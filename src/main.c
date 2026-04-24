@@ -4,8 +4,10 @@
 #include "shader.h"
 #include "vao.h"
 #include "vbo.h"
+#include "ebo.h"
 #include "fm.h"
 #include <GLFW/glfw3.h>
+#include <cglm/cglm.h>
 
 int main() {
     ASSERT(glfwInit(), "no glfw");
@@ -28,12 +30,20 @@ int main() {
 
     float vertices[] = {
         -1.0f, -1.0f, 0.0f,
-        0.0f, 1.0f, 0.0f,
+        -1.0f, 1.0f, 0.0f,
+        1.0f, 1.0f, 0.0f,
         1.0f, -1.0f, 0.0f
+    };
+
+    int indices[] = {
+        0,1,2,
+        0,2,3
     };
 
     VBO vbo;
     VAO vao;
+
+    EBO ebo;
 
     Shader vertex, fragment;
     Program program;
@@ -48,6 +58,9 @@ int main() {
     vao_bind(&vao);
 
     vbo_create(&vbo, vertices, sizeof(vertices));
+
+    ebo_create(&ebo, indices, sizeof(indices));
+
     vbo_attr(0, 3, 3 * sizeof(float), 0);
 
     shader_create(&vertex, vr.data);

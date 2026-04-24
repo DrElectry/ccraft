@@ -9,6 +9,5 @@ typedef struct {
 } File;
 
 File file_open(const char *src);
-void file_free(File *file);
 
 #endif

@@ -1,5 +1,6 @@
 #include "vao.h"
 #include "glad.h"
+#include <stddef.h>
 
 void vao_create(VAO* vao) {
     glGenVertexArrays(1, &vao->id);
@@ -11,5 +12,5 @@ void vao_bind(VAO* vao) {
 
 void render(VAO* vao) {
     vao_bind(vao);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
 }

@@ -38,14 +38,3 @@ File file_open(const char *src) {
 
     return file;
 }
-
-void file_free(File *file) {
-    ASSERT(file != NULL, "file_free called with NULL pointer");
-
-    if (file->data) free(file->data);
-    if (file->src) free(file->src);
-
-    file->data = NULL;
-    file->src = NULL;
-    file->size = 0;
-}

@@ -2,8 +2,21 @@
 #include "log.h"
 #include "glad.h"
 
-void create_vbo(VBO* vbo) {
+void vbo_create(VBO* vbo, float* vertices) {
     glGenBuffers(1, vbo->id);
 
-    
+    glBindBuffer(GL_ARRAY_BUFFER, vbo->id);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW); // on way generating everything suitable for the data
+}
+
+void vbo_attr(int layout, int size, int stride, int offset) {
+    glVertexAttribPointer(
+        layout,
+        size,
+        GL_FLOAT,
+        GL_FALSE,
+        stride,
+        (void*)(offset * sizeof(float))
+    );
+    glEnableVertexAttribArray(layout);
 }

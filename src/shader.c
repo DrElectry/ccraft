@@ -44,3 +44,8 @@ void program_create(Program* packet, Shader* packet2, Shader* packet3) {
 void program_use(Program* program) {
     glUseProgram(program->id);
 }
+
+void program_set_mat4(Program* program, const char* name, const float* mat) {
+    int loc = glGetUniformLocation(program->id, name);
+    glUniformMatrix4fv(loc, 1, GL_FALSE, mat);
+}

@@ -18,4 +18,7 @@ void shader_create(Shader* packet, char* src);
 void program_create(Program* packet, Shader* packet2, Shader* packet3);
 void program_use(Program* program);
 
+// uniforms
+void program_set_mat4(Program* program, const char* name, const float* mat);
+
 #endif

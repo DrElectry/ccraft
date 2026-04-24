@@ -7,7 +7,7 @@ BUILD_DIR = build
 TARGET = blocks
 
 CFLAGS = -O2 -I$(SRC_DIR) -I$(LIB_DIR)
-LDFLAGS = -lglfw -lGL -lcglm
+LDFLAGS = -lglfw -lGL -lcglm -lm
 
 SRCS = $(shell find $(SRC_DIR) -name '*.c') \
        $(shell find $(LIB_DIR) -name '*.c')

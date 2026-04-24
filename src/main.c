@@ -68,11 +68,24 @@ int main() {
 
     program_create(&program, &vertex, &fragment);
 
+    mat4 projection;
+    mat4 view;
+    mat4 model;
+    glm_mat4_identity(model);
+    
     while (!window_shouldclose()) {
         window_update();
         window_draw();
 
+        glm_perspective(90.0, 800.0f/600.0f, 0.1, 1000.0, projection);
+        glm_lookat((vec3){0.0f, 0.0f, -2.0f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0,1,0}, view);
+        glm_rotate_y(model, 0.01, model);
+
         program_use(&program);
+
+        program_set_mat4(&program, "proj", (float*)projection);
+        program_set_mat4(&program, "view", (float*)view);
+        program_set_mat4(&program, "model", (float*)model);
 
         render(&vao);
 

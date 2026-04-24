@@ -1,7 +1,12 @@
 #version 330 core
 
-layout(location=0) in vec3 in_vert;
+layout(location = 0) in vec3 in_vert;
 
-void main() {
-    gl_Position = vec4(in_vert, 1.0);
+uniform mat4 proj;
+uniform mat4 view;
+uniform mat4 model;
+
+void main()
+{
+    gl_Position = proj * view * model * vec4(in_vert, 1.0);
 }

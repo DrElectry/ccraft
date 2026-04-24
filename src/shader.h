@@ -1,0 +1,21 @@
+#ifndef SHADER_H
+#define SHADER_H
+
+#include "glad.h"
+
+typedef struct {
+    unsigned int id;
+    GLenum type; // GL_VERTEX_SHADER GL_FRAGMENT_SHADER
+} Shader;
+
+typedef struct {
+    unsigned int id;
+    Shader* vertex;
+    Shader* fragment;
+} Program;
+
+void shader_create(Shader* packet, char* src);
+void program_create(Program* packet, Shader* packet2, Shader* packet3);
+void program_use(Program* program);
+
+#endif

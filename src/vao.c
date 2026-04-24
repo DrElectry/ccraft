@@ -2,7 +2,7 @@
 #include "glad.h"
 
 void vao_create(VAO* vao) {
-    glGenVertexArrays(1, vao->id);
+    glGenVertexArrays(1, &vao->id);
 }
 
 void vao_bind(VAO* vao) {

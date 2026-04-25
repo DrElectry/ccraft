@@ -6,6 +6,7 @@
 #include "vbo.h"
 #include "ebo.h"
 #include "fm.h"
+#include "cam.h"
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
 
@@ -47,6 +48,7 @@ int main() {
 
     Shader vertex, fragment;
     Program program;
+    Camera cam;
 
     File vr = file_open("assets/quad/quad.vsh");
     File fr = file_open("assets/quad/quad.fsh");
@@ -68,6 +70,8 @@ int main() {
 
     program_create(&program, &vertex, &fragment);
 
+    cam.pos[2] = -5.0f;
+
     mat4 projection;
     mat4 view;
     mat4 model;
@@ -77,9 +81,12 @@ int main() {
         window_update();
         window_draw();
 
-        glm_perspective(90.0, 800.0f/600.0f, 0.1, 1000.0, projection);
-        glm_lookat((vec3){0.0f, 0.0f, -2.0f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0,1,0}, view);
-        glm_rotate_y(model, 0.01, model);
+        glm_perspective(glm_rad(60.0f), 800.0f/600.0f, 0.1, 1000.0, projection);
+
+        cam.rot[1]+=0.01;
+
+        camera_calculate(&cam);
+        camera_gen(&cam, view);
 
         program_use(&program);
 

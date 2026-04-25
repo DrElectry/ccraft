@@ -8,6 +8,7 @@
 #include "fm.h"
 #include "cam.h"
 #include "tex.h"
+#include "tile.h"
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
 
@@ -30,17 +31,13 @@ int main() {
 
     glClearColor(0.702f, 0.898f, 0.988f, 1.0f);
 
-    float vertices[] = {
-        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-        -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-        1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-        1.0f, -1.0f, 0.0f, 1.0f, 0.0f
-    };
+    float vertices[1000];
 
-    int indices[] = {
-        0,1,2,
-        0,2,3
-    };
+    int indices[1000];
+
+    int v, i;
+
+    tile_push_face(vertices, indices, &v, &i, FRONT, 241);
 
     VBO vbo;
     VAO vao;
@@ -95,6 +92,8 @@ int main() {
         window_draw();
 
         glm_perspective(glm_rad(60.0f), 800.0f/600.0f, 0.1, 1000.0, projection);
+
+        cam.rot[1]+=0.01f;
 
         camera_calculate(&cam);
         camera_gen(&cam, view);

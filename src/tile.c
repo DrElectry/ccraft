@@ -18,6 +18,56 @@ const unsigned int face_indices[] = {
     20,21,22, 22,23,20
 };
 
-float* tile_gen_uv(int atlas_number) {
-    // TODO:
+void tile_atlas_getuv(int atlas_number, float* uv)
+{
+    const int tiles_per_row = 16;
+    const float tile_size = 1.0f / tiles_per_row;
+
+    int col = atlas_number % tiles_per_row;
+    int row = atlas_number / tiles_per_row;
+
+    float u0 = col * tile_size;
+    float v0 = row * tile_size;
+    float u1 = u0 + tile_size;
+    float v1 = v0 + tile_size;
+
+    uv[0] = u0; uv[1] = v0;
+    uv[2] = u1; uv[3] = v0;
+    uv[4] = u1; uv[5] = v1;
+    uv[6] = u0; uv[7] = v1;
+}
+
+void tile_push_face(float* vertices,
+                    unsigned int* indices,
+                    int* v_cursor,
+                    int* i_cursor,
+                    int face,
+                    int atlas_id)
+{
+    float uv[8];
+    tile_atlas_getuv(atlas_id, uv);
+
+    int v_start = *v_cursor / 5;
+    int offset = face * 12;
+
+    for (int i = 0; i < 4; i++)
+    {
+        vertices[*v_cursor + 0] = face_vertices[offset + i * 3 + 0];
+        vertices[*v_cursor + 1] = face_vertices[offset + i * 3 + 1];
+        vertices[*v_cursor + 2] = face_vertices[offset + i * 3 + 2];
+
+        vertices[*v_cursor + 3] = uv[i * 2 + 0];
+        vertices[*v_cursor + 4] = uv[i * 2 + 1];
+
+        *v_cursor += 5;
+    }
+
+    indices[*i_cursor + 0] = v_start + 0;
+    indices[*i_cursor + 1] = v_start + 1;
+    indices[*i_cursor + 2] = v_start + 2;
+    indices[*i_cursor + 3] = v_start + 2;
+    indices[*i_cursor + 4] = v_start + 3;
+    indices[*i_cursor + 5] = v_start + 0;
+
+    *i_cursor += 6;
 }

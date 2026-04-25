@@ -1,10 +1,8 @@
 #ifndef TILE_H
 #define TILE_H
-#include <cglm/cglm.h>
 
-typedef struct {
-    int* face_textures;
-} Tile;
+extern const float face_vertices[];
+extern const unsigned int face_indices[];
 
 enum Tile_face {
     FRONT,
@@ -15,9 +13,7 @@ enum Tile_face {
     DOWN
 };
 
-extern const float face_vertices[];
-extern const unsigned int face_indices[];
-
-float* tile_gen_uv(int atlas_number);
+void tile_atlas_getuv(int atlas_number, float* uv);
+void tile_push_face(float* vertices, unsigned int* indices, int* v_cursor, int* i_cursor, int face, int atlas_id);
 
 #endif

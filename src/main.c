@@ -28,7 +28,7 @@ int main() {
 
     ASSERT(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress), "no glad");
 
-    glClearColor(0.0f, 1.0f, 1.0f, 1.0f);
+    glClearColor(0.702f, 0.898f, 0.988f, 1.0f);
 
     float vertices[] = {
         -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
@@ -53,8 +53,8 @@ int main() {
 
     Texture tex;
 
-    tex.mag_filter = GL_LINEAR;
-    tex.min_filter = GL_LINEAR_MIPMAP_LINEAR;
+    tex.mag_filter = GL_NEAREST;
+    tex.min_filter = GL_NEAREST;
     tex.wrap_s = GL_REPEAT;
     tex.wrap_t = GL_REPEAT;
 

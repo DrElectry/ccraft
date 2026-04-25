@@ -7,6 +7,7 @@
 #include "ebo.h"
 #include "fm.h"
 #include "cam.h"
+#include "tex.h"
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
 
@@ -30,10 +31,10 @@ int main() {
     glClearColor(0.0f, 1.0f, 1.0f, 1.0f);
 
     float vertices[] = {
-        -1.0f, -1.0f, 0.0f,
-        -1.0f, 1.0f, 0.0f,
-        1.0f, 1.0f, 0.0f,
-        1.0f, -1.0f, 0.0f
+        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+        -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+        1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+        1.0f, -1.0f, 0.0f, 1.0f, 0.0f
     };
 
     int indices[] = {
@@ -50,8 +51,17 @@ int main() {
     Program program;
     Camera cam;
 
+    Texture tex;
+
+    tex.mag_filter = GL_LINEAR;
+    tex.min_filter = GL_LINEAR_MIPMAP_LINEAR;
+    tex.wrap_s = GL_REPEAT;
+    tex.wrap_t = GL_REPEAT;
+
     File vr = file_open("assets/quad/quad.vsh");
     File fr = file_open("assets/quad/quad.fsh");
+
+    texture_create(&tex, "assets/terrain.png");
 
     vertex.type = GL_VERTEX_SHADER;
     fragment.type = GL_FRAGMENT_SHADER;
@@ -63,14 +73,17 @@ int main() {
 
     ebo_create(&ebo, indices, sizeof(indices));
 
-    vbo_attr(0, 3, 3 * sizeof(float), 0);
+    vbo_attr(0, 3, 5 * sizeof(float), 0);
+    vbo_attr(1, 2, 5 * sizeof(float), 3);
 
     shader_create(&vertex, vr.data);
     shader_create(&fragment, fr.data);
 
     program_create(&program, &vertex, &fragment);
 
+    glm_vec3_zero(cam.pos);
     cam.pos[2] = -5.0f;
+    glm_vec3_zero(cam.rot);
 
     mat4 projection;
     mat4 view;
@@ -83,12 +96,14 @@ int main() {
 
         glm_perspective(glm_rad(60.0f), 800.0f/600.0f, 0.1, 1000.0, projection);
 
-        cam.rot[1]+=0.01;
-
         camera_calculate(&cam);
         camera_gen(&cam, view);
 
         program_use(&program);
+
+        texture_bind(&tex, 0);
+
+        program_set_int(&program, "tex", 0);
 
         program_set_mat4(&program, "proj", (float*)projection);
         program_set_mat4(&program, "view", (float*)view);

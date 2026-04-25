@@ -47,5 +47,12 @@ void program_use(Program* program) {
 
 void program_set_mat4(Program* program, const char* name, const float* mat) {
     int loc = glGetUniformLocation(program->id, name);
+    ASSERT(loc != -1, "no such uniform, %s", name);
     glUniformMatrix4fv(loc, 1, GL_FALSE, mat);
+}
+
+void program_set_int(Program* program, const char* name, const int num) {
+    int loc = glGetUniformLocation(program->id, name);
+    ASSERT(loc != -1, "no such uniform, %s", name);
+    glUniform1i(loc, num);
 }

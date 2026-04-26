@@ -9,4 +9,6 @@ void vao_create(VAO* vao);
 void vao_bind(VAO* vao);
 void render(VAO* vao);
 
+void vao_free(VAO* vao);
+
 #endif

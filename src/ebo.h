@@ -8,5 +8,6 @@ typedef struct {
 } EBO;
 
 void ebo_create(EBO* ebo, int* indices, size_t size); // !!! CALL THIS BEFORE VBO_ATTR !!!
+void ebo_free(EBO* ebo);
 
 #endif

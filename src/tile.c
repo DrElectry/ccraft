@@ -31,14 +31,15 @@ void tile_atlas_getuv(int atlas_number, float* uv)
     float u1 = u0 + tile_size;
     float v1 = v0 + tile_size;
 
-    uv[0] = u0; uv[1] = v0;
-    uv[2] = u1; uv[3] = v0;
-    uv[4] = u1; uv[5] = v1;
-    uv[6] = u0; uv[7] = v1;
+    uv[0] = u0; uv[1] = v1;
+    uv[2] = u1; uv[3] = v1;
+    uv[4] = u1; uv[5] = v0;
+    uv[6] = u0; uv[7] = v0;
 }
 
 void tile_push_face(float* vertices,
                     unsigned int* indices,
+                    float* pos,          // vec3 (x, y, z)
                     int* v_cursor,
                     int* i_cursor,
                     int face,
@@ -52,10 +53,11 @@ void tile_push_face(float* vertices,
 
     for (int i = 0; i < 4; i++)
     {
-        vertices[*v_cursor + 0] = face_vertices[offset + i * 3 + 0];
-        vertices[*v_cursor + 1] = face_vertices[offset + i * 3 + 1];
-        vertices[*v_cursor + 2] = face_vertices[offset + i * 3 + 2];
+        vertices[*v_cursor + 0] = face_vertices[offset + i * 3 + 0] + pos[0];
+        vertices[*v_cursor + 1] = face_vertices[offset + i * 3 + 1] + pos[1];
+        vertices[*v_cursor + 2] = face_vertices[offset + i * 3 + 2] + pos[2];
 
+        // UV
         vertices[*v_cursor + 3] = uv[i * 2 + 0];
         vertices[*v_cursor + 4] = uv[i * 2 + 1];
 

@@ -4,7 +4,6 @@
 #include "log.h"
 
 void texture_create(Texture* tex, char* src) {
-    stbi_set_flip_vertically_on_load(1);  
     unsigned char *data = stbi_load(src, &tex->width, &tex->height, &tex->channels, 0);
     ASSERT(data, "Failed to load texture: %s", src);
 

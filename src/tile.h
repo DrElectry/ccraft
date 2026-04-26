@@ -14,6 +14,12 @@ enum Tile_face {
 };
 
 void tile_atlas_getuv(int atlas_number, float* uv);
-void tile_push_face(float* vertices, unsigned int* indices, int* v_cursor, int* i_cursor, int face, int atlas_id);
+void tile_push_face(float* vertices,
+                    unsigned int* indices,
+                    float* pos,          // vec3 (x, y, z)
+                    int* v_cursor,
+                    int* i_cursor,
+                    int face,
+                    int atlas_id);
 
 #endif

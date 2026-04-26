@@ -1,4 +1,6 @@
-#pragma once
+#ifndef INPUT_H
+#define INPUT_H
+
 #include <GLFW/glfw3.h>
 
 typedef struct {
@@ -21,3 +23,5 @@ void input_update(Input* in);
 
 int input_down(Input* in, int key);
 int input_pressed(Input* in, int key);
+
+#endif

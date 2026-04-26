@@ -3,6 +3,17 @@
 
 typedef struct {
     GLFWwindow* win;
+
+    double mouse_x;
+    double mouse_y;
+
+    double last_mouse_x;
+    double last_mouse_y;
+
+    double mouse_dx;
+    double mouse_dy;
+
+    int first_mouse;
 } Input;
 
 void input_init(Input* in, GLFWwindow* win);

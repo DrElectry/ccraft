@@ -31,6 +31,9 @@ int main() {
 
     ASSERT(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress), "no glad");
 
+    glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+    glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
     glClearColor(0.1f, 0.2f, 0.2f, 1.0f);
 
     float vertices[1000];
@@ -60,10 +63,9 @@ int main() {
     Program program;
     Camera cam;
     Input in;
+    Texture tex;
 
     input_init(&in, packet.glwin);
-
-    Texture tex;
 
     tex.mag_filter = GL_NEAREST;
     tex.min_filter = GL_NEAREST;
@@ -91,24 +93,57 @@ int main() {
     mat4 view;
 
     glEnable(GL_DEPTH_TEST);
-    
+    glEnable(GL_CULL_FACE);
+
+    float cam_speed = 6.0f;
+    float last_time = (float)glfwGetTime();
+
     while (!window_shouldclose()) {
         window_update();
-        window_draw(); // TODO: actually use it
+        window_draw();
 
         input_update(&in);
 
-        glm_perspective(glm_rad(60.0f), 800.0f/600.0f, 0.1, 1000.0, projection);
+        float current_time = (float)glfwGetTime();
+        float dt = current_time - last_time;
+        last_time = current_time;
+
+        glm_perspective(glm_rad(60.0f), 800.0f / 600.0f, 0.1f, 1000.0f, projection);
 
         camera_calculate(&cam);
 
-        if (input_down(&in, GLFW_KEY_W)) glm_vec3_add(cam.pos, cam.forward, cam.pos);
-        if (input_down(&in, GLFW_KEY_S)) glm_vec3_sub(cam.pos, cam.forward, cam.pos);
-        if (input_down(&in, GLFW_KEY_D)) glm_vec3_add(cam.pos, cam.right, cam.pos);
-        if (input_down(&in, GLFW_KEY_A)) glm_vec3_sub(cam.pos, cam.right, cam.pos);
+        float sensitivity = 0.00025f;
 
-        if (input_down(&in, GLFW_KEY_E)) cam.pos[1] += 1.0f;
-        if (input_down(&in, GLFW_KEY_Q)) cam.pos[1] -= 1.0f;
+        cam.rot[1] -= in.mouse_dx * sensitivity;
+        cam.rot[0] -= in.mouse_dy * sensitivity;
+
+        if (cam.rot[0] > 1.5f) cam.rot[0] = 1.5f;
+        if (cam.rot[0] < -1.5f) cam.rot[0] = -1.5f;
+
+        float speed = cam_speed;
+
+        if (input_down(&in, GLFW_KEY_LEFT_SHIFT))
+            speed *= 2.5f;
+
+        float velocity = speed * dt;
+
+        if (input_down(&in, GLFW_KEY_W))
+            glm_vec3_muladds(cam.forward, velocity, cam.pos);
+
+        if (input_down(&in, GLFW_KEY_S))
+            glm_vec3_muladds(cam.forward, -velocity, cam.pos);
+
+        if (input_down(&in, GLFW_KEY_D))
+            glm_vec3_muladds(cam.right, velocity, cam.pos);
+
+        if (input_down(&in, GLFW_KEY_A))
+            glm_vec3_muladds(cam.right, -velocity, cam.pos);
+
+        if (input_down(&in, GLFW_KEY_E))
+            cam.pos[1] += velocity;
+
+        if (input_down(&in, GLFW_KEY_Q))
+            cam.pos[1] -= velocity;
 
         camera_gen(&cam, view);
 
@@ -121,6 +156,6 @@ int main() {
 
         gfx_render(&block, &program);
 
-        glfwSwapBuffers(_win->glwin);
+        glfwSwapBuffers(packet.glwin);
     }
 }

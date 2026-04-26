@@ -7,7 +7,7 @@
 
 typedef struct {
     char* data;
-    uint16_t color; // 4 bits color 4 bits foreground
+    uint8_t color; // 4 bits color 4 bits foreground
 
     int x, y;
     int index_count;

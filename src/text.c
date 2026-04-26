@@ -13,8 +13,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define CHAR_WIDTH 32
-#define CHAR_HEIGHT 32
+#define CHAR_WIDTH 16
+#define CHAR_HEIGHT 16
 #define ATLAS_COLS 16
 #define ATLAS_ROWS 16
 
@@ -156,6 +156,7 @@ void text_draw(HText* text) {
 
     texture_bind(&text_atlas, 0);
     program_set_int(&text_program, "tex_atlas", 0);
+    program_set_uint(&text_program, "color_data", (uint32_t)text->color);
 
     render_count(&text->gpu_data.vao, text->index_count);
 }

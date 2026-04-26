@@ -73,7 +73,7 @@ void game_init() {
     input_init(&input_manager, _win->glwin);
 
     text_init("assets/text/text.vsh", "assets/text/text.fsh", "assets/text.png");
-    text_create(&demo_text, "HELLO WORLD", 0xFFFF, 0, 0);
+    text_create(&demo_text, "BLOCKS", 0x4F, 0, 0);
 }
 
 void game_tick() {

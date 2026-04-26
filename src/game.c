@@ -13,6 +13,7 @@
 
 Render_request tile;
 Camera main_camera;
+HText demo_text;
 
 Shader a, b;
 Program c;
@@ -70,6 +71,9 @@ void game_init() {
     program_create(&c, &a, &b);
 
     input_init(&input_manager, _win->glwin);
+
+    text_init("assets/text/text.vsh", "assets/text/text.fsh", "assets/text.png");
+    text_create(&demo_text, "HELLO WORLD", 0xFFFF, 0, 0);
 }
 
 void game_tick() {
@@ -128,6 +132,8 @@ void game_draw() {
     program_set_mat4(&c, "view", (float*)view);
 
     gfx_render(&tile, &c);
+
+    text_draw(&demo_text);
 
     glfwSwapBuffers(_win->glwin);
 }

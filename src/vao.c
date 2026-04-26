@@ -15,6 +15,11 @@ void render(VAO* vao) {
     glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, NULL);
 }
 
+void render_count(VAO* vao, int count) {
+    vao_bind(vao);
+    glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, NULL);
+}
+
 void vao_free(VAO* vao) {
     if (vao && vao->id != 0) {
         glDeleteVertexArrays(1, &vao->id);

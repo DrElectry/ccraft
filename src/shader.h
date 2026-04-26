@@ -21,5 +21,6 @@ void program_use(Program* program);
 // uniforms
 void program_set_mat4(Program* program, const char* name, const float* mat);
 void program_set_int(Program* program, const char* name, const int num);
+void program_set_uint(Program* program, const char* name, const unsigned int num);
 
 #endif

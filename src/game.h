@@ -1,8 +1,12 @@
 #ifndef GAME_H
 #define GAME_H
 
+#include "text.h"
+
 void game_init();
 void game_draw();
 void game_tick();
+
+extern HText demo_text;
 
 #endif

@@ -7,6 +7,7 @@
 #include "tex.h"
 #include "tile.h"
 #include "gfx.h"
+#include "input.h"
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
 
@@ -58,6 +59,9 @@ int main() {
     Shader vertex, fragment;
     Program program;
     Camera cam;
+    Input in;
+
+    input_init(&in, packet.glwin);
 
     Texture tex;
 
@@ -90,11 +94,22 @@ int main() {
     
     while (!window_shouldclose()) {
         window_update();
-        window_draw();
+        window_draw(); // TODO: actually use it
+
+        input_update(&in);
 
         glm_perspective(glm_rad(60.0f), 800.0f/600.0f, 0.1, 1000.0, projection);
 
         camera_calculate(&cam);
+
+        if (input_down(&in, GLFW_KEY_W)) glm_vec3_add(cam.pos, cam.forward, cam.pos);
+        if (input_down(&in, GLFW_KEY_S)) glm_vec3_sub(cam.pos, cam.forward, cam.pos);
+        if (input_down(&in, GLFW_KEY_D)) glm_vec3_add(cam.pos, cam.right, cam.pos);
+        if (input_down(&in, GLFW_KEY_A)) glm_vec3_sub(cam.pos, cam.right, cam.pos);
+
+        if (input_down(&in, GLFW_KEY_E)) cam.pos[1] += 1.0f;
+        if (input_down(&in, GLFW_KEY_Q)) cam.pos[1] -= 1.0f;
+
         camera_gen(&cam, view);
 
         program_use(&program);

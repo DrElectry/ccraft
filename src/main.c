@@ -30,6 +30,8 @@ int main() {
 
     ASSERT(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress), "no glad");
 
+    glfwSwapInterval(0);
+
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -39,11 +41,26 @@ int main() {
     glEnable(GL_CULL_FACE);
 
     game_init();
+    double last_time;
+    float fps_timer = 0.0f;
+    int fps_counter = 0;
 
     while (!window_shouldclose()) {
+        double current_time = glfwGetTime();
+        float delta = (float)(current_time - last_time);
+        last_time = current_time;
+
+        fps_timer += delta;
+        fps_counter++;
+
+        if (fps_timer >= 1.0f) {
+            printf("FPS: %d\n", fps_counter);
+            fps_counter = 0;
+            fps_timer = 0.0f;
+        }
+
         window_update();
         window_draw();
-
         game_tick();
         game_draw();
     }

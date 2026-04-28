@@ -25,7 +25,7 @@ int vc, ic;
 
 mat4 projection, view;
 
-float cam_speed = 6.0f;
+float cam_speed = 0.015f;
 float last_time = 0.0f;
 
 Input input_manager;
@@ -73,7 +73,7 @@ void game_init() {
     input_init(&input_manager, _win->glwin);
 
     text_init("assets/text/text.vsh", "assets/text/text.fsh", "assets/text.png");
-    text_create(&demo_text, "BLOCKS", 0x4F, 0, 0);
+    text_create(&demo_text, "BLOCKS", 0x5F, 0, 0);
 }
 
 void game_tick() {
@@ -84,8 +84,6 @@ void game_tick() {
     last_time = current_time;
 
     glm_perspective(glm_rad(60.0f), 800.0f / 600.0f, 0.1f, 1000.0f, projection);
-
-    camera_calculate(&main_camera);
 
     float sensitivity = 0.00025f;
 
@@ -103,22 +101,24 @@ void game_tick() {
     float velocity = speed * dt;
 
     if (input_down(&input_manager, GLFW_KEY_W))
-        glm_vec3_muladds(main_camera.forward, velocity, main_camera.pos);
+        camera_move(&main_camera, main_camera.forward, velocity);
 
     if (input_down(&input_manager, GLFW_KEY_S))
-        glm_vec3_muladds(main_camera.forward, -velocity, main_camera.pos);
+        camera_move(&main_camera, main_camera.forward, -velocity);
 
     if (input_down(&input_manager, GLFW_KEY_D))
-        glm_vec3_muladds(main_camera.right, velocity, main_camera.pos);
+        camera_move(&main_camera, main_camera.right, velocity);
 
     if (input_down(&input_manager, GLFW_KEY_A))
-        glm_vec3_muladds(main_camera.right, -velocity, main_camera.pos);
+        camera_move(&main_camera, main_camera.right, -velocity);
 
     if (input_down(&input_manager, GLFW_KEY_E))
-        main_camera.pos[1] += velocity;
+        camera_move(&main_camera, (vec3){0.0f, 1.0f, 0.0f}, velocity);
 
     if (input_down(&input_manager, GLFW_KEY_Q))
-        main_camera.pos[1] -= velocity;
+        camera_move(&main_camera, (vec3){0.0f, 1.0f, 0.0f}, -velocity);
+
+    camera_tick(&main_camera, dt);
 
     camera_gen(&main_camera, view);
 }

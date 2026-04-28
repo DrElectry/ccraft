@@ -4,7 +4,10 @@
 #include "aabb.h"
 #include "cam.h"
 #include "input.h"
+#include "world.h"
 #include <cglm/cglm.h>
+
+#define PLAYER_EYE_HEIGHT 1.6f
 
 typedef struct {
     AABB aabb;
@@ -14,7 +17,7 @@ typedef struct {
 } Player;
 
 void player_init(Player* p);
-void player_tick(Player* p, Input* in, float dt);
+void player_tick(World* world, Player* p, Input* in, float dt);
 void player_get_view(Player* p, mat4 view);
 void player_get_pos(Player* p, vec3 out);
 

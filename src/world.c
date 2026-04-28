@@ -1,6 +1,6 @@
-#include "world.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include "world.h"
 
 void world_init(World* world) {
     world->chunks_map = malloc(sizeof(Chunk) * MAX_LOADED_CHUNKS);

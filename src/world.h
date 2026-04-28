@@ -1,8 +1,8 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#include <cglm/cglm.h>
 #include "chunk.h"
+#include <cglm/cglm.h>
 
 #ifndef MAX_LOADED_CHUNKS
 #define MAX_LOADED_CHUNKS 1024

@@ -80,7 +80,7 @@ void game_tick(float dt) {
 
     glm_perspective(glm_rad(60.0f), 800.0f / 600.0f, 0.1f, 1000.0f, projection);
 
-    player_tick(&player, &input_manager, dt);
+    player_tick(&world, &player, &input_manager, dt);
     player_get_view(&player, view);
 }
 

@@ -42,21 +42,32 @@ void fbo_create(FBO* fbo, int width, int height, int color_count)
     }
 
     // ---- DEPTH BUFFER ----
-    glGenRenderbuffers(1, &fbo->depth_attachment);
-    glBindRenderbuffer(GL_RENDERBUFFER, fbo->depth_attachment);
+    glGenTextures(1, &fbo->depth_attachment);
+    glBindTexture(GL_TEXTURE_2D, fbo->depth_attachment);
 
-    glRenderbufferStorage(
-        GL_RENDERBUFFER,
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
         GL_DEPTH_COMPONENT24,
         width,
-        height
+        height,
+        0,
+        GL_DEPTH_COMPONENT,
+        GL_FLOAT,
+        NULL
     );
 
-    glFramebufferRenderbuffer(
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glFramebufferTexture2D(
         GL_FRAMEBUFFER,
         GL_DEPTH_ATTACHMENT,
-        GL_RENDERBUFFER,
-        fbo->depth_attachment
+        GL_TEXTURE_2D,
+        fbo->depth_attachment,
+        0
     );
 
     unsigned int attachments[MAX_FBO_ATTACHMENTS];
@@ -91,6 +102,12 @@ void fbo_bind_texture(FBO* fbo, int attachment_index, unsigned int unit)
     glBindTexture(GL_TEXTURE_2D, fbo->color_attachments[attachment_index]);
 }
 
+void fbo_bind_depth_texture(FBO* fbo, unsigned int unit)
+{
+    glActiveTexture(GL_TEXTURE0 + unit);
+    glBindTexture(GL_TEXTURE_2D, fbo->depth_attachment);
+}
+
 void fbo_free(FBO* fbo)
 {
     if (!fbo || fbo->id == 0)
@@ -103,7 +120,7 @@ void fbo_free(FBO* fbo)
         glDeleteTextures(1, &fbo->color_attachments[i]);
     }
 
-    glDeleteRenderbuffers(1, &fbo->depth_attachment);
+    glDeleteTextures(1, &fbo->depth_attachment);
 
     fbo->id = 0;
     fbo->color_count = 0;

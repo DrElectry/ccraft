@@ -12,6 +12,7 @@
 #include "input.h"
 #include "rand.h"
 #include "raycast.h"
+#include "fbo.h"
 #include <GLFW/glfw3.h>
 
 Player player;
@@ -58,8 +59,8 @@ void game_init() {
     texture_atlas.wrap_s = GL_REPEAT;
     texture_atlas.wrap_t = GL_REPEAT;
 
-    File vr = file_open("assets/quad/quad.vsh");
-    File fr = file_open("assets/quad/quad.fsh");
+    File vr = file_open("assets/tile/tile.vsh");
+    File fr = file_open("assets/tile/tile.fsh");
 
     texture_create(&texture_atlas, "assets/terrain.png");
 
@@ -100,7 +101,7 @@ void game_tick(float dt) {
     float current_time = (float)glfwGetTime();
     last_time = current_time;
 
-    glm_perspective(glm_rad(60.0f), 800.0f / 600.0f, 0.1f, 1000.0f, projection);
+    glm_perspective(glm_rad(60.0f), 1280.0f / 720.0f, 0.1f, 1000.0f, projection);
 
     player_tick(&world, &player, &input_manager, dt);
     player_get_view(&player, view);
@@ -156,8 +157,6 @@ void game_draw() {
     world_render(&world, &c);
 
     text_draw(&demo_text);
-
-    glfwSwapBuffers(_win->glwin);
 }
 
 void game_destroy() {

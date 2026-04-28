@@ -2,6 +2,9 @@
 #include "win.h"
 #include "glad.h"
 #include "game.h"
+#include "gfx.h"
+#include "fbo.h"
+#include "fm.h"
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
 
@@ -15,8 +18,8 @@ int main() {
 
     Window packet;
 
-    packet.width = 800;
-    packet.height = 600;
+    packet.width = 1280;
+    packet.height = 720;
     packet.title = "blocks";
 
     window_create(&packet);
@@ -32,6 +35,24 @@ int main() {
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
+
+    FBO gbuffer;
+    Shader mainv, mainf;
+    Program main;
+    File mainfv, mainff;
+
+    mainv.type = GL_VERTEX_SHADER;
+    mainf.type = GL_FRAGMENT_SHADER;
+
+    mainfv = file_open("assets/deferred/main.vsh");
+    mainff = file_open("assets/deferred/main.fsh");
+
+    shader_create(&mainv, mainfv.data);
+    shader_create(&mainf, mainff.data); // i know that writing this in main.c is not the best thing to do, why do i even write so much shit in main.c?
+
+    program_create(&main, &mainv, &mainf);
+
+    fbo_create(&gbuffer, 1280, 720, 2);
 
     game_init();
 
@@ -53,10 +74,35 @@ int main() {
             fps_timer = 0.0f;
         }
 
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+
+        fbo_bind(&gbuffer);
+
         window_update();
-        window_draw();
+        window_draw(); // dead code xd
+
         game_tick(delta_time);
         game_draw();
+
+        fbo_unbind();
+
+        program_use(&main);
+
+        fbo_bind_texture(&gbuffer, 0, 0);
+        fbo_bind_texture(&gbuffer, 1, 1);
+        fbo_bind_depth_texture(&gbuffer, 2);
+
+        program_set_int(&main, "gAlbedo", 0);
+        program_set_int(&main, "gNormal", 1);
+        program_set_int(&main, "gDepth", 2);
+
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+
+        gfx_draw_fullscreen_quad();
+
+        glfwSwapBuffers(_win->glwin);
     }
 
     game_destroy();

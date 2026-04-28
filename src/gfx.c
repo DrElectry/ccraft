@@ -16,8 +16,9 @@ void gfx_packet_static_request(Render_request* r) { // pos, rot and scale will b
     vbo_create(&vbo, r->data, r->data_size);
     ebo_create(&ebo, r->triangles, r->tri_count * 3 * sizeof(int));
 
-    vbo_attr(0, 3, 5 * sizeof(float), 0);
-    vbo_attr(1, 2, 5 * sizeof(float), 3);
+    vbo_attr(0, 3, 8 * sizeof(float), 0);
+    vbo_attr(1, 2, 8 * sizeof(float), 3);
+    vbo_attr(2, 3, 8 * sizeof(float), 5);
 
     r->cache.vbo = vbo;
     r->cache.vao = vao;
@@ -38,4 +39,40 @@ void gfx_render(Render_request *r, Program* active_program) {
 
     vao_bind(&r->cache.vao);
     glDrawElements(GL_TRIANGLES, r->tri_count * 3, GL_UNSIGNED_INT, NULL);
+}
+
+void gfx_draw_fullscreen_quad() {
+    static VAO vao;
+    static VBO vbo;
+    static EBO ebo;
+    static int initialized = 0;
+
+    if (!initialized) {
+        float vertices[] = {
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            -1.0f, -1.0f,  0.0f, 0.0f,
+             1.0f, -1.0f,  1.0f, 0.0f,
+             1.0f,  1.0f,  1.0f, 1.0f 
+        };
+
+        int indices[] = {
+            0, 1, 2,
+            2, 0, 3
+        };
+
+        vao_create(&vao);
+        vao_bind(&vao);
+
+        vbo_create(&vbo, vertices, sizeof(vertices));
+        ebo_create(&ebo, indices, sizeof(indices));
+
+        vbo_attr(0, 2, 4 * sizeof(float), 0);
+        vbo_attr(1, 2, 4 * sizeof(float), 2);
+
+        initialized = 1;
+    }
+
+    vao_bind(&vao);
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL); // i like how render() function in vao.h becomes useless
 }

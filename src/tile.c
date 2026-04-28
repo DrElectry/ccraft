@@ -18,6 +18,15 @@ const unsigned int face_indices[] = {
     20,21,22, 22,23,20
 };
 
+const float face_normals[] = {
+    0,0,1,
+    0,0,-1,
+    -1,0,0,
+    1,0,0,
+    0,1,0,
+    0,-1,0
+};
+
 void tile_atlas_getuv(int atlas_number, float* uv)
 {
     const int tiles_per_row = 16;
@@ -39,7 +48,7 @@ void tile_atlas_getuv(int atlas_number, float* uv)
 
 void tile_push_face(float* vertices,
                     unsigned int* indices,
-                    float* pos,          // vec3 (x, y, z)
+                    float* pos,
                     int* v_cursor,
                     int* i_cursor,
                     int face,
@@ -48,20 +57,29 @@ void tile_push_face(float* vertices,
     float uv[8];
     tile_atlas_getuv(atlas_id, uv);
 
-    int v_start = *v_cursor / 5;
+    float nx = face_normals[face * 3 + 0];
+    float ny = face_normals[face * 3 + 1];
+    float nz = face_normals[face * 3 + 2];
+
+    int v_start = *v_cursor / 8;
     int offset = face * 12;
 
     for (int i = 0; i < 4; i++)
     {
-        vertices[*v_cursor + 0] = face_vertices[offset + i * 3 + 0] + pos[0];
-        vertices[*v_cursor + 1] = face_vertices[offset + i * 3 + 1] + pos[1];
-        vertices[*v_cursor + 2] = face_vertices[offset + i * 3 + 2] + pos[2];
+        int base = *v_cursor;
 
-        // UV
-        vertices[*v_cursor + 3] = uv[i * 2 + 0];
-        vertices[*v_cursor + 4] = uv[i * 2 + 1];
+        vertices[base + 0] = face_vertices[offset + i * 3 + 0] + pos[0];
+        vertices[base + 1] = face_vertices[offset + i * 3 + 1] + pos[1];
+        vertices[base + 2] = face_vertices[offset + i * 3 + 2] + pos[2];
 
-        *v_cursor += 5;
+        vertices[base + 3] = uv[i * 2 + 0];
+        vertices[base + 4] = uv[i * 2 + 1];
+
+        vertices[base + 5] = nx;
+        vertices[base + 6] = ny;
+        vertices[base + 7] = nz;
+
+        *v_cursor += 8;
     }
 
     indices[*i_cursor + 0] = v_start + 0;

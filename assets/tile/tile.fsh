@@ -1,0 +1,15 @@
+#version 330 core
+
+layout(location = 0) out vec3 gAlbedo;
+layout(location = 1) out vec3 gNormal;
+
+in vec2 out_uv;
+in vec3 out_normal;
+
+uniform sampler2D tex;
+
+void main() {
+    vec4 data = texture(tex, out_uv);
+    gAlbedo = data.rgb;
+    gNormal = out_normal;
+}

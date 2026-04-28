@@ -40,6 +40,54 @@ void world_add_chunk(World* world, Chunk* chunk, vec2 position) {
     printf("Cant add new chunks, world overflow.\n");
 }
 
+static inline int floor_div(int a, int b) {
+    if (a >= 0) return a / b;
+    return - ((-a + b - 1) / b);
+}
+
+static inline int floor_mod(int a, int b) {
+    int r = a % b;
+    if (r < 0) r += b;
+    return r;
+}
+
+Chunk* world_get_chunk(World* world, int cx, int cz) {
+    for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
+        if (world->index_map[i] != -1) {
+            if ((int)world->positions_map[i][0] == cx &&
+                (int)world->positions_map[i][1] == cz) {
+                return &world->chunks_map[i];
+            }
+        }
+    }
+    return NULL;
+}
+
+uint16_t world_get_block(World* world, int wx, int wy, int wz) {
+    if (wy < 0 || wy >= CHUNK_HEIGHT)
+        return AIR;
+
+    int cx = floor_div(wx, CHUNK_WIDTH);
+    int cz = floor_div(wz, CHUNK_DEPTH);
+
+    Chunk* chunk = world_get_chunk(world, cx, cz);
+    if (!chunk)
+        return AIR;
+
+    int lx = floor_mod(wx, CHUNK_WIDTH);
+    int lz = floor_mod(wz, CHUNK_DEPTH);
+
+    int index = lx + CHUNK_WIDTH * (wy + CHUNK_HEIGHT * lz);
+    return chunk->data[index];
+}
+
+void world_rebuild_chunk(World* world, int cx, int cz) {
+    Chunk* chunk = world_get_chunk(world, cx, cz);
+    if (chunk) {
+        chunk_rebuild(chunk, world, cx, cz);
+    }
+}
+
 void world_render(World* world, void* active_program) {
     for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
         if (world->index_map[i] != -1) {

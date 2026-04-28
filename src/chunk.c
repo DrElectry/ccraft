@@ -2,6 +2,7 @@
 #include <cglm/cglm.h>
 #include "tile.h"
 #include "gfx.h"
+#include "world.h"
 
 #include "rand.h"
 
@@ -35,7 +36,7 @@ void chunk_generate(Chunk* chunk) {
     chunk->model = (Render_request){0};
 }
 
-void chunk_rebuild(Chunk* chunk) {
+void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
     if (chunk->model.data) { // freeing garbage cpu buffers
         free(chunk->model.data);
         chunk->model.data = NULL;
@@ -61,6 +62,9 @@ void chunk_rebuild(Chunk* chunk) {
     int v_cursor = 0;
     int i_cursor = 0;
 
+    int wx_offset = cx * CHUNK_WIDTH;
+    int wz_offset = cz * CHUNK_DEPTH;
+
     for (int x = 0; x < CHUNK_WIDTH; x++) {
         for (int y = 0; y < CHUNK_HEIGHT; y++) {
             for (int z = 0; z < CHUNK_DEPTH; z++) {
@@ -70,28 +74,32 @@ void chunk_rebuild(Chunk* chunk) {
                 if (tile_id == AIR)
                     continue;
 
-                // +z
-                if (z + 1 >= CHUNK_DEPTH || chunk->data[x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * (z + 1))] == AIR)
+                int wx = wx_offset + x;
+                int wy = y;
+                int wz = wz_offset + z;
+
+                // +z (FRONT)
+                if (world_get_block(world, wx, wy, wz + 1) == AIR)
                     tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, FRONT, atlas_lookup(tile_id, FRONT));
 
-                // -z
-                if (z - 1 < 0 || chunk->data[x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * (z - 1))] == AIR)
+                // -z (BACK)
+                if (world_get_block(world, wx, wy, wz - 1) == AIR)
                     tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, BACK, atlas_lookup(tile_id, BACK));
 
-                // -x
-                if (x - 1 < 0 || chunk->data[(x - 1) + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z)] == AIR)
+                // -x (LEFT)
+                if (world_get_block(world, wx - 1, wy, wz) == AIR)
                     tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, LEFT, atlas_lookup(tile_id, LEFT));
 
-                // +x
-                if (x + 1 >= CHUNK_WIDTH || chunk->data[(x + 1) + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z)] == AIR)
+                // +x (RIGHT)
+                if (world_get_block(world, wx + 1, wy, wz) == AIR)
                     tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, RIGHT, atlas_lookup(tile_id, RIGHT));
 
-                // +y
-                if (y + 1 >= CHUNK_HEIGHT || chunk->data[x + CHUNK_WIDTH * ((y + 1) + CHUNK_HEIGHT * z)] == AIR)
+                // +y (UP)
+                if (world_get_block(world, wx, wy + 1, wz) == AIR)
                     tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, UP, atlas_lookup(tile_id, UP));
 
-                // -y
-                if (y - 1 < 0 || chunk->data[x + CHUNK_WIDTH * ((y - 1) + CHUNK_HEIGHT * z)] == AIR)
+                // -y (DOWN)
+                if (world_get_block(world, wx, wy - 1, wz) == AIR)
                     tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, DOWN, atlas_lookup(tile_id, DOWN));
             }
         }

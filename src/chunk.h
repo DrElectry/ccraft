@@ -20,7 +20,9 @@ typedef struct {
     Render_request model; // has a pos, rot, scale, and GPU buffers inside, gfx.h does everything else
 } Chunk;
 
+struct World;
+
 void chunk_generate(Chunk* chunk);
-void chunk_rebuild(Chunk* chunk);
+void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz);
 
 #endif

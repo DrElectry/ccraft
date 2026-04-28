@@ -39,9 +39,13 @@ void game_init() {
         for (int z = 0; z < grid_size; z++) {
             Chunk chunk;
             chunk_generate(&chunk);
-            chunk_rebuild(&chunk);
             vec2 pos = { (float)x, (float)z };
             world_add_chunk(&world, &chunk, pos);
+        }
+    }
+    for (int x = 0; x < grid_size; x++) {
+        for (int z = 0; z < grid_size; z++) {
+            world_rebuild_chunk(&world, x, z);
         }
     }
 

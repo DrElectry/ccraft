@@ -9,12 +9,22 @@ out vec4 fragColor;
 
 void main()
 {
-    vec3 data = texture(gAlbedo, out_uv).rgb;
-    vec3 normal = texture(gNormal, out_uv).rgb;
-    float depth = texture(gDepth, out_uv).r;
+    vec3 color;
 
-    fragColor = vec4(
-        data + normal * 0.00001 + vec3(depth) * 0.00001,
-        1.0
-    ); // nice and useful deferred rtx dlss 5 vulkan metal dx11 and friends shader
+    if (out_uv.x < 0.3333)
+    {
+        color = texture(gAlbedo, out_uv).rgb;
+    }
+    else if (out_uv.x < 0.6666)
+    {
+        vec3 n = texture(gNormal, out_uv).rgb;
+        color = n * 0.5 + 0.5;
+    }
+    else
+    {
+        float d = texture(gDepth, out_uv).r;
+        color = vec3(d);
+    }
+
+    fragColor = vec4(color, 1.0);
 }

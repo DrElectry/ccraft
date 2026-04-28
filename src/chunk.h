@@ -12,6 +12,7 @@
 typedef enum : uint16_t {
     AIR = 0,
     GRASS = 1,
+    DIRT = 2,
 } Tile;
 
 typedef struct {

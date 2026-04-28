@@ -10,6 +10,7 @@
 #include "chunk.h"
 #include "world.h"
 #include "input.h"
+#include "rand.h"
 #include <GLFW/glfw3.h>
 
 Camera main_camera;
@@ -33,8 +34,9 @@ int game_ticks;
 
 void game_init() {
     world_init(&world);
+    rng_seed(0x11223344AABBCCDD);
 
-    int grid_size = 3;
+    int grid_size = 9;
     for (int x = 0; x < grid_size; x++) {
         for (int z = 0; z < grid_size; z++) {
             Chunk chunk;

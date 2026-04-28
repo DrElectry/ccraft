@@ -12,6 +12,7 @@
 int lookup_atlas[] = { // strict 6 ints per block FRONT BACK LEFT RIGHT UP DOWN
     0,0,0,0,0,0, // air has zero standards
     1,1,1,1,0,2, // grass
+    2,2,2,2,2,2, // dirt
 };
 
 inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
@@ -28,7 +29,22 @@ void chunk_generate(Chunk* chunk) {
         for (int y = 0; y < CHUNK_HEIGHT; y++) {
             for (int z = 0; z < CHUNK_DEPTH; z++) {
                 int index = x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z);
-                chunk->data[index] = GRASS;
+                if (y == 8) {
+                    chunk->data[index] = GRASS;
+                } else if (y < 8) {
+                    chunk->data[index] = DIRT;
+                } else {
+                    chunk->data[index] = AIR;
+                }
+            }
+        }
+    }
+
+    for (int x = 0; x < CHUNK_WIDTH; x++) {
+        for (int z = 0; z < CHUNK_DEPTH; z++) {
+            int index = x + CHUNK_WIDTH * (9 + CHUNK_HEIGHT * z);
+            if (RAND(0, 16) == 0) {
+                chunk->data[index] = DIRT;
             }
         }
     }

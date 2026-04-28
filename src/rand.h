@@ -7,13 +7,15 @@ typedef struct {
     uint64_t state;
 } RNG;
 
-void     rng_seed(RNG *r, uint64_t seed);
-uint64_t rng_next(RNG *r);
+void     rng_seed(uint64_t seed);
+uint64_t rng_next();
 
-int   rng_int(RNG *r, int min, int max);
-float rng_float(RNG *r);
+int   rng_int(int min, int max);
+float rng_float();
 
-#define RAND(r, min, max)   rng_int((r), (min), (max))
-#define RANDF(r)            rng_float((r))
+#define RAND(min, max)   rng_int((min), (max))
+#define RANDF()            rng_float()
+
+extern RNG global_rng;
 
 #endif

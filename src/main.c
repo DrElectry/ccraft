@@ -1,14 +1,7 @@
 #include "log.h"
 #include "win.h"
 #include "glad.h"
-#include "shader.h"
-#include "fm.h"
-#include "cam.h"
-#include "tex.h"
-#include "tile.h"
-#include "gfx.h"
 #include "game.h"
-#include "input.h"
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
 

@@ -44,7 +44,7 @@ void chunk_generate(Chunk* chunk) {
         for (int z = 0; z < CHUNK_DEPTH; z++) {
             int index = x + CHUNK_WIDTH * (9 + CHUNK_HEIGHT * z);
             if (RAND(0, 16) == 0) {
-                chunk->data[index] = DIRT;
+                chunk->data[index] = GRASS;
             }
         }
     }

@@ -3,9 +3,6 @@
 #include <cglm/cglm.h>
 #include <math.h>
 
-#define PLAYER_EYE_HEIGHT 1.6f
-#define EPSILON 0.0001f
-
 static int is_solid(uint16_t b) {
     return b != 0;
 }
@@ -38,6 +35,19 @@ static int aabb_collides(World* world, Player* p) {
     }
 
     return 0;
+}
+
+static int player_on_ground(World* world, Player* p) {
+    p->aabb.y -= EPSILON;
+    int grounded = aabb_collides(world, p);
+    p->aabb.y += EPSILON;
+    return grounded;
+}
+
+void player_jump(World* world, Player* p) {
+    if (player_on_ground(world, p)) {
+        p->camera.vel[1] = JUMP_SPEED;
+    }
 }
 
 static void move_axis(World* world, Player* p, int axis, float delta) {
@@ -94,7 +104,7 @@ void player_init(Player* p) {
     p->aabb.h = 1.8f;
     p->aabb.d = 0.6f;
 
-    p->speed = 100.0f;
+    p->speed = 50.0f;
     p->sensitivity = 0.00025f;
 
     sync_aabb(p);
@@ -138,16 +148,19 @@ void player_tick(World* world, Player* p, Input* in, float dt) {
     p->camera.vel[0] += accel[0] * dt;
     p->camera.vel[2] += accel[2] * dt;
 
-    if (input_down(in, GLFW_KEY_E))
-        p->camera.vel[1] += speed * dt;
+    // JUMP INPUT
+    if (input_down(in, GLFW_KEY_SPACE)) {
+        player_jump(world, p);
+    }
 
-    if (input_down(in, GLFW_KEY_Q))
-        p->camera.vel[1] -= speed * dt;
+    p->camera.vel[1] -= GRAVITY * dt;
 
-    float damping = 5.0f;
+    float damping = 10.0f;
     float factor = 1.0f - damping * dt;
     if (factor < 0.0f) factor = 0.0f;
-    glm_vec3_scale(p->camera.vel, factor, p->camera.vel);
+
+    p->camera.vel[0] *= factor;
+    p->camera.vel[2] *= factor;
 
     player_move_vel(world, p, dt);
 
@@ -167,4 +180,9 @@ void player_get_view(Player* p, mat4 view) {
 
 void player_get_pos(Player* p, vec3 out) {
     glm_vec3_copy(p->camera.pos, out);
+}
+
+void player_get_eye(Player* p, vec3 out) {
+    glm_vec3_copy(p->camera.pos, out);
+    out[1] += PLAYER_EYE_HEIGHT;
 }

@@ -11,6 +11,7 @@
 #include "world.h"
 #include "input.h"
 #include "rand.h"
+#include "raycast.h"
 #include <GLFW/glfw3.h>
 
 Player player;
@@ -29,6 +30,9 @@ float wdelay = 0.0f;
 
 Input input_manager;
 Texture texture_atlas;
+
+static float break_delay = 0.0f;
+static float place_delay = 0.0f;
 
 void game_init() {
     world_init(&world);
@@ -75,6 +79,21 @@ void game_init() {
     text_create(&demo_text, "BLOCKS", 0x5F, 0, 0);
 }
 
+static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
+    int cx = (wx >= 0) ? wx / CHUNK_WIDTH : (wx - CHUNK_WIDTH + 1) / CHUNK_WIDTH;
+    int cz = (wz >= 0) ? wz / CHUNK_DEPTH : (wz - CHUNK_DEPTH + 1) / CHUNK_DEPTH;
+
+    world_rebuild_chunk(world, cx, cz);
+
+    int lx = wx - cx * CHUNK_WIDTH;
+    int lz = wz - cz * CHUNK_DEPTH;
+
+    if (lx == 0)             world_rebuild_chunk(world, cx - 1, cz);
+    if (lx == CHUNK_WIDTH - 1)  world_rebuild_chunk(world, cx + 1, cz);
+    if (lz == 0)             world_rebuild_chunk(world, cx, cz - 1);
+    if (lz == CHUNK_DEPTH - 1)  world_rebuild_chunk(world, cx, cz + 1);
+}
+
 void game_tick(float dt) {
     input_update(&input_manager);
 
@@ -93,7 +112,37 @@ void game_tick(float dt) {
         wdelay = 0.25f;
     }
 
-    wdelay-=dt;
+    wdelay -= dt;
+
+    // Raycast from player's eye
+    vec3 eye;
+    player_get_eye(&player, eye);
+
+    RaycastHit hit;
+    raycast_dda(&world, eye, player.camera.forward, 5.0f, &hit);
+
+    break_delay -= dt;
+    place_delay -= dt;
+
+    if (hit.hit && break_delay <= 0.0f) {
+        if (glfwGetMouseButton(input_manager.win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            world_set_block(&world, hit.bx, hit.by, hit.bz, AIR);
+            rebuild_chunks_for_block(&world, hit.bx, hit.by, hit.bz);
+            break_delay = 0.2f;
+        }
+    }
+
+    if (hit.hit && place_delay <= 0.0f) {
+        if (glfwGetMouseButton(input_manager.win, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+            int px = hit.bx + (int)hit.normal[0];
+            int py = hit.by + (int)hit.normal[1];
+            int pz = hit.bz + (int)hit.normal[2];
+
+            world_set_block(&world, px, py, pz, DIRT);
+            rebuild_chunks_for_block(&world, px, py, pz);
+            place_delay = 0.2f;
+        }
+    }
 }
 
 void game_draw() {
@@ -114,3 +163,4 @@ void game_draw() {
 void game_destroy() {
     world_destroy(&world);
 }
+

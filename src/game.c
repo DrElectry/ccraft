@@ -8,12 +8,13 @@
 #include "tex.h"
 #include "gfx.h"
 #include "chunk.h"
+#include "world.h"
 #include "input.h"
 #include <GLFW/glfw3.h>
 
 Camera main_camera;
 HText demo_text;
-Chunk test;
+World world;
 
 Shader a, b;
 Program c;
@@ -28,9 +29,21 @@ Texture texture_atlas;
 
 float sensitivity = 0.00025f;
 
+int game_ticks;
+
 void game_init() {
-    chunk_generate(&test);
-    chunk_rebuild(&test);
+    world_init(&world);
+
+    int grid_size = 3;
+    for (int x = 0; x < grid_size; x++) {
+        for (int z = 0; z < grid_size; z++) {
+            Chunk chunk;
+            chunk_generate(&chunk);
+            chunk_rebuild(&chunk);
+            vec2 pos = { (float)x, (float)z };
+            world_add_chunk(&world, &chunk, pos);
+        }
+    }
 
     texture_atlas.mag_filter = GL_NEAREST;
     texture_atlas.min_filter = GL_NEAREST;
@@ -113,9 +126,13 @@ void game_draw() {
     program_set_mat4(&c, "proj", (float*)projection);
     program_set_mat4(&c, "view", (float*)view);
 
-    gfx_render(&test.model, &c);
+    world_render(&world, &c);
 
     text_draw(&demo_text);
 
     glfwSwapBuffers(_win->glwin);
+}
+
+void game_destroy() {
+    world_destroy(&world);
 }

@@ -23,18 +23,11 @@ void chunk_generate(Chunk* chunk) {
         CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t)
     );
 
-    RNG rng;
-    rng_seed(&rng, 0xA14F5C1DAAB61DC6);
-
     for (int x = 0; x < CHUNK_WIDTH; x++) {
         for (int y = 0; y < CHUNK_HEIGHT; y++) {
             for (int z = 0; z < CHUNK_DEPTH; z++) {
                 int index = x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z);
-                if (RAND(&rng, 0, 1) == 0) {
-                    chunk->data[index] = GRASS;
-                } else {
-                    chunk->data[index] = AIR;
-                }
+                chunk->data[index] = GRASS;
             }
         }
     }
@@ -113,7 +106,6 @@ void chunk_rebuild(Chunk* chunk) {
         chunk->model.data_size = v_cursor * sizeof(float);
         chunk->model.tri_count = i_cursor / 3;
 
-        glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, chunk->model.pos);
         chunk->model.rot = 0.0f;
         glm_vec3_copy((vec3){1.0f, 1.0f, 1.0f}, chunk->model.scale);
 

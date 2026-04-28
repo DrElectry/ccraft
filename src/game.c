@@ -24,6 +24,9 @@ mat4 projection, view;
 
 float last_time = 0.0f;
 
+int wireframe = 0;
+float wdelay = 0.0f;
+
 Input input_manager;
 Texture texture_atlas;
 
@@ -82,6 +85,15 @@ void game_tick(float dt) {
 
     player_tick(&world, &player, &input_manager, dt);
     player_get_view(&player, view);
+
+    if (input_down(&input_manager, GLFW_KEY_M) && wdelay < 0) {
+        wireframe = !wireframe;
+        glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
+
+        wdelay = 0.25f;
+    }
+
+    wdelay-=dt;
 }
 
 void game_draw() {

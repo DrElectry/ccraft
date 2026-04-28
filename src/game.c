@@ -6,22 +6,17 @@
 #include "fm.h"
 #include "cam.h"
 #include "tex.h"
-#include "tile.h"
 #include "gfx.h"
+#include "chunk.h"
 #include "input.h"
 #include <GLFW/glfw3.h>
 
-Render_request tile;
 Camera main_camera;
 HText demo_text;
+Chunk test;
 
 Shader a, b;
 Program c;
-
-float v[1000];
-int i[1000];
-
-int vc, ic;
 
 mat4 projection, view;
 
@@ -34,21 +29,8 @@ Texture texture_atlas;
 float sensitivity = 0.00025f;
 
 void game_init() {
-    tile_push_face(v, i, (vec3){0.0f, 0.0f, 0.0f}, &vc, &ic, FRONT, 1);
-    tile_push_face(v, i, (vec3){0.0f, 0.0f, 0.0f}, &vc, &ic, BACK, 1);
-    tile_push_face(v, i, (vec3){0.0f, 0.0f, 0.0f}, &vc, &ic, LEFT, 1);
-    tile_push_face(v, i, (vec3){0.0f, 0.0f, 0.0f}, &vc, &ic, RIGHT, 1);
-    tile_push_face(v, i, (vec3){0.0f, 0.0f, 0.0f}, &vc, &ic, UP, 0);
-    tile_push_face(v, i, (vec3){0.0f, 0.0f, 0.0f}, &vc, &ic, DOWN, 2);
-
-    tile.data = v;
-    tile.triangles = i;
-    tile.data_size = vc * sizeof(float);
-    tile.tri_count = ic / 3;
-    glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, tile.pos);
-    tile.rot = 0.0f;
-    glm_vec3_copy((vec3){1.0f, 1.0f, 1.0f}, tile.scale);
-    gfx_packet_static_request(&tile);
+    chunk_generate(&test);
+    chunk_rebuild(&test);
 
     texture_atlas.mag_filter = GL_NEAREST;
     texture_atlas.min_filter = GL_NEAREST;
@@ -131,7 +113,7 @@ void game_draw() {
     program_set_mat4(&c, "proj", (float*)projection);
     program_set_mat4(&c, "view", (float*)view);
 
-    gfx_render(&tile, &c);
+    gfx_render(&test.model, &c);
 
     text_draw(&demo_text);
 

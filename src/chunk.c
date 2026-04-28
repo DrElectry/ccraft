@@ -6,6 +6,16 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+int lookup_atlas[] = { // strict 6 ints per block FRONT BACK LEFT RIGHT UP DOWN
+    0,0,0,0,0,0, // air has zero standards
+    1,1,1,1,0,2, // grass
+};
+
+inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
+{
+    return lookup_atlas[tile_id * 6 + face];
+}
+
 void chunk_generate(Chunk* chunk) {
     chunk->data = (uint16_t*)malloc(
         CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t)
@@ -60,27 +70,27 @@ void chunk_rebuild(Chunk* chunk) {
 
                 // +z
                 if (z + 1 >= CHUNK_DEPTH || chunk->data[x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * (z + 1))] == AIR)
-                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, FRONT, tile_id);
+                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, FRONT, atlas_lookup(tile_id, FRONT));
 
                 // -z
                 if (z - 1 < 0 || chunk->data[x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * (z - 1))] == AIR)
-                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, BACK, tile_id);
+                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, BACK, atlas_lookup(tile_id, BACK));
 
                 // -x
                 if (x - 1 < 0 || chunk->data[(x - 1) + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z)] == AIR)
-                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, LEFT, tile_id);
+                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, LEFT, atlas_lookup(tile_id, LEFT));
 
                 // +x
                 if (x + 1 >= CHUNK_WIDTH || chunk->data[(x + 1) + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z)] == AIR)
-                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, RIGHT, tile_id);
+                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, RIGHT, atlas_lookup(tile_id, RIGHT));
 
                 // +y
                 if (y + 1 >= CHUNK_HEIGHT || chunk->data[x + CHUNK_WIDTH * ((y + 1) + CHUNK_HEIGHT * z)] == AIR)
-                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, UP, tile_id);
+                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, UP, atlas_lookup(tile_id, UP));
 
                 // -y
                 if (y - 1 < 0 || chunk->data[x + CHUNK_WIDTH * ((y - 1) + CHUNK_HEIGHT * z)] == AIR)
-                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, DOWN, tile_id);
+                    tile_push_face(vertices, (unsigned int*)indices, (float[]){(float)x, (float)y, (float)z}, &v_cursor, &i_cursor, DOWN, atlas_lookup(tile_id, DOWN));
             }
         }
     }

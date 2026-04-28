@@ -5,9 +5,9 @@
 #include "gfx.h"
 #include <cglm/cglm.h>
 
-#define CHUNK_WIDTH 4
-#define CHUNK_HEIGHT 4 // for now, later will be 256
-#define CHUNK_DEPTH 4
+#define CHUNK_WIDTH 16
+#define CHUNK_HEIGHT 16 // for now, later will be 256
+#define CHUNK_DEPTH 16
 
 typedef enum : uint16_t {
     AIR = 0,

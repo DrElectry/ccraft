@@ -81,6 +81,14 @@ uint16_t world_get_block(World* world, int wx, int wy, int wz) {
     return chunk->data[index];
 }
 
+uint16_t world_get_block_at(World* world, vec3 p) {
+    int wx = (int)floorf(p[0]);
+    int wy = (int)floorf(p[1]);
+    int wz = (int)floorf(p[2]);
+
+    return world_get_block(world, wx, wy, wz);
+}
+
 void world_rebuild_chunk(World* world, int cx, int cz) {
     Chunk* chunk = world_get_chunk(world, cx, cz);
     if (chunk) {

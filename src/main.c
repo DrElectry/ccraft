@@ -23,7 +23,7 @@ int main() {
 
     ASSERT(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress), "no glad");
 
-    glfwSwapInterval(0);
+    glfwSwapInterval(0); // damp this for vsync or no vsync
 
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -34,16 +34,17 @@ int main() {
     glEnable(GL_CULL_FACE);
 
     game_init();
-    double last_time;
+
+    double last_time = glfwGetTime();
     float fps_timer = 0.0f;
     int fps_counter = 0;
 
     while (!window_shouldclose()) {
         double current_time = glfwGetTime();
-        float delta = (float)(current_time - last_time);
+        float delta_time = (float)(current_time - last_time);
         last_time = current_time;
 
-        fps_timer += delta;
+        fps_timer += delta_time;
         fps_counter++;
 
         if (fps_timer >= 1.0f) {
@@ -54,9 +55,13 @@ int main() {
 
         window_update();
         window_draw();
-        game_tick();
+        game_tick(delta_time);
         game_draw();
     }
 
     game_destroy();
+
+    glfwTerminate();
+
+    return 0;
 }

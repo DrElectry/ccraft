@@ -20,8 +20,11 @@ void camera_calculate(Camera* cam) {
 }
 
 void camera_tick(Camera* cam, float dt) {
-    glm_vec3_add(cam->pos, cam->vel, cam->pos);
-    float damping = powf(0.00001f, dt); // nice code
+    vec3 displacement;
+    glm_vec3_scale(cam->vel, dt, displacement);
+    glm_vec3_add(cam->pos, displacement, cam->pos);
+    float damping = expf(-8.0f * dt);
+    glm_vec3_scale(cam->vel, damping, cam->vel);
     glm_vec3_scale(cam->vel, damping, cam->vel);
     camera_calculate(cam);
 }

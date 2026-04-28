@@ -21,5 +21,6 @@ uint16_t world_get_block(World* world, int wx, int wy, int wz);
 void world_rebuild_chunk(World* world, int cx, int cz);
 void world_destroy(World* world);
 void world_render(World* world, void* active_program);
+uint16_t world_get_block_at(World* world, vec3 p);
 
 #endif

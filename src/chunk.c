@@ -3,6 +3,8 @@
 #include "tile.h"
 #include "gfx.h"
 
+#include "rand.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -21,11 +23,18 @@ void chunk_generate(Chunk* chunk) {
         CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t)
     );
 
+    RNG rng;
+    rng_seed(&rng, 0xA14F5C1DAAB61DC6);
+
     for (int x = 0; x < CHUNK_WIDTH; x++) {
         for (int y = 0; y < CHUNK_HEIGHT; y++) {
             for (int z = 0; z < CHUNK_DEPTH; z++) {
                 int index = x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z);
-                chunk->data[index] = GRASS;
+                if (RAND(&rng, 0, 1) == 0) {
+                    chunk->data[index] = GRASS;
+                } else {
+                    chunk->data[index] = AIR;
+                }
             }
         }
     }

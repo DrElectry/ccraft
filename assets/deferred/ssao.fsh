@@ -9,9 +9,9 @@ uniform mat4 proj;
 in vec2 out_uv;
 out float fragColor;
 
-const float ssaoRadius = 0.15;
+const float ssaoRadius = 0.1;
 const float bias = 0.0025;
-const int samples = 16;
+const int samples = 32;
 
 vec3 clipToView(vec2 uv, float d)
 {
@@ -74,7 +74,6 @@ void main()
     }
 
     occ /= float(samples);
-    occ = pow(occ, 1.2);
     occ = clamp(occ, 0.0, 1.0);
 
     fragColor = 1.0 - occ;

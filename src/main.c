@@ -38,21 +38,29 @@ int main() {
 
     FBO gbuffer;
     FBO shadow_pass;
+    FBO ssaofb;
 
-    Shader mainv, mainf;
-    Program main;
-    File mainfv, mainff;
+    Shader mainv, mainf, ssaof;
+    Program main, ssao;
+    File mainfv, mainff, ssaoff;
 
     mainv.type = GL_VERTEX_SHADER;
     mainf.type = GL_FRAGMENT_SHADER;
+    ssaof.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
     mainff = file_open("assets/deferred/main.fsh");
+    ssaoff = file_open("assets/deferred/ssao.fsh");
 
     shader_create(&mainv, mainfv.data);
     shader_create(&mainf, mainff.data); // i know that writing this in main.c is not the best thing to do, why do i even write so much shit in main.c?
+    
+    shader_create(&ssaof, ssaoff.data);
 
     program_create(&main, &mainv, &mainf);
+    program_create(&ssao, &mainv, &ssaof);
+
+    fbo_create(&ssaofb, 1280, 720, 1);
 
     fbo_create(&gbuffer, 1280, 720, 2);
     fbo_create_depth(&shadow_pass, 2048, 2048);
@@ -97,17 +105,39 @@ int main() {
 
         fbo_unbind();
 
+        fbo_bind(&ssaofb);
+        window_draw();
+        
+        program_use(&ssao);
+
+        fbo_bind_depth_texture(&gbuffer, 0);
+        fbo_bind_texture(&gbuffer, 1, 1); // normal is at color attachment 1
+        program_set_int(&ssao, "gDepth", 0);
+        program_set_int(&ssao, "gNormal", 1);
+
+        program_set_mat4(&ssao, "inverseProjection", (float*)inv_projection);
+        program_set_mat4(&ssao, "proj", (float*)projection);
+
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
         program_use(&main);
 
         fbo_bind_texture(&gbuffer, 0, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
         fbo_bind_depth_texture(&gbuffer, 2);
         fbo_bind_depth_texture(&shadow_pass, 3);
+        fbo_bind_texture(&ssaofb, 0, 4);
 
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
         program_set_int(&main, "gDepth", 2);
         program_set_int(&main, "dShadow", 3);
+        program_set_int(&main, "dSSAO", 4);
 
         program_set_mat4(&main, "light_space_matrix", (float*)light_space_matrix);
         program_set_mat4(&main, "inv_projection", (float*)inv_projection);

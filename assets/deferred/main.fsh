@@ -4,6 +4,7 @@ uniform sampler2D gAlbedo;
 uniform sampler2D gDepth;
 uniform sampler2D gNormal;
 uniform sampler2D dShadow;
+uniform sampler2D dSSAO;
 
 uniform mat4 inv_projection;
 uniform mat4 inv_view;
@@ -181,6 +182,7 @@ vec3 reconstructWorldPosition(float depth)
 
 void main()
 {
+    float ao = texture(dSSAO, out_uv).r;
     vec3 albedo = texture(gAlbedo, out_uv).rgb;
 
     float depth = texture(gDepth, out_uv).r;
@@ -202,8 +204,8 @@ void main()
     float diffuse =
         max(dot(normal, L), 0.0);
 
-    vec3 ambient =
-        albedo * 0.35;
+vec3 ambient =
+        albedo * 0.35*ao;  // Apply AO to ambient lighting
 
     vec3 direct =
         albedo *

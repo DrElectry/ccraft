@@ -68,3 +68,9 @@ void program_set_vec3(Program* program, const char* name, const float* vec3) {
     ASSERT(loc != -1, "no such uniform, %s", name);
     glUniform3f(loc, vec3[0], vec3[1], vec3[2]);
 }
+
+void program_set_vec2(Program* program, const char* name, const float* vec2) {
+    int loc = glGetUniformLocation(program->id, name);
+    ASSERT(loc != -1, "no such uniform, %s", name);
+    glUniform2f(loc, vec2[0], vec2[1]);
+}

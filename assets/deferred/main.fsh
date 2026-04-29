@@ -203,7 +203,7 @@ void main()
         max(dot(normal, L), 0.0);
 
     vec3 ambient =
-        albedo * 0.2;
+        albedo * 0.35;
 
     vec3 direct =
         albedo *
@@ -213,7 +213,6 @@ void main()
 
     vec3 lighting =
         ambient + direct;
-
     fragColor = vec4(lighting, 1.0);
     return;
 }

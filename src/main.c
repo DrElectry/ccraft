@@ -113,8 +113,8 @@ int main() {
         program_set_mat4(&main, "inv_projection", (float*)inv_projection);
         program_set_mat4(&main, "inv_view", (float*)inv_view);
 
-        program_set_vec3(&main, "lightDir", (float*)light_pos);
-        program_set_vec3(&main, "lightColor", (float*)(vec3){2.0f, 2.0f, 2.0f});
+        program_set_vec3(&main, "lightDir", (float*)light_dir);
+        program_set_vec3(&main, "lightColor", (float*)(vec3){1.0f, 1.0f, 1.0f});
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);

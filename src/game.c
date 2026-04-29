@@ -24,6 +24,7 @@ Program c;
 
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix;
 vec3 light_pos = { 20.0f, 40.0f, -30.0f };
+vec3 light_dir = { 2.0f, 4.0f, -3.0f };
 vec3 target = { 32.0f, 0.0f, 32.0f };
 vec3 up = { 0.0f, 1.0f, 0.0f };
 
@@ -39,7 +40,6 @@ static float break_delay = 0.0f;
 static float place_delay = 0.0f;
 
 void game_init() {
-    // init static light
     glm_ortho(
         -64.0f, 64.0f,
         -64.0f, 64.0f,
@@ -160,8 +160,16 @@ void game_tick(float dt) {
     }
 }
 
-void game_shadow_pass(void) { // cool shadow pass
+void game_shadow_pass(void) {
+    glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
+
+    vec3 light_offset = { 20.0f, 40.0f, -30.0f };
+    glm_vec3_add(player.camera.pos, light_offset, light_pos);
+    glm_lookat(light_pos, player.camera.pos, up, light_view);
     glm_mat4_mul(light_proj, light_view, light_space_matrix);
+
+    glm_vec3_copy(light_offset, light_dir);
+    glm_vec3_normalize(light_dir);
 
     glViewport(0, 0, 2048, 2048);
     glEnable(GL_DEPTH_TEST);

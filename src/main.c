@@ -37,6 +37,8 @@ int main() {
     glEnable(GL_CULL_FACE);
 
     FBO gbuffer;
+    FBO shadow_pass;
+
     Shader mainv, mainf;
     Program main;
     File mainfv, mainff;
@@ -53,6 +55,7 @@ int main() {
     program_create(&main, &mainv, &mainf);
 
     fbo_create(&gbuffer, 1280, 720, 2);
+    fbo_create_depth(&shadow_pass, 2048, 2048);
 
     game_init();
 
@@ -87,15 +90,28 @@ int main() {
 
         fbo_unbind();
 
+        fbo_bind(&shadow_pass);
+
+        window_draw();
+        game_shadow_pass();
+
+        fbo_unbind();
+
         program_use(&main);
 
         fbo_bind_texture(&gbuffer, 0, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
         fbo_bind_depth_texture(&gbuffer, 2);
+        fbo_bind_depth_texture(&shadow_pass, 3);
 
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
         program_set_int(&main, "gDepth", 2);
+        program_set_int(&main, "dShadow", 3);
+
+        program_set_mat4(&main, "light_space_matrix", (float*)light_space_matrix);
+        program_set_mat4(&main, "inv_projection", (float*)inv_projection);
+        program_set_mat4(&main, "inv_view", (float*)inv_view);
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);

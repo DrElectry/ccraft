@@ -86,6 +86,56 @@ void fbo_create(FBO* fbo, int width, int height, int color_count)
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void fbo_create_depth(FBO* fbo, int width, int height)
+{
+    glGenFramebuffers(1, &fbo->id);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo->id);
+
+    fbo->color_count = 0;
+
+    glGenTextures(1, &fbo->depth_attachment);
+    glBindTexture(GL_TEXTURE_2D, fbo->depth_attachment);
+
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_DEPTH_COMPONENT24,
+        width,
+        height,
+        0,
+        GL_DEPTH_COMPONENT,
+        GL_FLOAT,
+        NULL
+    );
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+    float borderColor[] = {1.0, 1.0, 1.0, 1.0};
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+    glFramebufferTexture2D(
+        GL_FRAMEBUFFER,
+        GL_DEPTH_ATTACHMENT,
+        GL_TEXTURE_2D,
+        fbo->depth_attachment,
+        0
+    );
+
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        printf("DEPTH FBO ERROR: Framebuffer not complete!\n");
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void fbo_bind(FBO* fbo)
 {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo->id);

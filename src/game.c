@@ -22,7 +22,7 @@ World world;
 Shader a, b;
 Program c;
 
-mat4 projection, view;
+mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix;
 
 float last_time = 0.0f;
 
@@ -36,6 +36,18 @@ static float break_delay = 0.0f;
 static float place_delay = 0.0f;
 
 void game_init() {
+    // init static light
+    glm_ortho(
+        -64.0f, 64.0f,
+        -64.0f, 64.0f,
+        1.0f, 200.0f,
+        light_proj
+    );
+    vec3 light_pos = { 20.0f, 40.0f, -30.0f };
+    vec3 target = { 32.0f, 0.0f, 32.0f };
+    vec3 up = { 0.0f, 1.0f, 0.0f };
+    glm_lookat(light_pos, target, up, light_view);
+    
     world_init(&world);
     rng_seed(0x11223344AABBCCDD);
 
@@ -105,6 +117,9 @@ void game_tick(float dt) {
 
     player_tick(&world, &player, &input_manager, dt);
     player_get_view(&player, view);
+    
+    glm_mat4_inv(projection, inv_projection);
+    glm_mat4_inv(view, inv_view);
 
     if (input_down(&input_manager, GLFW_KEY_M) && wdelay < 0) {
         wireframe = !wireframe;
@@ -114,8 +129,7 @@ void game_tick(float dt) {
     }
 
     wdelay -= dt;
-
-    // Raycast from player's eye
+    
     vec3 eye;
     player_get_eye(&player, eye);
 
@@ -144,6 +158,21 @@ void game_tick(float dt) {
             place_delay = 0.2f;
         }
     }
+}
+
+void game_shadow_pass(void) { // cool shadow pass
+    glm_mat4_mul(light_proj, light_view, light_space_matrix);
+
+    glViewport(0, 0, 2048, 2048);
+    glEnable(GL_DEPTH_TEST);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    program_use(&c);
+    texture_bind(&texture_atlas, 0);
+    program_set_int(&c, "tex", 0);
+    program_set_mat4(&c, "proj", (float*)light_proj);
+    program_set_mat4(&c, "view", (float*)light_view);
+    world_render(&world, &c);
+    glViewport(0, 0, 1280, 720);
 }
 
 void game_draw() {

@@ -23,6 +23,9 @@ Shader a, b;
 Program c;
 
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix;
+vec3 light_pos = { 20.0f, 40.0f, -30.0f };
+vec3 target = { 32.0f, 0.0f, 32.0f };
+vec3 up = { 0.0f, 1.0f, 0.0f };
 
 float last_time = 0.0f;
 
@@ -43,9 +46,6 @@ void game_init() {
         1.0f, 200.0f,
         light_proj
     );
-    vec3 light_pos = { 20.0f, 40.0f, -30.0f };
-    vec3 target = { 32.0f, 0.0f, 32.0f };
-    vec3 up = { 0.0f, 1.0f, 0.0f };
     glm_lookat(light_pos, target, up, light_view);
     
     world_init(&world);
@@ -129,7 +129,7 @@ void game_tick(float dt) {
     }
 
     wdelay -= dt;
-    
+
     vec3 eye;
     player_get_eye(&player, eye);
 

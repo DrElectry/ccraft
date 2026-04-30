@@ -31,7 +31,7 @@ int main() {
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    glClearColor(0.1f, 0.2f, 0.2f, 1.0f);
+    glClearColor(0.8f, 1.0f, 1.0f, 1.0f);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -63,7 +63,7 @@ int main() {
     fbo_create(&ssaofb, 1280, 720, 1);
 
     fbo_create(&gbuffer, 1280, 720, 2);
-    fbo_create_depth(&shadow_pass, 2048, 2048);
+    fbo_create_depth(&shadow_pass, 4096, 4096);
 
     game_init();
 
@@ -141,7 +141,7 @@ int main() {
         gfx_draw_fullscreen_quad();
 
         fbo_unbind();
-        
+
         program_use(&main);
 
         fbo_bind_texture(&gbuffer, 0, 0);

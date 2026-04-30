@@ -173,7 +173,7 @@ void game_shadow_pass(void) {
     glm_vec3_copy(light_offset, light_dir);
     glm_vec3_normalize(light_dir);
 
-    glViewport(0, 0, 2048, 2048);
+    glViewport(0, 0, 4096, 4096);
     glEnable(GL_DEPTH_TEST);
     glClear(GL_DEPTH_BUFFER_BIT);
     program_use(&c);

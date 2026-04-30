@@ -10,6 +10,9 @@ uniform sampler2D tex;
 
 void main() {
     vec4 data = texture(tex, out_uv);
+    if (data.a < 0.1) {
+        discard;
+    }
     gAlbedo = data.rgb;
     gNormal = out_normal;
 }

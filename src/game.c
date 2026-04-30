@@ -133,6 +133,8 @@ void game_tick(float dt) {
     vec3 eye;
     player_get_eye(&player, eye);
 
+    world_tick(&world, eye);
+
     RaycastHit hit;
     raycast_dda(&world, eye, player.camera.forward, 5.0f, &hit);
 
@@ -192,7 +194,9 @@ void game_draw() {
     program_set_mat4(&c, "view", (float*)view);
 
     world_render(&world, &c);
+}
 
+void game_draw_hud() {
     text_draw(&demo_text);
 }
 

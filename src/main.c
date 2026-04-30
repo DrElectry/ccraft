@@ -151,6 +151,8 @@ int main() {
 
         gfx_draw_fullscreen_quad();
 
+        game_draw_hud();
+
         glfwSwapBuffers(_win->glwin);
     }
 

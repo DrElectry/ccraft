@@ -85,33 +85,50 @@ int main() {
             fps_timer = 0.0f;
         }
 
+        game_tick(delta_time);
+
+        if (wireframe) {
+            fbo_unbind();
+
+            window_update();
+            window_draw();
+
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_CULL_FACE);
+
+            game_draw();
+
+            game_draw_hud();
+
+            glfwSwapBuffers(_win->glwin);
+            continue;
+        }
+
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
-
         fbo_bind(&gbuffer);
 
         window_update();
-        window_draw(); // dead code xd
+        window_draw();
 
-        game_tick(delta_time);
         game_draw();
 
         fbo_unbind();
-
         fbo_bind(&shadow_pass);
 
         window_draw();
         game_shadow_pass();
 
         fbo_unbind();
-
         fbo_bind(&ssaofb);
+
         window_draw();
-        
+
         program_use(&ssao);
 
         fbo_bind_depth_texture(&gbuffer, 0);
-        fbo_bind_texture(&gbuffer, 1, 1); // normal is at color attachment 1
+        fbo_bind_texture(&gbuffer, 1, 1);
+
         program_set_int(&ssao, "gDepth", 0);
         program_set_int(&ssao, "gNormal", 1);
 
@@ -124,7 +141,7 @@ int main() {
         gfx_draw_fullscreen_quad();
 
         fbo_unbind();
-
+        
         program_use(&main);
 
         fbo_bind_texture(&gbuffer, 0, 0);

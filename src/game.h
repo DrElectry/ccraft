@@ -7,6 +7,7 @@
 extern mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix;
 extern vec3 light_pos;
 extern vec3 light_dir;
+extern int wireframe;
 
 void game_init();
 void game_draw();

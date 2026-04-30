@@ -12,17 +12,27 @@ void fbo_create(FBO* fbo, int width, int height, int color_count)
 
     for (int i = 0; i < color_count; i++)
     {
+        int format, channels;
+        
+        if (fbo->color_formats[i] == FBO_COLOR_RG16F) {
+            format = GL_RG16F;
+            channels = GL_RG;
+        } else {
+            format = GL_RGB16F;
+            channels = GL_RGB;
+        }
+
         glGenTextures(1, &fbo->color_attachments[i]);
         glBindTexture(GL_TEXTURE_2D, fbo->color_attachments[i]);
 
         glTexImage2D(
             GL_TEXTURE_2D,
             0,
-            GL_RGB16F,
+            format,
             width,
             height,
             0,
-            GL_RGB,
+            channels,
             GL_FLOAT,
             NULL
         );

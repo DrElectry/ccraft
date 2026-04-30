@@ -5,11 +5,17 @@
 
 #define MAX_FBO_ATTACHMENTS 8
 
+typedef enum {
+    FBO_COLOR_RGB16F,
+    FBO_COLOR_RG16F,
+} FBOColorFormat;
+
 typedef struct {
     unsigned int id;
 
     unsigned int color_attachments[MAX_FBO_ATTACHMENTS];
     int color_count;
+    FBOColorFormat color_formats[MAX_FBO_ATTACHMENTS];
 
     unsigned int depth_attachment;
 } FBO;

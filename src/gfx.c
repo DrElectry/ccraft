@@ -31,7 +31,11 @@ void gfx_render(Render_request *r, Program* active_program) {
     glm_mat4_identity(model_matrix);
 
     glm_translate(model_matrix, r->pos);
-    glm_rotate(model_matrix, r->rot, (vec3){0.0f, 1.0f, 0.0f});
+    
+    glm_rotate(model_matrix, r->rot[0], (vec3){1.0f, 0.0f, 0.0f});
+    glm_rotate(model_matrix, r->rot[1], (vec3){0.0f, 1.0f, 0.0f});
+    glm_rotate(model_matrix, r->rot[2], (vec3){0.0f, 0.0f, 1.0f});
+    
     glm_scale(model_matrix, r->scale);
 
     program_use(active_program);

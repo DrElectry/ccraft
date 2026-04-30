@@ -14,6 +14,7 @@ int lookup_atlas[] = { // strict 6 ints per block FRONT BACK LEFT RIGHT UP DOWN
     1,1,1,1,0,2, // grass
     2,2,2,2,2,2, // dirt
     3,3,3,3,3,3, // leaves
+    4,4,4,4,4,4, // stone
 };
 
 int lookup_transparent[] = {
@@ -21,6 +22,7 @@ int lookup_transparent[] = {
     0,
     0,
     1, // leaves are transparent
+    0,
 };
 
 inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
@@ -52,7 +54,7 @@ void chunk_generate(Chunk* chunk) {
         for (int z = 0; z < CHUNK_DEPTH; z++) {
             int index = x + CHUNK_WIDTH * (9 + CHUNK_HEIGHT * z);
             if (RAND(0, 16) == 0) {
-                chunk->data[index] = LEAVES;
+                chunk->data[index] = STONE;
             }
         }
     }
@@ -187,7 +189,7 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
         chunk->model.data_size = v_cursor * sizeof(float);
         chunk->model.tri_count = i_cursor / 3;
 
-        chunk->model.rot = 0.0f;
+        glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, chunk->model.rot);
 
         glm_vec3_copy(
             (vec3){1.0f, 1.0f, 1.0f},

@@ -39,30 +39,41 @@ int main() {
     FBO gbuffer;
     FBO shadow_pass;
     FBO ssaofb;
+    FBO ppfb;
+    FBO prev_frame;
 
-    Shader mainv, mainf, ssaof;
-    Program main, ssao;
-    File mainfv, mainff, ssaoff;
+    Shader mainv, mainf, ssaof, ppf;
+    Program main, ssao, pp;
+    File mainfv, mainff, ssaoff, ppff;
 
     mainv.type = GL_VERTEX_SHADER;
     mainf.type = GL_FRAGMENT_SHADER;
     ssaof.type = GL_FRAGMENT_SHADER;
+    ppf.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
     mainff = file_open("assets/deferred/main.fsh");
     ssaoff = file_open("assets/deferred/ssao.fsh");
+    ppff = file_open("assets/deferred/pp.fsh");
 
     shader_create(&mainv, mainfv.data);
     shader_create(&mainf, mainff.data); // i know that writing this in main.c is not the best thing to do, why do i even write so much shit in main.c?
-    
+
     shader_create(&ssaof, ssaoff.data);
+    shader_create(&ppf, ppff.data);
 
     program_create(&main, &mainv, &mainf);
     program_create(&ssao, &mainv, &ssaof);
+    program_create(&pp, &mainv, &ppf);
 
     fbo_create(&ssaofb, 1280, 720, 1);
+    fbo_create(&prev_frame, 1280, 720, 1);
+    fbo_create(&ppfb, 1280, 720, 1);
 
-    fbo_create(&gbuffer, 1280, 720, 2);
+    fbo_create(&gbuffer, 1280, 720, 3);
+    gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
+    gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
+    gbuffer.color_formats[2] = FBO_COLOR_RG16F;
     fbo_create_depth(&shadow_pass, 4096, 4096);
 
     game_init();
@@ -104,6 +115,12 @@ int main() {
             continue;
         }
 
+        fbo_bind(&prev_frame);
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
         fbo_bind(&gbuffer);
@@ -142,6 +159,8 @@ int main() {
 
         fbo_unbind();
 
+        fbo_bind(&ppfb);
+
         program_use(&main);
 
         fbo_bind_texture(&gbuffer, 0, 0);
@@ -165,6 +184,19 @@ int main() {
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
+        program_use(&pp);
+
+        fbo_bind_texture(&ppfb, 0, 0);
+        fbo_bind_texture(&gbuffer, 2, 1);
+
+        program_set_int(&pp, "colorTexture", 0);
+        program_set_int(&pp, "velocityTexture", 1);
+        program_set_int(&pp, "depthTexture", 2);
 
         gfx_draw_fullscreen_quad();
 

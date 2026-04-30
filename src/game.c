@@ -13,6 +13,10 @@
 #include "rand.h"
 #include "raycast.h"
 #include "fbo.h"
+#include "tile.h"
+#include "vao.h"
+#include "vbo.h"
+#include "ebo.h"
 #include <GLFW/glfw3.h>
 
 Player player;
@@ -23,6 +27,8 @@ Shader a, b;
 Program c;
 
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix;
+mat4 prev_view_proj;
+
 vec3 light_pos = { 20.0f, 40.0f, -30.0f };
 vec3 light_dir = { 2.0f, 4.0f, -3.0f };
 vec3 target = { 32.0f, 0.0f, 32.0f };
@@ -40,18 +46,14 @@ static float break_delay = 0.0f;
 static float place_delay = 0.0f;
 
 void game_init() {
-    glm_ortho(
-        -64.0f, 64.0f,
-        -64.0f, 64.0f,
-        1.0f, 200.0f,
-        light_proj
-    );
+    glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
     glm_lookat(light_pos, target, up, light_view);
-    
+
     world_init(&world);
     rng_seed(0x11223344AABBCCDD);
 
     int grid_size = 9;
+
     for (int x = 0; x < grid_size; x++) {
         for (int z = 0; z < grid_size; z++) {
             Chunk chunk;
@@ -60,6 +62,7 @@ void game_init() {
             world_add_chunk(&world, &chunk, pos);
         }
     }
+
     for (int x = 0; x < grid_size; x++) {
         for (int z = 0; z < grid_size; z++) {
             world_rebuild_chunk(&world, x, z);
@@ -101,13 +104,15 @@ static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
     int lx = wx - cx * CHUNK_WIDTH;
     int lz = wz - cz * CHUNK_DEPTH;
 
-    if (lx == 0)             world_rebuild_chunk(world, cx - 1, cz);
-    if (lx == CHUNK_WIDTH - 1)  world_rebuild_chunk(world, cx + 1, cz);
-    if (lz == 0)             world_rebuild_chunk(world, cx, cz - 1);
-    if (lz == CHUNK_DEPTH - 1)  world_rebuild_chunk(world, cx, cz + 1);
+    if (lx == 0) world_rebuild_chunk(world, cx - 1, cz);
+    if (lx == CHUNK_WIDTH - 1) world_rebuild_chunk(world, cx + 1, cz);
+    if (lz == 0) world_rebuild_chunk(world, cx, cz - 1);
+    if (lz == CHUNK_DEPTH - 1) world_rebuild_chunk(world, cx, cz + 1);
 }
 
 void game_tick(float dt) {
+    glm_mat4_mul(projection, view, prev_view_proj);
+
     input_update(&input_manager);
 
     float current_time = (float)glfwGetTime();
@@ -117,14 +122,13 @@ void game_tick(float dt) {
 
     player_tick(&world, &player, &input_manager, dt);
     player_get_view(&player, view);
-    
+
     glm_mat4_inv(projection, inv_projection);
     glm_mat4_inv(view, inv_view);
 
     if (input_down(&input_manager, GLFW_KEY_M) && wdelay < 0) {
         wireframe = !wireframe;
         glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
-
         wdelay = 0.25f;
     }
 
@@ -155,7 +159,7 @@ void game_tick(float dt) {
             int py = hit.by + (int)hit.normal[1];
             int pz = hit.bz + (int)hit.normal[2];
 
-            world_set_block(&world, px, py, pz, DIRT);
+            world_set_block(&world, px, py, pz, LEAVES);
             rebuild_chunks_for_block(&world, px, py, pz);
             place_delay = 0.2f;
         }
@@ -187,12 +191,12 @@ void game_shadow_pass(void) {
 
 void game_draw() {
     program_use(&c);
-
     texture_bind(&texture_atlas, 0);
     program_set_int(&c, "tex", 0);
     program_set_mat4(&c, "proj", (float*)projection);
     program_set_mat4(&c, "view", (float*)view);
-
+    program_set_mat4(&c, "prev_view_proj", (float*)prev_view_proj);
+    program_set_vec2(&c, "screen_size", (float[]){1280.0f, 720.0f});
     world_render(&world, &c);
 }
 
@@ -203,4 +207,3 @@ void game_draw_hud() {
 void game_destroy() {
     world_destroy(&world);
 }
-

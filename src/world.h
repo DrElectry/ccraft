@@ -14,7 +14,7 @@
 #endif
 
 #ifndef WORLD_RENDER_DISTANCE
-#define WORLD_RENDER_DISTANCE 4
+#define WORLD_RENDER_DISTANCE 6
 #endif
 
 typedef struct World {

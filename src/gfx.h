@@ -21,7 +21,7 @@ typedef struct {
     int tri_count;
 
     vec3 pos;
-    float rot;
+    vec3 rot;
     vec3 scale;
 
     GPUBuffer cache;

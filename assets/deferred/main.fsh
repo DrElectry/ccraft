@@ -205,7 +205,7 @@ void main()
         max(dot(normal, L), 0.0);
 
 vec3 ambient =
-        albedo * 0.35*ao;  // Apply AO to ambient lighting
+        albedo * 0.5*ao;
 
     vec3 direct =
         albedo *

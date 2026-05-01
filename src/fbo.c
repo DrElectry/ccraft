@@ -17,6 +17,9 @@ void fbo_create(FBO* fbo, int width, int height, int color_count)
         if (fbo->color_formats[i] == FBO_COLOR_RG16F) {
             format = GL_RG16F;
             channels = GL_RG;
+        } else if (fbo->color_formats[i] == FBO_COLOR_RGBA16F) {
+            format = GL_RGBA16F;
+            channels = GL_RGBA;
         } else {
             format = GL_RGB16F;
             channels = GL_RGB;

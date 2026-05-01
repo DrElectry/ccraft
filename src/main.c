@@ -41,39 +41,46 @@ int main() {
     FBO ssaofb;
     FBO ppfb;
     FBO prev_frame;
+    FBO ssrfb;
 
-    Shader mainv, mainf, ssaof, ppf;
-    Program main, ssao, pp;
-    File mainfv, mainff, ssaoff, ppff;
+    Shader mainv, mainf, ssaof, ppf, ssrf;
+    Program main, ssao, pp, ssr;
+    File mainfv, mainff, ssaoff, ppff, ssrff;
 
     mainv.type = GL_VERTEX_SHADER;
     mainf.type = GL_FRAGMENT_SHADER;
     ssaof.type = GL_FRAGMENT_SHADER;
     ppf.type = GL_FRAGMENT_SHADER;
+    ssrf.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
     mainff = file_open("assets/deferred/main.fsh");
     ssaoff = file_open("assets/deferred/ssao.fsh");
     ppff = file_open("assets/deferred/pp.fsh");
+    ssrff = file_open("assets/deferred/ssr.fsh");
 
     shader_create(&mainv, mainfv.data);
     shader_create(&mainf, mainff.data); // i know that writing this in main.c is not the best thing to do, why do i even write so much shit in main.c?
 
     shader_create(&ssaof, ssaoff.data);
     shader_create(&ppf, ppff.data);
+    shader_create(&ssrf, ssrff.data);
 
     program_create(&main, &mainv, &mainf);
     program_create(&ssao, &mainv, &ssaof);
     program_create(&pp, &mainv, &ppf);
+    program_create(&ssr, &mainv, &ssrf);
 
     fbo_create(&ssaofb, 1280, 720, 1);
     fbo_create(&prev_frame, 1280, 720, 1);
     fbo_create(&ppfb, 1280, 720, 1);
+    fbo_create(&ssrfb, 1280, 720, 1);
 
-    fbo_create(&gbuffer, 1280, 720, 3);
+    fbo_create(&gbuffer, 1280, 720, 4);
     gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[2] = FBO_COLOR_RG16F;
+    gbuffer.color_formats[3] = FBO_COLOR_RGBA16F;
     fbo_create_depth(&shadow_pass, 4096, 4096);
 
     game_init();
@@ -159,6 +166,25 @@ int main() {
 
         fbo_unbind();
 
+        fbo_bind(&ssrfb);
+
+        program_use(&ssr);
+
+        fbo_bind_texture(&gbuffer, 0, 0);
+        fbo_bind_texture(&gbuffer, 1, 1);
+        fbo_bind_texture(&gbuffer, 3, 3);
+
+        program_set_int(&ssr, "gAlbedo", 0);
+        program_set_int(&ssr, "gNormal", 1);
+        program_set_int(&ssr, "gPosition", 3);
+
+        program_set_mat4(&ssr, "projection", (float*)projection);
+        program_set_mat4(&ssr, "view", (float*)view);
+    
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
         fbo_bind(&ppfb);
 
         program_use(&main);
@@ -168,12 +194,14 @@ int main() {
         fbo_bind_depth_texture(&gbuffer, 2);
         fbo_bind_depth_texture(&shadow_pass, 3);
         fbo_bind_texture(&ssaofb, 0, 4);
+        fbo_bind_texture(&ssrfb, 0, 5);
 
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
         program_set_int(&main, "gDepth", 2);
         program_set_int(&main, "dShadow", 3);
         program_set_int(&main, "dSSAO", 4);
+        program_set_int(&main, "dSSR", 5);
 
         program_set_mat4(&main, "light_space_matrix", (float*)light_space_matrix);
         program_set_mat4(&main, "inv_projection", (float*)inv_projection);

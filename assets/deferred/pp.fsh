@@ -1,7 +1,7 @@
 #version 330 core
 
-#define SAMPLES 16
-#define BLUR_STRENGTH 0.01
+#define SAMPLES 32
+#define BLUR_STRENGTH 0.0125
 #define SKY_DEPTH_THRESHOLD 0.9995
 
 in vec2 out_uv;

@@ -13,6 +13,7 @@ uniform vec2 screen_size;
 out vec2 out_uv;
 out vec3 out_normal;
 out vec2 out_velocity;
+out vec3 out_view_pos;
 
 void main()
 {
@@ -21,6 +22,10 @@ void main()
 
     vec4 current_pos = proj * view * model * vec4(in_vert, 1.0);
     vec4 prev_pos = prev_view_proj * model * vec4(in_vert, 1.0);
+    
+    // View space position (for gbuffer attachment 3)
+    vec4 view_pos = view * model * vec4(in_vert, 1.0);
+    out_view_pos = view_pos.xyz;
 
     vec2 current_ndc = current_pos.xy / current_pos.w;
     vec2 prev_ndc = prev_pos.xy / prev_pos.w;

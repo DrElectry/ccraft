@@ -8,6 +8,7 @@
 typedef enum {
     FBO_COLOR_RGB16F,
     FBO_COLOR_RG16F,
+    FBO_COLOR_RGBA16F,
 } FBOColorFormat;
 
 typedef struct {

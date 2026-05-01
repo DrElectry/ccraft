@@ -56,6 +56,9 @@ void game_init() {
 
     for (int x = 0; x < grid_size; x++) {
         for (int z = 0; z < grid_size; z++) {
+            // Set chunk position for seeded noise generation
+            chunk_set_position(x, z);
+            
             Chunk chunk;
             chunk_generate(&chunk);
             vec2 pos = { (float)x, (float)z };

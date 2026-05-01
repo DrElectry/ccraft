@@ -3,6 +3,7 @@
 #include <math.h>
 #include "world.h"
 #include "rand.h"
+#include "noise.h"
 
 void world_init(World* world) {
     world->chunks_map = malloc(sizeof(Chunk) * MAX_LOADED_CHUNKS);
@@ -254,9 +255,15 @@ void world_tick(World* world, vec3 ppos) {
         int cx = (int)should_load[j][0];
         int cz = (int)should_load[j][1];
 
-        if (!world_get_chunk(world, cx, cz)) {
+if (!world_get_chunk(world, cx, cz)) {
             for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
                 if (world->index_map[i] == -1) {
+                    // Seed RNG for deterministic chunk generation
+                    rng_seed_chunk(cx, cz);
+                    
+                    // Set chunk position for noise-based terrain
+                    chunk_set_position(cx, cz);
+                    
                     Chunk chunk;
                     chunk_generate(&chunk);
 

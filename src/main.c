@@ -31,7 +31,7 @@ int main() {
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    glClearColor(0.8f, 1.0f, 1.0f, 1.0f);
+    glClearColor(0.3f, 1.0f, 1.0f, 1.0f);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);

@@ -72,7 +72,7 @@ void main()
     vec3 bloom = texture(bloomTexture, out_uv).rgb;
     bloom = bloom / (1.0 + bloom);
 
-    color += bloom * 0.15;
+    color += bloom * 0.35;
 
     fragColor = vec4(color, 1.0);
 }

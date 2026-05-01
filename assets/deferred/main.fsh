@@ -17,6 +17,10 @@ uniform vec3 lightColor;
 in vec2 out_uv;
 out vec4 fragColor;
 
+const vec3 FOG_COLOR = vec3(0.6, 0.7, 0.8);
+const float FOG_START = 20.0;
+const float FOG_END = 100.0;
+
 vec2 poissonDisk[16] = vec2[](
 vec2(-0.942, -0.399),
 vec2(0.945, -0.768),
@@ -36,7 +40,6 @@ vec2(0.199, 0.786),
 vec2(0.143, -0.141)
 );
 
-// Function declarations
 vec3 fresnelSchlick(float cosTheta, vec3 F0);
 float DistributionGGX(vec3 N, vec3 H, float roughness);
 float GeometrySchlickGGX(float NdotV, float roughness);
@@ -63,77 +66,72 @@ vec3 reconstructWorldPosition(float depth)
     return (inv_view * viewPos).xyz;
 }
 
+vec3 getCameraPos()
+{
+    return (inv_view * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+}
+
 float pcf(vec4 fragPosLightSpace)
 {
     vec3 proj = fragPosLightSpace.xyz / fragPosLightSpace.w;
     proj = proj * 0.5 + 0.5;
-    
+
     if (proj.z > 1.0)
         return 0.0;
-    
+
     float currentDepth = proj.z;
     vec2 texelSize = 1.0 / vec2(textureSize(dShadow, 0));
     mat2 rot = getRotation(out_uv);
-    
+
     vec3 normal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
     float bias = max(0.002 * (1.0 - dot(normal, normalize(lightDir))), 0.0005);
-    
+
     float shadow = 0.0;
     float radius = 1.5;
-    
+
     for (int i = 0; i < 16; i++)
     {
         vec2 offset = rot * poissonDisk[i] * texelSize * radius;
         float closestDepth = texture(dShadow, proj.xy + offset).r;
         shadow += step(closestDepth, currentDepth - bias);
     }
-    
+
     return shadow / 16.0;
 }
 
 void main()
 {
-    // Get base color components
     float ao = texture(dSSAO, out_uv).r;
     vec3 albedo = texture(gAlbedo, out_uv).rgb;
     float depth = texture(gDepth, out_uv).r;
     vec3 normal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
-    float roughness = texture(dSSR, out_uv).g; // Assuming roughness is stored in green channel
-    float metallic = texture(dSSR, out_uv).b;   // Assuming metallic is stored in blue channel
-    
-    // Check for sky/background
+    float roughness = texture(dSSR, out_uv).g;
+    float metallic = texture(dSSR, out_uv).b;
+
     bool isSky = depth > 0.9999;
-    
-    // Reconstruct world position
+
     vec3 worldPos = reconstructWorldPosition(depth);
     vec4 fragPosLightSpace = light_space_matrix * vec4(worldPos, 1.0);
-    
-    // Calculate shadow
+
     float shadow = pcf(fragPosLightSpace);
-    
-    // Light calculations
+
     vec3 L = normalize(lightDir);
     vec3 V = normalize(-worldPos);
     vec3 H = normalize(L + V);
-    
+
     float NdotL = max(dot(normal, L), 0.0);
     float NdotV = max(dot(normal, V), 0.0);
-    
-    // Get SSR data
+
     vec3 ssrColor = texture(dSSR, out_uv).rgb;
     float ssrAlpha = texture(dSSR, out_uv).a;
-    
-    // Fresnel for specular response
+
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
     vec3 F = fresnelSchlick(NdotV, F0);
-    
-    // Ambient with AO (diffuse ambient only)
+
     vec3 ambient = albedo * ao * 0.5;
-    
-    // Diffuse lighting
+
     vec3 diffuse = albedo * lightColor * NdotL * (1.0 - shadow);
-    
-    // Specular lighting (from direct light)
+
     vec3 specular = vec3(0.0);
     if (NdotL > 0.0)
     {
@@ -144,23 +142,23 @@ void main()
         specular = numerator / denominator;
         specular *= lightColor * NdotL * (1.0 - shadow);
     }
-    
-    // Combine direct lighting
+
     vec3 directLighting = ambient + diffuse + specular;
-    
-    // Add SSR reflections
+
     vec3 finalColor;
-    if (!isSky) {
-        // Add SSR on top of direct lighting
+    if (!isSky)
         finalColor = directLighting + ssrColor * ssrAlpha;
-    } else {
+    else
         finalColor = directLighting;
-    }
-    
+
+    float dist = length(worldPos - getCameraPos());
+    float fogFactor = clamp((FOG_END - dist) / (FOG_END - FOG_START), 0.0, 1.0);
+
+    finalColor = mix(FOG_COLOR, finalColor, fogFactor);
+
     fragColor = vec4(finalColor, 1.0);
 }
 
-// Helper function implementations
 vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
@@ -172,11 +170,11 @@ float DistributionGGX(vec3 N, vec3 H, float roughness)
     float a2 = a * a;
     float NdotH = max(dot(N, H), 0.0);
     float NdotH2 = NdotH * NdotH;
-    
+
     float nom = a2;
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
     denom = 3.14159 * denom * denom;
-    
+
     return nom / denom;
 }
 
@@ -184,10 +182,10 @@ float GeometrySchlickGGX(float NdotV, float roughness)
 {
     float r = (roughness + 1.0);
     float k = (r * r) / 8.0;
-    
+
     float nom = NdotV;
     float denom = NdotV * (1.0 - k) + k;
-    
+
     return nom / denom;
 }
 
@@ -197,6 +195,6 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
     float NdotL = max(dot(N, L), 0.0);
     float ggx2 = GeometrySchlickGGX(NdotV, roughness);
     float ggx1 = GeometrySchlickGGX(NdotL, roughness);
-    
+
     return ggx1 * ggx2;
 }

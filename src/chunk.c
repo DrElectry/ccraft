@@ -52,15 +52,6 @@ void chunk_generate(Chunk* chunk) {
         }
     }
 
-    for (int x = 0; x < CHUNK_WIDTH; x++) {
-        for (int z = 0; z < CHUNK_DEPTH; z++) {
-            int index = x + CHUNK_WIDTH * (9 + CHUNK_HEIGHT * z);
-            if (RAND(0, 16) == 0) {
-                chunk->data[index] = IRON_BLOCK;
-            }
-        }
-    }
-
     chunk->model = (Render_request){0};
 }
 

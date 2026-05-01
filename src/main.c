@@ -26,7 +26,7 @@ int main() {
 
     ASSERT(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress), "no glad");
 
-    glfwSwapInterval(0); // damp this for vsync or no vsync
+    glfwSwapInterval(0);
 
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -42,48 +42,63 @@ int main() {
     FBO ppfb;
     FBO prev_frame;
     FBO ssrfb;
+    FBO bloombfb;
+    FBO bloomblfb;
 
-    Shader mainv, mainf, ssaof, ppf, ssrf;
-    Program main, ssao, pp, ssr;
-    File mainfv, mainff, ssaoff, ppff, ssrff;
+    Shader mainv, mainf, ssaof, ppf, ssrf, bloombf, bloomblf;
+    Program main, ssao, pp, ssr, bloomb, bloombl;
+    File mainfv, mainff, ssaoff, ppff, ssrff, bloombff, bloomblff;
 
     mainv.type = GL_VERTEX_SHADER;
     mainf.type = GL_FRAGMENT_SHADER;
     ssaof.type = GL_FRAGMENT_SHADER;
     ppf.type = GL_FRAGMENT_SHADER;
     ssrf.type = GL_FRAGMENT_SHADER;
+    bloombf.type = GL_FRAGMENT_SHADER;
+    bloomblf.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
     mainff = file_open("assets/deferred/main.fsh");
     ssaoff = file_open("assets/deferred/ssao.fsh");
     ppff = file_open("assets/deferred/pp.fsh");
     ssrff = file_open("assets/deferred/ssr.fsh");
+    bloombff = file_open("assets/deferred/bloomb.fsh");
+    bloomblff = file_open("assets/deferred/bloombl.fsh");
 
     shader_create(&mainv, mainfv.data);
-    shader_create(&mainf, mainff.data); // i know that writing this in main.c is not the best thing to do, why do i even write so much shit in main.c?
-
+    shader_create(&mainf, mainff.data);
     shader_create(&ssaof, ssaoff.data);
     shader_create(&ppf, ppff.data);
     shader_create(&ssrf, ssrff.data);
+    shader_create(&bloombf, bloombff.data);
+    shader_create(&bloomblf, bloomblff.data);
 
     program_create(&main, &mainv, &mainf);
     program_create(&ssao, &mainv, &ssaof);
     program_create(&pp, &mainv, &ppf);
     program_create(&ssr, &mainv, &ssrf);
+    program_create(&bloomb, &mainv, &bloombf);
+    program_create(&bloombl, &mainv, &bloomblf);
 
     fbo_create(&ssaofb, 1280, 720, 1);
     fbo_create(&prev_frame, 1280, 720, 1);
     fbo_create(&ppfb, 1280, 720, 1);
     fbo_create(&ssrfb, 1280, 720, 1);
+    fbo_create(&bloombfb, 1280, 720, 1);
+    fbo_create(&bloomblfb, 1280, 720, 1);
 
     ssrfb.color_formats[0] = FBO_COLOR_RGBA16F;
+    bloombfb.color_formats[0] = FBO_COLOR_RGBA16F;
+    bloomblfb.color_formats[0] = FBO_COLOR_RGBA16F;
 
     fbo_create(&gbuffer, 1280, 720, 5);
+
     gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[2] = FBO_COLOR_RG16F;
     gbuffer.color_formats[3] = FBO_COLOR_RGBA16F;
     gbuffer.color_formats[4] = FBO_COLOR_RG16F;
+
     fbo_create_depth(&shadow_pass, 4096, 4096);
 
     game_init();
@@ -133,6 +148,7 @@ int main() {
 
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
+
         fbo_bind(&gbuffer);
 
         window_update();
@@ -141,12 +157,15 @@ int main() {
         game_draw();
 
         fbo_unbind();
+
         fbo_bind(&shadow_pass);
 
         window_draw();
+
         game_shadow_pass();
 
         fbo_unbind();
+
         fbo_bind(&ssaofb);
 
         window_draw();
@@ -185,7 +204,7 @@ int main() {
 
         program_set_mat4(&ssr, "projection", (float*)projection);
         program_set_mat4(&ssr, "view", (float*)view);
-    
+
         gfx_draw_fullscreen_quad();
 
         fbo_unbind();
@@ -222,14 +241,53 @@ int main() {
 
         fbo_unbind();
 
+        fbo_bind(&bloombfb);
+
+        program_use(&bloomb);
+
+        fbo_bind_texture(&ppfb, 0, 0);
+
+        program_set_int(&bloomb, "sceneTex", 0);
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
+        fbo_bind(&bloomblfb);
+
+        program_use(&bloombl);
+
+        fbo_bind_texture(&bloombfb, 0, 0);
+
+        program_set_int(&bloombl, "image", 0);
+        program_set_vec2(&bloombl, "direction", (float[]){1.0f, 0.0f});
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
+        fbo_bind(&bloombfb);
+
+        program_use(&bloombl);
+
+        fbo_bind_texture(&bloomblfb, 0, 0);
+
+        program_set_int(&bloombl, "image", 0);
+        program_set_vec2(&bloombl, "direction", (float[]){0.0f, 1.0f});
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
         program_use(&pp);
 
         fbo_bind_texture(&ppfb, 0, 0);
         fbo_bind_texture(&gbuffer, 2, 1);
+        fbo_bind_texture(&bloombfb, 0, 2);
 
         program_set_int(&pp, "colorTexture", 0);
         program_set_int(&pp, "velocityTexture", 1);
-        program_set_int(&pp, "depthTexture", 2);
+        program_set_int(&pp, "bloomTexture", 2);
 
         gfx_draw_fullscreen_quad();
 

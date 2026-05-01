@@ -6,7 +6,7 @@
 #include <cglm/cglm.h>
 
 #define CHUNK_WIDTH 16
-#define CHUNK_HEIGHT 16 // for now, later will be 256
+#define CHUNK_HEIGHT 64 // for now, later will be 256
 #define CHUNK_DEPTH 16
 
 typedef enum : uint16_t {
@@ -15,6 +15,7 @@ typedef enum : uint16_t {
     DIRT = 2,
     LEAVES = 3,
     STONE = 4,
+    IRON_BLOCK = 5,
 } Tile;
 
 typedef struct {

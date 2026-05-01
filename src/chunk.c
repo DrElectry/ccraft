@@ -15,6 +15,7 @@ int lookup_atlas[] = { // strict 6 ints per block FRONT BACK LEFT RIGHT UP DOWN
     2,2,2,2,2,2, // dirt
     3,3,3,3,3,3, // leaves
     4,4,4,4,4,4, // stone
+    5,5,5,5,5,5,
 };
 
 int lookup_transparent[] = {
@@ -22,6 +23,7 @@ int lookup_transparent[] = {
     0,
     0,
     1, // leaves are transparent
+    0,
     0,
 };
 
@@ -54,7 +56,7 @@ void chunk_generate(Chunk* chunk) {
         for (int z = 0; z < CHUNK_DEPTH; z++) {
             int index = x + CHUNK_WIDTH * (9 + CHUNK_HEIGHT * z);
             if (RAND(0, 16) == 0) {
-                chunk->data[index] = STONE;
+                chunk->data[index] = IRON_BLOCK;
             }
         }
     }

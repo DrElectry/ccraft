@@ -36,6 +36,12 @@ vec2(0.199, 0.786),
 vec2(0.143, -0.141)
 );
 
+// Function declarations
+vec3 fresnelSchlick(float cosTheta, vec3 F0);
+float DistributionGGX(vec3 N, vec3 H, float roughness);
+float GeometrySchlickGGX(float NdotV, float roughness);
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness);
+
 float rand(vec2 co)
 {
     return fract(sin(dot(co, vec2(12.9898,78.233))) * 43758.5453);
@@ -85,12 +91,6 @@ float pcf(vec4 fragPosLightSpace)
     return shadow / 16.0;
 }
 
-// Improved fresnel with roughness
-float fresnelSchlick(float cosTheta, float roughness)
-{
-    return pow(1.0 - max(cosTheta, 0.0), 5.0) * (1.0 - roughness) + roughness;
-}
-
 void main()
 {
     // Get base color components
@@ -98,6 +98,8 @@ void main()
     vec3 albedo = texture(gAlbedo, out_uv).rgb;
     float depth = texture(gDepth, out_uv).r;
     vec3 normal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
+    float roughness = texture(dSSR, out_uv).g; // Assuming roughness is stored in green channel
+    float metallic = texture(dSSR, out_uv).b;   // Assuming metallic is stored in blue channel
     
     // Check for sky/background
     bool isSky = depth > 0.9999;
@@ -116,46 +118,85 @@ void main()
     
     float NdotL = max(dot(normal, L), 0.0);
     float NdotV = max(dot(normal, V), 0.0);
-    float NdotH = max(dot(normal, H), 0.0);
     
-    // Improved fresnel with surface roughness
-    float roughness = 0.1; // Could be read from material
-    float fresnel = fresnelSchlick(NdotV, roughness);
+    // Get SSR data
+    vec3 ssrColor = texture(dSSR, out_uv).rgb;
+    float ssrAlpha = texture(dSSR, out_uv).a;
     
-    // Ambient with AO
+    // Fresnel for specular response
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    vec3 F = fresnelSchlick(NdotV, F0);
+    
+    // Ambient with AO (diffuse ambient only)
     vec3 ambient = albedo * ao * 0.5;
     
     // Diffuse lighting
     vec3 diffuse = albedo * lightColor * NdotL * (1.0 - shadow);
     
-    // Combine base color
-    vec3 color = ambient + diffuse;
-    
-    // Blend SSR with smooth transition
-    vec4 ssr = texture(dSSR, out_uv);
-    vec3 ssrColor = ssr.rgb;
-    float ssrAlpha = ssr.a;
-    
-    // Smooth blend: use alpha from SSR along with fresnel
-    float ssrStrength = fresnel * clamp(ssrAlpha + 0.2, 0.0, 1.0);
-    
-    if (!isSky && ssrAlpha > 0.01) {
-        // Smooth interpolation between base color and SSR
-        color = mix(color, ssrColor, ssrStrength * 0.8);
-    }
-    else if (isSky) {
-        // For sky, use a simple reflection approximation
-        vec3 reflectedDir = reflect(normalize(worldPos), normal);
-        float skyFactor = max(reflectedDir.y * 0.5 + 0.5, 0.0);
-        vec3 skyColor = mix(vec3(0.6, 0.7, 0.8), vec3(0.3, 0.5, 0.8), skyFactor);
-        
-        // Apply subtle sky reflection based on fresnel
-        color = mix(color, skyColor * albedo, fresnel * 0.3);
+    // Specular lighting (from direct light)
+    vec3 specular = vec3(0.0);
+    if (NdotL > 0.0)
+    {
+        float NDF = DistributionGGX(normal, H, roughness);
+        float G = GeometrySmith(normal, V, L, roughness);
+        vec3 numerator = NDF * G * F;
+        float denominator = 4.0 * NdotV * NdotL + 0.001;
+        specular = numerator / denominator;
+        specular *= lightColor * NdotL * (1.0 - shadow);
     }
     
-    // Add subtle specular highlight
-    float spec = pow(NdotH, 32.0 / max(roughness, 0.01)) * (1.0 - shadow);
-    color += lightColor * spec * 0.25;
+    // Combine direct lighting
+    vec3 directLighting = ambient + diffuse + specular;
     
-    fragColor = vec4(color, 1.0);
+    // Add SSR reflections
+    vec3 finalColor;
+    if (!isSky) {
+        // Add SSR on top of direct lighting
+        finalColor = directLighting + ssrColor * ssrAlpha;
+    } else {
+        finalColor = directLighting;
+    }
+    
+    fragColor = vec4(finalColor, 1.0);
+}
+
+// Helper function implementations
+vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+float DistributionGGX(vec3 N, vec3 H, float roughness)
+{
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    
+    float nom = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = 3.14159 * denom * denom;
+    
+    return nom / denom;
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+    
+    float nom = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+    
+    return nom / denom;
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+    
+    return ggx1 * ggx2;
 }

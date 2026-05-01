@@ -40,7 +40,7 @@ int wireframe = 0;
 float wdelay = 0.0f;
 
 Input input_manager;
-Texture texture_atlas;
+Texture texture_atlas, roughness;
 
 static float break_delay = 0.0f;
 static float place_delay = 0.0f;
@@ -74,10 +74,16 @@ void game_init() {
     texture_atlas.wrap_s = GL_REPEAT;
     texture_atlas.wrap_t = GL_REPEAT;
 
+    roughness.mag_filter = GL_NEAREST;
+    roughness.min_filter = GL_NEAREST;
+    roughness.wrap_s = GL_REPEAT;
+    roughness.wrap_t = GL_REPEAT;
+
     File vr = file_open("assets/tile/tile.vsh");
     File fr = file_open("assets/tile/tile.fsh");
 
     texture_create(&texture_atlas, "assets/terrain.png");
+    texture_create(&roughness, "assets/shiny.png");
 
     player_init(&player);
 
@@ -159,7 +165,7 @@ void game_tick(float dt) {
             int py = hit.by + (int)hit.normal[1];
             int pz = hit.bz + (int)hit.normal[2];
 
-            world_set_block(&world, px, py, pz, LEAVES);
+            world_set_block(&world, px, py, pz, IRON_BLOCK);
             rebuild_chunks_for_block(&world, px, py, pz);
             place_delay = 0.2f;
         }
@@ -182,7 +188,9 @@ void game_shadow_pass(void) {
     glClear(GL_DEPTH_BUFFER_BIT);
     program_use(&c);
     texture_bind(&texture_atlas, 0);
+    texture_bind(&roughness, 1);
     program_set_int(&c, "tex", 0);
+    program_set_int(&c, "roug", 1);
     program_set_mat4(&c, "proj", (float*)light_proj);
     program_set_mat4(&c, "view", (float*)light_view);
     world_render(&world, &c);
@@ -192,7 +200,9 @@ void game_shadow_pass(void) {
 void game_draw() {
     program_use(&c);
     texture_bind(&texture_atlas, 0);
+    texture_bind(&roughness, 1);
     program_set_int(&c, "tex", 0);
+    program_set_int(&c, "roug", 1);
     program_set_mat4(&c, "proj", (float*)projection);
     program_set_mat4(&c, "view", (float*)view);
     program_set_mat4(&c, "prev_view_proj", (float*)prev_view_proj);

@@ -45,7 +45,7 @@ void world_rebuild_chunk(World* world, int cx, int cz);
 void world_queue_rebuild(World* world, int cx, int cz);
 void world_process_rebuild_queue(World* world);
 
-void world_render(World* world, void* active_program);
+void world_render(World* world, void* active_program, void* water_program);
 void world_tick(World* world, vec3 ppos);
 
 #endif

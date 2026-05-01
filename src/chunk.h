@@ -16,12 +16,14 @@ typedef enum : uint16_t {
     LEAVES = 3,
     STONE = 4,
     IRON_BLOCK = 5,
+    WATER = 6,
 } Tile;
 
 typedef struct {
     uint16_t* data; // 2 bytes for block id meaning that we have 65535 possible unique blocks
 
     Render_request model; // has a pos, rot, scale, and GPU buffers inside, gfx.h does everything else
+    Render_request water_model;
 } Chunk;
 
 struct World;

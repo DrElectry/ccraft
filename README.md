@@ -1,2 +1,3 @@
-# ccraft W.I.P
-Another minecraft clone in C.
+### ccraft
+
+wip minecraft in C

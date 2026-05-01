@@ -23,8 +23,8 @@ Player player;
 HText demo_text;
 World world;
 
-Shader a, b;
-Program c;
+Shader a, b, water_vertex;
+Program c, water_prog;
 
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix;
 mat4 prev_view_proj;
@@ -84,6 +84,7 @@ void game_init() {
 
     File vr = file_open("assets/tile/tile.vsh");
     File fr = file_open("assets/tile/tile.fsh");
+    File water_vr = file_open("assets/tile/tile_water.vsh");
 
     texture_create(&texture_atlas, "assets/terrain.png");
     texture_create(&roughness, "assets/shiny.png");
@@ -92,11 +93,14 @@ void game_init() {
 
     a.type = GL_VERTEX_SHADER;
     b.type = GL_FRAGMENT_SHADER;
+    water_vertex.type = GL_VERTEX_SHADER;
 
     shader_create(&a, vr.data);
     shader_create(&b, fr.data);
+    shader_create(&water_vertex, water_vr.data);
 
     program_create(&c, &a, &b);
+    program_create(&water_prog, &water_vertex, &b);
 
     input_init(&input_manager, _win->glwin);
 
@@ -168,7 +172,7 @@ void game_tick(float dt) {
             int py = hit.by + (int)hit.normal[1];
             int pz = hit.bz + (int)hit.normal[2];
 
-            world_set_block(&world, px, py, pz, IRON_BLOCK);
+            world_set_block(&world, px, py, pz, WATER);
             rebuild_chunks_for_block(&world, px, py, pz);
             place_delay = 0.2f;
         }
@@ -196,7 +200,17 @@ void game_shadow_pass(void) {
     program_set_int(&c, "roug", 1);
     program_set_mat4(&c, "proj", (float*)light_proj);
     program_set_mat4(&c, "view", (float*)light_view);
-    world_render(&world, &c);
+
+    // Set uniforms for water program
+    program_use(&water_prog);
+    texture_bind(&texture_atlas, 0);
+    texture_bind(&roughness, 1);
+    program_set_int(&water_prog, "tex", 0);
+    program_set_int(&water_prog, "roug", 1);
+    program_set_mat4(&water_prog, "proj", (float*)light_proj);
+    program_set_mat4(&water_prog, "view", (float*)light_view);
+
+    world_render(&world, &c, &water_prog);
     glViewport(0, 0, 1280, 720);
 }
 
@@ -210,7 +224,19 @@ void game_draw() {
     program_set_mat4(&c, "view", (float*)view);
     program_set_mat4(&c, "prev_view_proj", (float*)prev_view_proj);
     program_set_vec2(&c, "screen_size", (float[]){1280.0f, 720.0f});
-    world_render(&world, &c);
+
+    // Set uniforms for water program too
+    program_use(&water_prog);
+    texture_bind(&texture_atlas, 0);
+    texture_bind(&roughness, 1);
+    program_set_int(&water_prog, "tex", 0);
+    program_set_int(&water_prog, "roug", 1);
+    program_set_mat4(&water_prog, "proj", (float*)projection);
+    program_set_mat4(&water_prog, "view", (float*)view);
+    program_set_mat4(&water_prog, "prev_view_proj", (float*)prev_view_proj);
+    program_set_vec2(&water_prog, "screen_size", (float[]){1280.0f, 720.0f});
+
+    world_render(&world, &c, &water_prog);
 }
 
 void game_draw_hud() {

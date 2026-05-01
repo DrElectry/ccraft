@@ -28,7 +28,13 @@ void main()
     {
         vec3 bloom = texture(bloomTexture, out_uv).rgb;
         bloom = bloom / (1.0 + bloom);
-        fragColor = vec4(baseColor + bloom * 0.35, 1.0);
+        vec3 col = baseColor + bloom * 0.35;
+
+        float d = distance(out_uv, vec2(0.5));
+        float vignette = 1.0 - d * d * 1.8;
+        vignette = clamp(vignette, 0.0, 1.0);
+
+        fragColor = vec4(col * vignette, 1.0);
         return;
     }
 
@@ -41,7 +47,13 @@ void main()
     {
         vec3 bloom = texture(bloomTexture, out_uv).rgb;
         bloom = bloom / (1.0 + bloom);
-        fragColor = vec4(baseColor + bloom * 0.35, 1.0);
+        vec3 col = baseColor + bloom * 0.35;
+
+        float d = distance(out_uv, vec2(0.5));
+        float vignette = 1.0 - d * d * 1.8;
+        vignette = clamp(vignette, 0.0, 1.0);
+
+        fragColor = vec4(col * vignette, 1.0);
         return;
     }
 
@@ -74,5 +86,9 @@ void main()
 
     color += bloom * 0.35;
 
-    fragColor = vec4(color, 1.0);
+    float d = distance(out_uv, vec2(0.5));
+    float vignette = 1.0 - d * d;
+    vignette = clamp(vignette, 0.0, 1.0);
+
+    fragColor = vec4(color * vignette, 1.0);
 }

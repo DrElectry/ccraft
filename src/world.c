@@ -1,4 +1,4 @@
-#include <stdlib.h>
+   #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include "world.h"
@@ -35,9 +35,13 @@ void world_add_chunk(World* world, Chunk* chunk, vec2 position) {
             world->positions_map[i][1] = position[1];
             world->index_map[i] = 1;
 
-            world->chunks_map[i].model.pos[0] = position[0] * CHUNK_WIDTH;
+world->chunks_map[i].model.pos[0] = position[0] * CHUNK_WIDTH;
             world->chunks_map[i].model.pos[1] = 0.0f;
             world->chunks_map[i].model.pos[2] = position[1] * CHUNK_DEPTH;
+
+world->chunks_map[i].water_model.pos[0] = position[0] * CHUNK_WIDTH;
+            world->chunks_map[i].water_model.pos[1] = 0.0f;
+            world->chunks_map[i].water_model.pos[2] = position[1] * CHUNK_DEPTH;
             return;
         }
     }
@@ -160,10 +164,11 @@ void world_rebuild_chunk(World* world, int cx, int cz) {
     }
 }
 
-void world_render(World* world, void* active_program) {
+void world_render(World* world, void* active_program, void* water_program) {
     for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
         if (world->index_map[i] != -1) {
             gfx_render(&world->chunks_map[i].model, (Program*)active_program);
+            gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
         }
     }
 }
@@ -183,6 +188,18 @@ void world_destroy(World* world) {
             vbo_free(&chunk->model.cache.vbo);
             vao_free(&chunk->model.cache.vao);
             ebo_free(&chunk->model.cache.ebo);
+
+            if (chunk->water_model.data) {
+                free(chunk->water_model.data);
+                chunk->water_model.data = NULL;
+            }
+            if (chunk->water_model.triangles) {
+                free(chunk->water_model.triangles);
+                chunk->water_model.triangles = NULL;
+            }
+vbo_free(&chunk->water_model.cache.vbo);
+            vao_free(&chunk->water_model.cache.vao);
+            ebo_free(&chunk->water_model.cache.ebo);
         }
     }
 
@@ -246,6 +263,18 @@ void world_tick(World* world, vec3 ppos) {
                 vao_free(&chunk->model.cache.vao);
                 ebo_free(&chunk->model.cache.ebo);
 
+                if (chunk->water_model.data) {
+                    free(chunk->water_model.data);
+                    chunk->water_model.data = NULL;
+                }
+                if (chunk->water_model.triangles) {
+                    free(chunk->water_model.triangles);
+                    chunk->water_model.triangles = NULL;
+                }
+                vbo_free(&chunk->water_model.cache.vbo);
+                vao_free(&chunk->water_model.cache.vao);
+                ebo_free(&chunk->water_model.cache.ebo);
+
                 world->index_map[i] = -1;
             }
         }
@@ -255,7 +284,7 @@ void world_tick(World* world, vec3 ppos) {
         int cx = (int)should_load[j][0];
         int cz = (int)should_load[j][1];
 
-if (!world_get_chunk(world, cx, cz)) {
+        if (!world_get_chunk(world, cx, cz)) {
             for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
                 if (world->index_map[i] == -1) {
                     // Seed RNG for deterministic chunk generation
@@ -272,9 +301,13 @@ if (!world_get_chunk(world, cx, cz)) {
                     world->positions_map[i][1] = (float)cz;
                     world->index_map[i] = 1;
 
-                    world->chunks_map[i].model.pos[0] = (float)cx * CHUNK_WIDTH;
+world->chunks_map[i].model.pos[0] = (float)cx * CHUNK_WIDTH;
                     world->chunks_map[i].model.pos[1] = 0.0f;
                     world->chunks_map[i].model.pos[2] = (float)cz * CHUNK_DEPTH;
+
+world->chunks_map[i].water_model.pos[0] = (float)cx * CHUNK_WIDTH;
+                    world->chunks_map[i].water_model.pos[1] = 0.0f;
+                    world->chunks_map[i].water_model.pos[2] = (float)cz * CHUNK_DEPTH;
 
                     world_queue_rebuild(world, cx, cz);
 

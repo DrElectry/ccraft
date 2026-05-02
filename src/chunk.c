@@ -27,7 +27,8 @@ int lookup_atlas[] = {
     3,3,3,3,3,3,        // LEAVES
     4,4,4,4,4,4,        // STONE
     5,5,5,5,5,5,        // IRON_BLOCK
-    16,16,16,16,16,16         // WATER
+    16,16,16,16,16,16,  // WATER
+    6,6,6,6,7,7,        // LOG
 };
 
 int lookup_transparent[] = {
@@ -37,7 +38,8 @@ int lookup_transparent[] = {
     1, // LEAVES
     0, // STONE
     0, // IRON_BLOCK
-    1  // WATER
+    1, // WATER
+    0, // LOG
 };
 
 inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)

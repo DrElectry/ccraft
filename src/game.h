@@ -14,7 +14,7 @@ extern int wireframe;
 extern Player player;
 
 void game_init();
-void game_draw();
+void game_draw(float time);
 void game_tick(float dt);
 void game_shadow_pass(void);
 void game_draw_hud();

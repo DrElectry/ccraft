@@ -132,7 +132,7 @@ int main() {
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_CULL_FACE);
 
-            game_draw();
+            game_draw(current_time);
 
             game_draw_hud();
 
@@ -154,7 +154,7 @@ int main() {
         window_update();
         window_draw();
 
-        game_draw();
+        game_draw(current_time);
 
         fbo_unbind();
 

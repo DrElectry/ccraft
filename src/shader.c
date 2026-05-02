@@ -64,6 +64,12 @@ void program_set_int(Program* program, const char* name, const int num) {
     glUniform1i(loc, num);
 }
 
+void program_set_float(Program* program, const char* name, const float num) {
+    int loc = glGetUniformLocation(program->id, name);
+    ASSERT(loc != -1, "no such uniform, %s", name);
+    glUniform1f(loc, num);
+}
+
 void program_set_uint(Program* program, const char* name, const unsigned int num) {
     int loc = glGetUniformLocation(program->id, name);
     ASSERT(loc != -1, "no such uniform, %s", name);

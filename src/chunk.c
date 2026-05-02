@@ -27,7 +27,7 @@ int lookup_atlas[] = {
     3,3,3,3,3,3,        // LEAVES
     4,4,4,4,4,4,        // STONE
     5,5,5,5,5,5,        // IRON_BLOCK
-    7,7,7,7,7,7         // WATER
+    16,16,16,16,16,16         // WATER
 };
 
 int lookup_transparent[] = {

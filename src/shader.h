@@ -22,6 +22,7 @@ void program_use(Program* program);
 void program_set_mat4(Program* program, const char* name, const float* mat);
 void program_set_mat3(Program* program, const char* name, const float* mat);
 void program_set_int(Program* program, const char* name, const int num);
+void program_set_float(Program* program, const char* name, const float num);
 void program_set_uint(Program* program, const char* name, const unsigned int num);
 void program_set_vec3(Program* program, const char* name, const float* vec3);
 void program_set_vec2(Program* program, const char* name, const float* vec2);

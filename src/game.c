@@ -23,7 +23,7 @@ Player player;
 HText demo_text;
 World world;
 
-Shader a, b, water_vertex;
+Shader a, b, water_vertex, water_fragment;
 Program c, water_prog;
 
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix;
@@ -85,6 +85,7 @@ void game_init() {
     File vr = file_open("assets/tile/tile.vsh");
     File fr = file_open("assets/tile/tile.fsh");
     File water_vr = file_open("assets/tile/tile_water.vsh");
+    File water_fr = file_open("assets/tile/tile_water.fsh");
 
     texture_create(&texture_atlas, "assets/terrain.png");
     texture_create(&roughness, "assets/shiny.png");
@@ -94,13 +95,15 @@ void game_init() {
     a.type = GL_VERTEX_SHADER;
     b.type = GL_FRAGMENT_SHADER;
     water_vertex.type = GL_VERTEX_SHADER;
+    water_fragment.type = GL_FRAGMENT_SHADER;
 
     shader_create(&a, vr.data);
     shader_create(&b, fr.data);
     shader_create(&water_vertex, water_vr.data);
+    shader_create(&water_fragment, water_fr.data);
 
     program_create(&c, &a, &b);
-    program_create(&water_prog, &water_vertex, &b);
+    program_create(&water_prog, &water_vertex, &water_fragment);
 
     input_init(&input_manager, _win->glwin);
 
@@ -214,7 +217,7 @@ void game_shadow_pass(void) {
     glViewport(0, 0, 1280, 720);
 }
 
-void game_draw() {
+void game_draw(float time) {
     program_use(&c);
     texture_bind(&texture_atlas, 0);
     texture_bind(&roughness, 1);
@@ -235,6 +238,7 @@ void game_draw() {
     program_set_mat4(&water_prog, "view", (float*)view);
     program_set_mat4(&water_prog, "prev_view_proj", (float*)prev_view_proj);
     program_set_vec2(&water_prog, "screen_size", (float[]){1280.0f, 720.0f});
+    program_set_float(&water_prog, "time", time);
 
     world_render(&world, &c, &water_prog);
 }

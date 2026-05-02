@@ -105,6 +105,7 @@ int main() {
     double last_time = glfwGetTime();
     float fps_timer = 0.0f;
     int fps_counter = 0;
+    float time;
 
     while (!window_shouldclose()) {
         double current_time = glfwGetTime();
@@ -119,6 +120,7 @@ int main() {
             fps_counter = 0;
             fps_timer = 0.0f;
         }
+        time+=delta_time;
 
         game_tick(delta_time);
 
@@ -275,10 +277,11 @@ int main() {
         program_use(&pp);
 
         fbo_bind_texture(&ppfb, 0, 0);
-        fbo_bind_texture(&gbuffer, 2, 1);
+        fbo_bind_depth_texture(&gbuffer, 1);
         fbo_bind_texture(&bloombfb, 0, 2);
 
         program_set_int(&pp, "colorTexture", 0);
+        program_set_int(&pp, "depthTexture", 1);
         program_set_int(&pp, "bloomTexture", 2);
 
         gfx_draw_fullscreen_quad();

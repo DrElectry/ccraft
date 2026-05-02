@@ -22,12 +22,6 @@ void main()
     vec3 pos = in_vert;
     vec3 world_pos = (model * vec4(in_vert, 1.0)).xyz;
 
-    float tile_size = 1.0 / 16.0;
-
-    if (mod(time, 1.0) < 0.1) {
-        out_uv.x += tile_size;
-    }
-
     float wave = sin(world_pos.x * 2.0 + world_pos.z * 2.0 + time * 8.0) * 0.01;
     pos.y += wave;
 

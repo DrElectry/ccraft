@@ -67,7 +67,7 @@ void main()
     vec3 bloom = texture(bloomTexture, out_uv).rgb;
     bloom = bloom / (1.0 + bloom);
 
-    vec3 finalCol = sum + bloom * 0.30;
+    vec3 finalCol = sum + bloom * 0.55;
 
     float vignette = 1.0 - pow(distance(out_uv, vec2(0.5)), 2.0) * 1.5;
     vignette = clamp(vignette, 0.0, 1.0);

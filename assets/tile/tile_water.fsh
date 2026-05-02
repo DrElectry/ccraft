@@ -2,13 +2,11 @@
 
 layout(location = 0) out vec3 gAlbedo;
 layout(location = 1) out vec3 gNormal;
-layout(location = 2) out vec2 gVelocity;
-layout(location = 3) out vec4 gViewPosition;
-layout(location = 4) out vec2 gRoughness;
+layout(location = 2) out vec4 gViewPosition;
+layout(location = 3) out vec2 gRoughness;
 
 in vec2 out_uv;
 in vec3 out_normal;
-in vec2 out_velocity;
 in vec3 out_view_pos;
 in vec3 out_pos;
 
@@ -52,7 +50,6 @@ float fbm(vec2 p) {
 
     for (int i = 0; i < 2; i++) {
         value += noise(p) * amplitude;
-
         p = rot * p * 2.0;
         amplitude *= 0.5;
     }
@@ -62,11 +59,7 @@ float fbm(vec2 p) {
 
 float sharpFbm(vec2 p) {
     float n = fbm(p);
-
-    // sharper contrast
-    n = pow(n, 2.8);
-
-    return n;
+    return pow(n, 2.8);
 }
 
 float ridgedFbm(vec2 p) {
@@ -80,11 +73,9 @@ float ridgedFbm(vec2 p) {
 
     for (int i = 0; i < 2; i++) {
         float n = noise(p);
-
         n = 1.0 - abs(n * 2.0 - 1.0);
 
         value += n * amplitude;
-
         p = rot * p * 2.0;
         amplitude *= 0.5;
     }
@@ -99,7 +90,7 @@ void main() {
         discard;
     }
 
-    gAlbedo = data.rgb*2.0;
+    gAlbedo = data.rgb * 2.0;
 
     vec3 normal = normalize(out_normal);
 
@@ -129,10 +120,7 @@ void main() {
         1.0
     ));
 
-    // blend with mesh normal
     gNormal = normalize(mix(normal, perturb, 0.45));
-
-    gVelocity = out_velocity;
 
     gRoughness = texture(roug, out_uv).bb;
 

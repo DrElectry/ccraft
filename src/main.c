@@ -91,13 +91,12 @@ int main() {
     bloombfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloomblfb.color_formats[0] = FBO_COLOR_RGBA16F;
 
-    fbo_create(&gbuffer, 1280, 720, 5);
+    fbo_create(&gbuffer, 1280, 720, 4);
 
     gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
-    gbuffer.color_formats[2] = FBO_COLOR_RG16F;
-    gbuffer.color_formats[3] = FBO_COLOR_RGBA16F;
-    gbuffer.color_formats[4] = FBO_COLOR_RG16F;
+    gbuffer.color_formats[2] = FBO_COLOR_RGBA16F;
+    gbuffer.color_formats[3] = FBO_COLOR_RG16F;
 
     fbo_create_depth(&shadow_pass, 4096, 4096);
 
@@ -139,12 +138,6 @@ int main() {
             glfwSwapBuffers(_win->glwin);
             continue;
         }
-
-        fbo_bind(&prev_frame);
-
-        gfx_draw_fullscreen_quad();
-
-        fbo_unbind();
 
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
@@ -194,8 +187,8 @@ int main() {
 
         fbo_bind_texture(&gbuffer, 0, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
-        fbo_bind_texture(&gbuffer, 3, 3);
-        fbo_bind_texture(&gbuffer, 4, 4);
+        fbo_bind_texture(&gbuffer, 2, 3);
+        fbo_bind_texture(&gbuffer, 3, 4);
 
         program_set_int(&ssr, "gAlbedo", 0);
         program_set_int(&ssr, "gNormal", 1);
@@ -232,7 +225,7 @@ int main() {
         program_set_mat4(&main, "inv_view", (float*)inv_view);
 
         program_set_vec3(&main, "lightDir", (float*)light_dir);
-        program_set_vec3(&main, "lightColor", (float*)(vec3){1.0f, 1.0f, 1.0f});
+        program_set_vec3(&main, "lightColor", (float[]){1.0f, 1.0f, 1.0f});
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
@@ -286,7 +279,6 @@ int main() {
         fbo_bind_texture(&bloombfb, 0, 2);
 
         program_set_int(&pp, "colorTexture", 0);
-        program_set_int(&pp, "velocityTexture", 1);
         program_set_int(&pp, "bloomTexture", 2);
 
         gfx_draw_fullscreen_quad();

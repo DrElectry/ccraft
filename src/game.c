@@ -204,7 +204,6 @@ void game_shadow_pass(void) {
     program_set_mat4(&c, "proj", (float*)light_proj);
     program_set_mat4(&c, "view", (float*)light_view);
 
-    // Set uniforms for water program
     program_use(&water_prog);
     texture_bind(&texture_atlas, 0);
     texture_bind(&roughness, 1);
@@ -225,8 +224,6 @@ void game_draw(float time) {
     program_set_int(&c, "roug", 1);
     program_set_mat4(&c, "proj", (float*)projection);
     program_set_mat4(&c, "view", (float*)view);
-    program_set_mat4(&c, "prev_view_proj", (float*)prev_view_proj);
-    program_set_vec2(&c, "screen_size", (float[]){1280.0f, 720.0f});
 
     // Set uniforms for water program too
     program_use(&water_prog);
@@ -236,8 +233,6 @@ void game_draw(float time) {
     program_set_int(&water_prog, "roug", 1);
     program_set_mat4(&water_prog, "proj", (float*)projection);
     program_set_mat4(&water_prog, "view", (float*)view);
-    program_set_mat4(&water_prog, "prev_view_proj", (float*)prev_view_proj);
-    program_set_vec2(&water_prog, "screen_size", (float[]){1280.0f, 720.0f});
     program_set_float(&water_prog, "time", time);
 
     world_render(&world, &c, &water_prog);

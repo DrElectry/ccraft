@@ -48,10 +48,8 @@ inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
 }
 
 static int get_terrain_height(int wx, int wz) {
-    float h = fbm2d((float)wx * 0.015f, (float)wz * 0.015f, 4, 0.5f, 2.0f);
-    float detail = fbm2d((float)wx * 0.08f, (float)wz * 0.08f, 2, 0.5f, 2.0f) * 0.25f;
-    int height = SEA_LEVEL + (int)((h + detail) * 1.0f);
-    return height;
+    float h = noise2d(wx*0.05, wz*0.05);
+    return h;
 }
 
 static uint16_t get_block_at_height(int wy, int terrain_height, int water_level) {

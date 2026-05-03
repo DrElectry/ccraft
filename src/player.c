@@ -91,7 +91,7 @@ void player_move_vel(World* world, Player* p, float dt) {
 
 void player_init(Player* p) {
     p->camera.pos[0] = 50.0f;
-    p->camera.pos[1] = 10.0f;
+    p->camera.pos[1] = 50.0f;
     p->camera.pos[2] = 50.0f;
 
     p->camera.rot[0] = 0.0f;
@@ -123,19 +123,24 @@ void player_tick(World* world, Player* p, Input* in, float dt) {
         speed *= 2.5f;
     }
 
+    vec3 forward_h = { p->camera.forward[0], 0.0f, p->camera.forward[2] };
+    if (glm_vec3_norm(forward_h) > 0.001f) {
+        glm_vec3_normalize(forward_h);
+    }
+
+    vec3 right_h;
+    glm_cross(forward_h, (vec3){0.0f, 1.0f, 0.0f}, right_h);
+
     vec3 accel = {0.0f, 0.0f, 0.0f};
 
     if (input_down(in, GLFW_KEY_W))
-        glm_vec3_add(accel, (vec3){p->camera.forward[0], 0.0f, p->camera.forward[2]}, accel);
-
+        glm_vec3_add(accel, forward_h, accel);
     if (input_down(in, GLFW_KEY_S))
-        glm_vec3_add(accel, (vec3){-p->camera.forward[0], 0.0f, -p->camera.forward[2]}, accel);
-
+        glm_vec3_add(accel, (vec3){-forward_h[0], 0.0f, -forward_h[2]}, accel);
     if (input_down(in, GLFW_KEY_D))
-        glm_vec3_add(accel, (vec3){p->camera.right[0], 0.0f, p->camera.right[2]}, accel);
-
+        glm_vec3_add(accel, right_h, accel);
     if (input_down(in, GLFW_KEY_A))
-        glm_vec3_add(accel, (vec3){-p->camera.right[0], 0.0f, -p->camera.right[2]}, accel);
+        glm_vec3_add(accel, (vec3){-right_h[0], 0.0f, -right_h[2]}, accel);
 
     vec3 flat = {accel[0], 0.0f, accel[2]};
     if (glm_vec3_norm(flat) > 0.0f) {
@@ -148,7 +153,6 @@ void player_tick(World* world, Player* p, Input* in, float dt) {
     p->camera.vel[0] += accel[0] * dt;
     p->camera.vel[2] += accel[2] * dt;
 
-    // JUMP INPUT
     if (input_down(in, GLFW_KEY_SPACE)) {
         player_jump(world, p);
     }

@@ -178,7 +178,7 @@ void game_tick(float dt) {
             int py = hit.by + (int)hit.normal[1];
             int pz = hit.bz + (int)hit.normal[2];
 
-            world_set_block(&world, px, py, pz, WATER);
+            world_set_block(&world, px, py, pz, IRON_BLOCK);
             rebuild_chunks_for_block(&world, px, py, pz);
             place_delay = 0.2f;
         }

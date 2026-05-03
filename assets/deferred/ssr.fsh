@@ -134,36 +134,71 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 vec3 SSRBlur(vec2 uv)
 {
     vec2 texel = 1.0 / vec2(textureSize(gAlbedo, 0));
-
-    vec3 result = vec3(0.0);
-
-    float radius = 6.0;
-
-    float w[7] = float[](
-        0.05,
-        0.09,
-        0.12,
-        0.16,
-        0.12,
-        0.09,
-        0.05
+    
+    float metallic = clamp(Metallic, 0.0, 1.0);
+    
+    // metallic 0.0 = minimal blur (3 samples)
+    // metallic 0.5 = medium heavy blur (9 samples)
+    // metallic 1.0 = heavy blur (15 samples)
+    int maxSamples = int(mix(3, 15, metallic));
+    float weights[16] = float[](
+        0.0,    // unused
+        0.65,   // kernel size 1
+        0.55,   // kernel size 2
+        0.48,   // kernel size 3
+        0.42,   // kernel size 4
+        0.37,   // kernel size 5
+        0.33,   // kernel size 6
+        0.29,   // kernel size 7
+        0.26,   // kernel size 8
+        0.23,   // kernel size 9
+        0.20,   // kernel size 10
+        0.17,   // kernel size 11
+        0.14,   // kernel size 12
+        0.11,   // kernel size 13
+        0.08,   // kernel size 14
+        0.05    // kernel size 15
     );
     
-    vec3 hsum = vec3(0.0);
-    for (int i = -3; i <= 3; i++)
+    vec3 result = texture(gAlbedo, uv).rgb;
+    
+    if (maxSamples > 1)
     {
-        float w_i = w[i + 3];
-        vec2 offset = vec2(float(i)) * texel * radius;
-        hsum += texture(gAlbedo, uv + offset).rgb * w_i;
+        vec3 horiz = result * 0.5;
+        float totalWeight = 0.5;
+        
+        for (int x = 1; x <= maxSamples; x++)
+        {
+            float weight = weights[maxSamples] * (1.0 - pow(float(x) / float(maxSamples), 1.5));
+            weight *= (1.0 - (float(x) / float(maxSamples + 2)));
+            
+            vec2 offsetPos = vec2(float(x) * texel.x * 1.5, 0.0);
+            vec2 offsetNeg = vec2(-float(x) * texel.x * 1.5, 0.0);
+            
+            horiz += texture(gAlbedo, uv + offsetPos).rgb * weight;
+            horiz += texture(gAlbedo, uv + offsetNeg).rgb * weight;
+            totalWeight += weight * 2.0;
+        }
+        
+        horiz /= totalWeight;
+        vec3 vert = horiz * 0.5;
+        totalWeight = 0.5;
+        
+        for (int y = 1; y <= maxSamples; y++)
+        {
+            float weight = weights[maxSamples] * (1.0 - pow(float(y) / float(maxSamples), 1.5));
+            weight *= (1.0 - (float(y) / float(maxSamples + 2)));
+            
+            vec2 offsetPos = vec2(0.0, float(y) * texel.y * 1.5);
+            vec2 offsetNeg = vec2(0.0, -float(y) * texel.y * 1.5);
+            
+            vert += texture(gAlbedo, uv + offsetPos).rgb * weight;
+            vert += texture(gAlbedo, uv + offsetNeg).rgb * weight;
+            totalWeight += weight * 2.0;
+        }
+        
+        result = vert / totalWeight;
     }
-
-    vec3 vsum = vec3(0.0);
-    for (int i = -3; i <= 3; i++)
-    {
-        float w_i = w[i + 3];
-        vec2 offset = vec2(0.0, float(i)) * texel * radius;
-        vsum += hsum * w_i;
-    }
-
-    return vsum;
+    
+    return result;
 }

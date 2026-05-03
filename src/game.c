@@ -37,7 +37,9 @@ vec3 up = { 0.0f, 1.0f, 0.0f };
 float last_time = 0.0f;
 
 int wireframe = 0;
+int potato_mode = 0;
 float wdelay = 0.0f;
+float pdelay = 0.0f;
 
 Input input_manager;
 Texture texture_atlas, roughness;
@@ -150,8 +152,13 @@ void game_tick(float dt) {
         glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
         wdelay = 0.25f;
     }
+    if (input_down(&input_manager, GLFW_KEY_N) && pdelay < 0) {
+        potato_mode = !potato_mode;
+        pdelay = 0.25f;
+    }
 
     wdelay -= dt;
+    pdelay -= dt;
 
     vec3 eye;
     player_get_eye(&player, eye);

@@ -33,6 +33,7 @@ int lookup_atlas[] = {
     9,9,9,9,9,9,        // COAL_ORE
     10,10,10,10,10,10,  // COPPER_ORE
     11,11,11,11,11,11,  // GOLD_ORE
+    12,12,12,12,12,12,  // SAND
 };
 
 int lookup_transparent[] = {
@@ -48,6 +49,7 @@ int lookup_transparent[] = {
     0, // COAL_ORE
     0, // COPPER_ORE
     0, // GOLD_ORE
+    0, // SAND
 };
 
 inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
@@ -62,13 +64,46 @@ static int get_terrain_height(int wx, int wz) {
     return h+20.0f;
 }
 
-static uint16_t get_block_at_height(int wy, int terrain_height, int water_level) {
+static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, int water_level) {
+    int distance_to_water = terrain_height - water_level;
+    
     if (wy <= water_level && wy > terrain_height) {
         return WATER;
     }
     
     if (wy > terrain_height) {
         return AIR;
+    }
+
+    int is_surface = (wy == terrain_height);
+    
+    if (is_surface) {
+        if (terrain_height <= water_level) {
+            return SAND;
+        }
+        
+        if (terrain_height <= water_level + BEACH_HEIGHT) {
+            float blend = (terrain_height - water_level) / (float)BEACH_HEIGHT;
+            float random_factor = RANDF();
+            
+            if (random_factor < blend) {
+                return GRASS;
+            } else {
+                return SAND;
+            }
+        }
+        
+        return GRASS;
+    }
+
+    if (terrain_height <= water_level + BEACH_HEIGHT) {
+        if (wy >= terrain_height - 2) {
+            return SAND;
+        } else if (wy >= terrain_height - 4) {
+            return DIRT;
+        } else {
+            return STONE;
+        }
     }
 
     if (terrain_height > water_level + BEACH_HEIGHT) {
@@ -111,7 +146,7 @@ void chunk_generate(Chunk* chunk) {
 
             for (int y = 0; y < CHUNK_HEIGHT; y++) {
                 int index = x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z);
-                uint16_t block = get_block_at_height(y, terrain_height, SEA_LEVEL);
+                uint16_t block = get_block_at_height(y, wx, wz, terrain_height, SEA_LEVEL);
                 chunk->data[index] = block;
             }
         }

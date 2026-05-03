@@ -124,7 +124,7 @@ int main() {
 
         game_tick(delta_time);
 
-        if (wireframe) {
+        if (wireframe || potato_mode) {
             fbo_unbind();
 
             window_update();

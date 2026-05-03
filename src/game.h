@@ -10,6 +10,7 @@ extern mat4 prev_view_proj;
 extern vec3 light_pos;
 extern vec3 light_dir;
 extern int wireframe;
+extern int potato_mode;
 
 extern Player player;
 

@@ -34,6 +34,7 @@ int lookup_atlas[] = {
     10,10,10,10,10,10,  // COPPER_ORE
     11,11,11,11,11,11,  // GOLD_ORE
     12,12,12,12,12,12,  // SAND
+    13,13,13,13,13,13,  // GRAVEL
 };
 
 int lookup_transparent[] = {
@@ -50,6 +51,7 @@ int lookup_transparent[] = {
     0, // COPPER_ORE
     0, // GOLD_ORE
     0, // SAND
+    0, // GRAVEL
 };
 
 inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
@@ -89,7 +91,11 @@ static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, 
             if (random_factor < blend) {
                 return GRASS;
             } else {
-                return SAND;
+                if (RAND(0, 1) == 0) {
+                    return GRAVEL;
+                } else {
+                    return SAND;
+                }
             }
         }
         

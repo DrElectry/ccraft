@@ -23,6 +23,7 @@ typedef enum : uint16_t {
     COPPER_ORE = 10,
     GOLD_ORE = 11,
     SAND = 12,
+    GRAVEL = 13,
 } Tile;
 
 typedef struct {

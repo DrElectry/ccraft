@@ -56,10 +56,10 @@ inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
 }
 
 static int get_terrain_height(int wx, int wz) {
-    float h = fbm2d(wx*0.025, wz*0.025, 4, 0.25, 0.5);
-    float h2 = noise2d(wx*0.025+100.0, wz*0.025+100.0);
-    if (h2 < h) {h-=16.0f;}
-    return h+28.0f;
+    float h = fbm2d(wx*0.025, wz*0.025, 4, 0.25, 0.5)*16.0;
+    float h2 = fbm2d(wx*0.05-100.0, wz*0.05-100.0, 2, 0.25, 1.5);
+    if (h2 < h) {h-=h2*12.0;}
+    return h+20.0f;
 }
 
 static uint16_t get_block_at_height(int wy, int terrain_height, int water_level) {
@@ -96,6 +96,9 @@ static uint16_t get_block_at_height(int wy, int terrain_height, int water_level)
 }
 
 void chunk_generate(Chunk* chunk) {
+    // Seed per-chunk RNG for deterministic features (ores, trees)
+    rng_seed_chunk(gen_chunk_x, gen_chunk_z);
+    
     chunk->data = (uint16_t*)malloc(CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t));
 
     for (int x = 0; x < CHUNK_WIDTH; x++) {

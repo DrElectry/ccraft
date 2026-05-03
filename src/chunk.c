@@ -30,6 +30,9 @@ int lookup_atlas[] = {
     16,16,16,16,16,16,  // WATER
     6,6,6,6,7,7,        // LOG
     8,8,8,8,8,8,        // GLASS
+    9,9,9,9,9,9,        // COAL_ORE
+    10,10,10,10,10,10,  // COPPER_ORE
+    11,11,11,11,11,11,  // GOLD_ORE
 };
 
 int lookup_transparent[] = {
@@ -42,6 +45,9 @@ int lookup_transparent[] = {
     0, // WATER
     0, // LOG
     1, // GLASS
+    0, // COAL_ORE
+    0, // COPPER_ORE
+    0, // GOLD_ORE
 };
 
 inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
@@ -90,12 +96,11 @@ static uint16_t get_block_at_height(int wy, int terrain_height, int water_level)
 }
 
 void chunk_generate(Chunk* chunk) {
-    chunk->data = (uint16_t*)malloc(
-        CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t)
-    );
+    chunk->data = (uint16_t*)malloc(CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t));
 
     for (int x = 0; x < CHUNK_WIDTH; x++) {
         for (int z = 0; z < CHUNK_DEPTH; z++) {
+
             int wx = gen_chunk_x * CHUNK_WIDTH + x;
             int wz = gen_chunk_z * CHUNK_DEPTH + z;
 
@@ -111,6 +116,7 @@ void chunk_generate(Chunk* chunk) {
 
     for (int x = 2; x < CHUNK_WIDTH - 2; x += 5) {
         for (int z = 2; z < CHUNK_DEPTH - 2; z += 5) {
+
             int wx = gen_chunk_x * CHUNK_WIDTH + x;
             int wz = gen_chunk_z * CHUNK_DEPTH + z;
 
@@ -122,53 +128,189 @@ void chunk_generate(Chunk* chunk) {
 
             int surface_y = terrain_height;
             int surface_idx = x + CHUNK_WIDTH * (surface_y + CHUNK_HEIGHT * z);
-            if (chunk->data[surface_idx] != GRASS) continue;
+
+            if (surface_idx < 0 || surface_idx >= CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH)
+                continue;
+
+            if (chunk->data[surface_idx] != GRASS)
+                continue;
 
             int trunk_h = 3 + RAND(0, 3);
 
-            for (int th = 1; th <= trunk_h; ++th) {
+            for (int th = 1; th <= trunk_h; th++) {
                 int ty = surface_y + th;
                 if (ty >= CHUNK_HEIGHT) break;
-                int trunk_idx = x + CHUNK_WIDTH * (ty + CHUNK_HEIGHT * z);
-                chunk->data[trunk_idx] = LOG;
+
+                int idx = x + CHUNK_WIDTH * (ty + CHUNK_HEIGHT * z);
+                chunk->data[idx] = LOG;
             }
 
             int canopy_base = surface_y + trunk_h;
 
-            for (int ly = 0; ly < 2; ++ly) {
-                for (int dx = -2; dx <= 2; ++dx) {
-                    for (int dz = -2; dz <= 2; ++dz) {
-                        int lx = x + dx, lz = z + dz, lyy = canopy_base + ly;
-                        if (lx < 0 || lx >= CHUNK_WIDTH || lz < 0 || lz >= CHUNK_DEPTH || lyy >= CHUNK_HEIGHT) continue;
-                        int leaves_idx = lx + CHUNK_WIDTH * (lyy + CHUNK_HEIGHT * lz);
-                        chunk->data[leaves_idx] = LEAVES;
+            for (int ly = 0; ly < 2; ly++) {
+                for (int dx = -2; dx <= 2; dx++) {
+                    for (int dz = -2; dz <= 2; dz++) {
+
+                        int lx = x + dx;
+                        int lz = z + dz;
+                        int ly_ = canopy_base + ly;
+
+                        if (lx < 0 || lx >= CHUNK_WIDTH ||
+                            lz < 0 || lz >= CHUNK_DEPTH ||
+                            ly_ >= CHUNK_HEIGHT)
+                            continue;
+
+                        int idx = lx + CHUNK_WIDTH * (ly_ + CHUNK_HEIGHT * lz);
+                        chunk->data[idx] = LEAVES;
                     }
                 }
             }
 
-            for (int ly = 2; ly < 4; ++ly) {
-                {
-                    int lx = x, lz_ = z, lyy = canopy_base + ly;
-                    if (lyy < CHUNK_HEIGHT) {
-                        int leaves_idx = lx + CHUNK_WIDTH * (lyy + CHUNK_HEIGHT * lz_);
-                        chunk->data[leaves_idx] = LEAVES;
-                    }
+            for (int ly = 2; ly < 4; ly++) {
+
+                int lx = x;
+                int lz = z;
+                int ly_ = canopy_base + ly;
+
+                if (ly_ < CHUNK_HEIGHT) {
+                    int idx = lx + CHUNK_WIDTH * (ly_ + CHUNK_HEIGHT * lz);
+                    chunk->data[idx] = LEAVES;
                 }
-                int dirs[4][2] = {{0,1}, {0,-1}, {1,0}, {-1,0}};
-                for (int d = 0; d < 4; ++d) {
-                    int dx = dirs[d][0], dz = dirs[d][1];
-                    int lx = x + dx, lz_ = z + dz, lyy = canopy_base + ly;
-                    if (lx >= 0 && lx < CHUNK_WIDTH && lz_ >= 0 && lz_ < CHUNK_DEPTH && lyy < CHUNK_HEIGHT) {
-                        int leaves_idx = lx + CHUNK_WIDTH * (lyy + CHUNK_HEIGHT * lz_);
-                        chunk->data[leaves_idx] = LEAVES;
-                    }
-                }
-                int lx = x, lz_ = z, lyy = canopy_base + ly;
-                if (lyy < CHUNK_HEIGHT) {
-                    int leaves_idx = lx + CHUNK_WIDTH * (lyy + CHUNK_HEIGHT * lz_);
-                    chunk->data[leaves_idx] = LEAVES;
+
+                int dirs[4][2] = {{0,1},{0,-1},{1,0},{-1,0}};
+
+                for (int d = 0; d < 4; d++) {
+                    int dx = dirs[d][0];
+                    int dz = dirs[d][1];
+
+                    int lx2 = x + dx;
+                    int lz2 = z + dz;
+
+                    if (lx2 < 0 || lx2 >= CHUNK_WIDTH ||
+                        lz2 < 0 || lz2 >= CHUNK_DEPTH ||
+                        ly_ >= CHUNK_HEIGHT)
+                        continue;
+
+                    int idx = lx2 + CHUNK_WIDTH * (ly_ + CHUNK_HEIGHT * lz2);
+                    chunk->data[idx] = LEAVES;
                 }
             }
+        }
+    }
+
+    for (int i = 0; i < 10; i++) { // ores
+        {
+            int x = RAND(0, CHUNK_WIDTH - 1);
+            int y = RAND(0, 32);
+            int z = RAND(0, CHUNK_DEPTH - 1);
+
+            if (chunk->data[x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z)] != STONE)
+                goto coal_skip; // goto yuck, but its required
+
+            int len = 20 + RAND(0, 25);
+
+            float dx = (RANDF() - 0.5f) * 2.0f;
+            float dy = (RANDF() - 0.5f) * 1.0f;
+            float dz = (RANDF() - 0.5f) * 2.0f;
+
+            for (int s = 0; s < len; s++) {
+
+                int rx = x + RAND(-1, 1);
+                int ry = y + RAND(-1, 1);
+                int rz = z + RAND(-1, 1);
+
+                if (rx < 0 || rx >= CHUNK_WIDTH ||
+                    ry < 0 || ry >= CHUNK_HEIGHT ||
+                    rz < 0 || rz >= CHUNK_DEPTH)
+                    continue;
+
+                int idx = rx + CHUNK_WIDTH * (ry + CHUNK_HEIGHT * rz);
+
+                if (chunk->data[idx] == STONE)
+                    chunk->data[idx] = COAL_ORE;
+
+                x += dx;
+                y += dy;
+                z += dz;
+            }
+
+            coal_skip:;
+        }
+
+        {
+            int x = RAND(0, CHUNK_WIDTH - 1);
+            int y = RAND(0, 28);
+            int z = RAND(0, CHUNK_DEPTH - 1);
+
+            if (chunk->data[x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z)] != STONE)
+                goto copper_skip;
+
+            int len = 15 + RAND(0, 20);
+
+            float dx = (RANDF() - 0.5f) * 2.0f;
+            float dy = (RANDF() - 0.5f) * 1.0f;
+            float dz = (RANDF() - 0.5f) * 2.0f;
+
+            for (int s = 0; s < len; s++) {
+
+                int rx = x + RAND(-1, 1);
+                int ry = y + RAND(-1, 1);
+                int rz = z + RAND(-1, 1);
+
+                if (rx < 0 || rx >= CHUNK_WIDTH ||
+                    ry < 0 || ry >= CHUNK_HEIGHT ||
+                    rz < 0 || rz >= CHUNK_DEPTH)
+                    continue;
+
+                int idx = rx + CHUNK_WIDTH * (ry + CHUNK_HEIGHT * rz);
+
+                if (chunk->data[idx] == STONE)
+                    chunk->data[idx] = COPPER_ORE;
+
+                x += dx;
+                y += dy;
+                z += dz;
+            }
+
+            copper_skip:;
+        }
+
+        {
+            int x = RAND(0, CHUNK_WIDTH - 1);
+            int y = RAND(0, 24);
+            int z = RAND(0, CHUNK_DEPTH - 1);
+
+            if (chunk->data[x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z)] != STONE)
+                goto gold_skip;
+
+            int len = 10 + RAND(0, 15);
+
+            float dx = (RANDF() - 0.5f) * 1.5f;
+            float dy = (RANDF() - 0.5f) * 1.0f;
+            float dz = (RANDF() - 0.5f) * 1.5f;
+
+            for (int s = 0; s < len; s++) {
+
+                int rx = x + RAND(-1, 1);
+                int ry = y + RAND(-1, 1);
+                int rz = z + RAND(-1, 1);
+
+                if (rx < 0 || rx >= CHUNK_WIDTH ||
+                    ry < 0 || ry >= CHUNK_HEIGHT ||
+                    rz < 0 || rz >= CHUNK_DEPTH)
+                    continue;
+
+                int idx = rx + CHUNK_WIDTH * (ry + CHUNK_HEIGHT * rz);
+
+                if (chunk->data[idx] == STONE)
+                    chunk->data[idx] = GOLD_ORE;
+
+                x += dx;
+                y += dy;
+                z += dz;
+            }
+
+            gold_skip:;
         }
     }
 

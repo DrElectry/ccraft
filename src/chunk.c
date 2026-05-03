@@ -109,6 +109,69 @@ void chunk_generate(Chunk* chunk) {
         }
     }
 
+    for (int x = 2; x < CHUNK_WIDTH - 2; x += 5) {
+        for (int z = 2; z < CHUNK_DEPTH - 2; z += 5) {
+            int wx = gen_chunk_x * CHUNK_WIDTH + x;
+            int wz = gen_chunk_z * CHUNK_DEPTH + z;
+
+            float density = fbm2d(wx * 0.08f, wz * 0.08f, 2, 0.5f, 2.0f);
+            if (density < 0.4f) continue;
+
+            int terrain_height = get_terrain_height(wx, wz);
+            if (terrain_height <= SEA_LEVEL + 6) continue;
+
+            int surface_y = terrain_height;
+            int surface_idx = x + CHUNK_WIDTH * (surface_y + CHUNK_HEIGHT * z);
+            if (chunk->data[surface_idx] != GRASS) continue;
+
+            int trunk_h = 3 + RAND(0, 3);
+
+            for (int th = 1; th <= trunk_h; ++th) {
+                int ty = surface_y + th;
+                if (ty >= CHUNK_HEIGHT) break;
+                int trunk_idx = x + CHUNK_WIDTH * (ty + CHUNK_HEIGHT * z);
+                chunk->data[trunk_idx] = LOG;
+            }
+
+            int canopy_base = surface_y + trunk_h;
+
+            for (int ly = 0; ly < 2; ++ly) {
+                for (int dx = -2; dx <= 2; ++dx) {
+                    for (int dz = -2; dz <= 2; ++dz) {
+                        int lx = x + dx, lz = z + dz, lyy = canopy_base + ly;
+                        if (lx < 0 || lx >= CHUNK_WIDTH || lz < 0 || lz >= CHUNK_DEPTH || lyy >= CHUNK_HEIGHT) continue;
+                        int leaves_idx = lx + CHUNK_WIDTH * (lyy + CHUNK_HEIGHT * lz);
+                        chunk->data[leaves_idx] = LEAVES;
+                    }
+                }
+            }
+
+            for (int ly = 2; ly < 4; ++ly) {
+                {
+                    int lx = x, lz_ = z, lyy = canopy_base + ly;
+                    if (lyy < CHUNK_HEIGHT) {
+                        int leaves_idx = lx + CHUNK_WIDTH * (lyy + CHUNK_HEIGHT * lz_);
+                        chunk->data[leaves_idx] = LEAVES;
+                    }
+                }
+                int dirs[4][2] = {{0,1}, {0,-1}, {1,0}, {-1,0}};
+                for (int d = 0; d < 4; ++d) {
+                    int dx = dirs[d][0], dz = dirs[d][1];
+                    int lx = x + dx, lz_ = z + dz, lyy = canopy_base + ly;
+                    if (lx >= 0 && lx < CHUNK_WIDTH && lz_ >= 0 && lz_ < CHUNK_DEPTH && lyy < CHUNK_HEIGHT) {
+                        int leaves_idx = lx + CHUNK_WIDTH * (lyy + CHUNK_HEIGHT * lz_);
+                        chunk->data[leaves_idx] = LEAVES;
+                    }
+                }
+                int lx = x, lz_ = z, lyy = canopy_base + ly;
+                if (lyy < CHUNK_HEIGHT) {
+                    int leaves_idx = lx + CHUNK_WIDTH * (lyy + CHUNK_HEIGHT * lz_);
+                    chunk->data[leaves_idx] = LEAVES;
+                }
+            }
+        }
+    }
+
     chunk->model = (Render_request){0};
     chunk->water_model = (Render_request){0};
 }
@@ -173,10 +236,10 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
 
     int render_front;
     if (is_water_block(tile_id)) {
-        // Water culls only with water
+        // water culls by water
         render_front = !is_water_block(front);
     } else {
-        // Non-water blocks never cull with water
+        // non water blocks are never culled by water
         render_front = lookup_transparent[front] || (is_water_block(front) ? 1 : 0);
     }
     if (render_front) {

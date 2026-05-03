@@ -38,7 +38,7 @@ int lookup_transparent[] = {
     1, // LEAVES
     0, // STONE
     0, // IRON_BLOCK
-    1, // WATER
+    0, // WATER
     0, // LOG
 };
 
@@ -111,7 +111,6 @@ void chunk_generate(Chunk* chunk) {
     chunk->water_model = (Render_request){0};
 }
 
-// Helper to check if a block type is in a category
 static inline int is_opaque_block(uint16_t tile_id) {
     return tile_id != AIR && tile_id != LEAVES && tile_id != WATER;
 }
@@ -120,7 +119,6 @@ static inline int is_water_block(uint16_t tile_id) {
     return tile_id == WATER;
 }
 
-// Helper to free render request data
 static void free_render_request(Render_request* r) {
     if (r->data) {
         free(r->data);
@@ -135,7 +133,6 @@ static void free_render_request(Render_request* r) {
     ebo_free(&r->cache.ebo);
 }
 
-// Helper to finalize a render request
 static void finalize_render_request(Render_request* r, float* vertices, int* indices, int v_cursor, int i_cursor) {
     if (v_cursor > 0) {
         vertices = (float*)realloc(vertices, v_cursor * sizeof(float));
@@ -172,8 +169,14 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
     uint16_t up    = world_get_block(world, wx, wy + 1, wz);
     uint16_t down  = world_get_block(world, wx, wy - 1, wz);
 
-    // Check if front face should be rendered
-    int render_front = lookup_transparent[front] || (is_water_block(tile_id) && !is_opaque_block(front));
+    int render_front;
+    if (is_water_block(tile_id)) {
+        // Water culls only with water
+        render_front = !is_water_block(front);
+    } else {
+        // Non-water blocks never cull with water
+        render_front = lookup_transparent[front] || (is_water_block(front) ? 1 : 0);
+    }
     if (render_front) {
         if (is_water_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, FRONT, atlas_lookup(tile_id, FRONT));
@@ -182,7 +185,12 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         }
     }
 
-    int render_back = lookup_transparent[back] || (is_water_block(tile_id) && !is_opaque_block(back));
+    int render_back;
+    if (is_water_block(tile_id)) {
+        render_back = !is_water_block(back);
+    } else {
+        render_back = lookup_transparent[back] || (is_water_block(back) ? 1 : 0);
+    }
     if (render_back) {
         if (is_water_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, BACK, atlas_lookup(tile_id, BACK));
@@ -191,7 +199,12 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         }
     }
 
-    int render_left = lookup_transparent[left] || (is_water_block(tile_id) && !is_opaque_block(left));
+    int render_left;
+    if (is_water_block(tile_id)) {
+        render_left = !is_water_block(left);
+    } else {
+        render_left = lookup_transparent[left] || (is_water_block(left) ? 1 : 0);
+    }
     if (render_left) {
         if (is_water_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, LEFT, atlas_lookup(tile_id, LEFT));
@@ -200,7 +213,12 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         }
     }
 
-    int render_right = lookup_transparent[right] || (is_water_block(tile_id) && !is_opaque_block(right));
+    int render_right;
+    if (is_water_block(tile_id)) {
+        render_right = !is_water_block(right);
+    } else {
+        render_right = lookup_transparent[right] || (is_water_block(right) ? 1 : 0);
+    }
     if (render_right) {
         if (is_water_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, RIGHT, atlas_lookup(tile_id, RIGHT));
@@ -209,7 +227,12 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         }
     }
 
-    int render_up = lookup_transparent[up] || (is_water_block(tile_id) && !is_opaque_block(up));
+    int render_up;
+    if (is_water_block(tile_id)) {
+        render_up = !is_water_block(up);
+    } else {
+        render_up = lookup_transparent[up] || (is_water_block(up) ? 1 : 0);
+    }
     if (render_up) {
         if (is_water_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, UP, atlas_lookup(tile_id, UP));
@@ -218,7 +241,12 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         }
     }
 
-    int render_down = lookup_transparent[down] || (is_water_block(tile_id) && !is_opaque_block(down));
+    int render_down;
+    if (is_water_block(tile_id)) {
+        render_down = !is_water_block(down);
+    } else {
+        render_down = lookup_transparent[down] || (is_water_block(down) ? 1 : 0);
+    }
     if (render_down) {
         if (is_water_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, DOWN, atlas_lookup(tile_id, DOWN));

@@ -33,7 +33,7 @@ void main() {
     vec4 frame1 = texture(tex, uv1);
     vec4 frame2 = texture(tex, uv2);
 
-    vec4 data = mix(frame1, frame2, t)*1.5;
+    vec4 data = mix(frame1, frame2, t);
 
     if (data.a < 0.1) discard;
     gAlbedo = data.rgb;

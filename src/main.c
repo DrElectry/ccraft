@@ -144,6 +144,13 @@ int main() {
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
 
+        fbo_bind(&prev_frame);
+        // yuck yuck copying
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prev_frame.id);
+        glBlitFramebuffer(0, 0, 1280, 720, 0, 0, 1280, 720, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        fbo_unbind();
+
         fbo_bind(&gbuffer);
 
         window_update();
@@ -187,7 +194,7 @@ int main() {
 
         program_use(&ssr);
 
-        fbo_bind_texture(&gbuffer, 0, 0);
+        fbo_bind_texture(&prev_frame, 0, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
         fbo_bind_texture(&gbuffer, 2, 3);
         fbo_bind_texture(&gbuffer, 3, 4);

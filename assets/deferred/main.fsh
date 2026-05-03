@@ -132,18 +132,7 @@ void main()
 
     vec3 diffuse = albedo * lightColor * NdotL * (1.0 - shadow);
 
-    vec3 specular = vec3(0.0);
-    if (NdotL > 0.0)
-    {
-        float NDF = DistributionGGX(normal, H, roughness);
-        float G = GeometrySmith(normal, V, L, roughness);
-        vec3 numerator = NDF * G * F;
-        float denominator = 4.0 * NdotV * NdotL + 0.001;
-        specular = numerator / denominator;
-        specular *= lightColor * NdotL * (1.0 - shadow);
-    }
-
-    vec3 directLighting = ambient + diffuse + specular;
+    vec3 directLighting = ambient + diffuse;
 
     vec3 finalColor;
     if (!isSky)

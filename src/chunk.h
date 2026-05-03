@@ -18,6 +18,7 @@ typedef enum : uint16_t {
     IRON_BLOCK = 5,
     WATER = 6,
     LOG = 7,
+    GLASS = 8,
 } Tile;
 
 typedef struct {

@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define SEA_LEVEL 8
+#define SEA_LEVEL 16
 #define BEACH_HEIGHT 2
 
 static int gen_chunk_x = 0;
@@ -48,11 +48,17 @@ inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
 }
 
 static int get_terrain_height(int wx, int wz) {
-    float h = noise2d(wx*0.05, wz*0.05);
-    return h;
+    float h = noise2d(wx*0.025, wz*0.025);
+    float h2 = noise2d(wx*0.025+100.0, wz*0.025+100.0);
+    if (h2 < h) {h-=16.0f;}
+    return h+20.0f;
 }
 
 static uint16_t get_block_at_height(int wy, int terrain_height, int water_level) {
+    if (wy <= water_level && wy > terrain_height) {
+        return WATER;
+    }
+    
     if (wy > terrain_height) {
         return AIR;
     }
@@ -101,7 +107,7 @@ void chunk_generate(Chunk* chunk) {
         }
     }
 
-chunk->model = (Render_request){0};
+    chunk->model = (Render_request){0};
     chunk->water_model = (Render_request){0};
 }
 
@@ -113,8 +119,6 @@ static inline int is_opaque_block(uint16_t tile_id) {
 static inline int is_water_block(uint16_t tile_id) {
     return tile_id == WATER;
 }
-
-
 
 // Helper to free render request data
 static void free_render_request(Render_request* r) {

@@ -42,8 +42,11 @@ float wdelay = 0.0f;
 Input input_manager;
 Texture texture_atlas, roughness;
 
+Render_request block; // in your hand
+
 static float break_delay = 0.0f;
 static float place_delay = 0.0f;
+// the quality of this code is the new level of shit
 
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
@@ -108,7 +111,7 @@ void game_init() {
     input_init(&input_manager, _win->glwin);
 
     text_init("assets/text/text.vsh", "assets/text/text.fsh", "assets/text.png");
-    text_create(&demo_text, "BLOCKS", 0x5F, 0, 0);
+    text_create(&demo_text, "CCRAFT", 0x5F, 0, 0);
 }
 
 static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {

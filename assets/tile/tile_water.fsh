@@ -61,7 +61,26 @@ float ridgedFbm(vec2 p) {
 }
 
 void main() {
-    vec4 data = texture(tex, out_uv);
+    float tile_size = 1.0 / 16.0;
+
+    float fps = 0.5;
+    float frameCount = 2.0;
+
+    float animTime = time * fps;
+
+    float frame = floor(animTime);
+    float t = fract(animTime);
+
+    float currentFrame = mod(frame, frameCount);
+    float nextFrame = mod(frame + 1.0, frameCount);
+
+    vec2 uv1 = out_uv + vec2(currentFrame * tile_size, 0.0);
+    vec2 uv2 = out_uv + vec2(nextFrame * tile_size, 0.0);
+
+    vec4 frame1 = texture(tex, uv1);
+    vec4 frame2 = texture(tex, uv2);
+
+    vec4 data = mix(frame1, frame2, t);
 
     if (data.a < 0.1) discard;
     gAlbedo = data.rgb;

@@ -18,7 +18,7 @@ in vec2 out_uv;
 out vec4 fragColor;
 
 const vec3 FOG_COLOR = vec3(0.6, 0.7, 0.8);
-const float FOG_START = 80.0;
+const float FOG_START = 100.0;
 const float FOG_END = 110.0;
 
 vec2 poissonDisk[16] = vec2[](

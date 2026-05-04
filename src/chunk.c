@@ -137,7 +137,7 @@ static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, 
 }
 
 void chunk_generate(Chunk* chunk) {
-    // Seed per-chunk RNG for deterministic features (ores, trees)
+    // seed per chunk
     rng_seed_chunk(gen_chunk_x, gen_chunk_z);
     
     chunk->data = (uint16_t*)malloc(CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t));
@@ -154,6 +154,7 @@ void chunk_generate(Chunk* chunk) {
                 int index = x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z);
                 uint16_t block = get_block_at_height(y, wx, wz, terrain_height, SEA_LEVEL);
                 chunk->data[index] = block;
+
             }
         }
     }
@@ -241,6 +242,7 @@ void chunk_generate(Chunk* chunk) {
             }
         }
     }
+
 
     for (int i = 0; i < 10; i++) { // ores
         {

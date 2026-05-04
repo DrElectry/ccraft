@@ -3,7 +3,6 @@
 #include <math.h>
 #include <stdint.h>
 
-// Alignment macro for portability
 #if defined(_MSC_VER)
     #define ALIGN16 __declspec(align(16))
 #elif defined(__GNUC__) || defined(__clang__)
@@ -48,7 +47,9 @@ static inline float dot2(uint8_t gi, float x, float y) {
 }
 
 static inline float dot3(uint8_t gi, float x, float y, float z) {
-    return grad3d[gi % 12][0] * x + grad3d[gi % 12][1] * y + grad3d[gi % 12][2] * z;
+    return grad3d[gi % 12][0] * x +
+           grad3d[gi % 12][1] * y +
+           grad3d[gi % 12][2] * z;
 }
 
 static inline __m128 floor_ps(__m128 x) {
@@ -86,30 +87,37 @@ static inline __m128 noise2d_simd(__m128 x, __m128 y) {
     __m128 x2 = _mm_add_ps(_mm_sub_ps(X0, _mm_set1_ps(1.0f)), _mm_set1_ps(2.0f * G2));
     __m128 y2 = _mm_add_ps(_mm_sub_ps(Y0, _mm_set1_ps(1.0f)), _mm_set1_ps(2.0f * G2));
 
-    // Declare arrays with proper alignment
     ALIGN16 int ii[4];
     ALIGN16 int jj[4];
+
     ALIGN16 float X0a[4];
     ALIGN16 float Y0a[4];
+
     ALIGN16 float x1a[4];
     ALIGN16 float y1a[4];
+
     ALIGN16 float x2a[4];
     ALIGN16 float y2a[4];
+
     ALIGN16 float i1a[4];
     ALIGN16 float j1a[4];
 
     _mm_store_si128((__m128i*)ii, i);
     _mm_store_si128((__m128i*)jj, j);
+
     _mm_store_ps(X0a, X0);
     _mm_store_ps(Y0a, Y0);
+
     _mm_store_ps(x1a, x1);
     _mm_store_ps(y1a, y1);
+
     _mm_store_ps(x2a, x2);
     _mm_store_ps(y2a, y2);
+
     _mm_store_ps(i1a, i1f);
     _mm_store_ps(j1a, j1f);
 
-    float out[4];
+    ALIGN16 float out[4];
 
     for (int n = 0; n < 4; n++) {
         int i1 = (int)i1a[n];
@@ -144,6 +152,108 @@ static inline __m128 noise2d_simd(__m128 x, __m128 y) {
     return _mm_load_ps(out);
 }
 
+static inline __m128 noise3d_simd(__m128 x, __m128 y, __m128 z) {
+    ALIGN16 float xs[4];
+    ALIGN16 float ys[4];
+    ALIGN16 float zs[4];
+
+    _mm_store_ps(xs, x);
+    _mm_store_ps(ys, y);
+    _mm_store_ps(zs, z);
+
+    ALIGN16 float out[4];
+
+    for (int n = 0; n < 4; n++) {
+        float xf = xs[n];
+        float yf = ys[n];
+        float zf = zs[n];
+
+        float s = (xf + yf + zf) * F3;
+
+        int i = (int)floorf(xf + s);
+        int j = (int)floorf(yf + s);
+        int k = (int)floorf(zf + s);
+
+        float t = (float)(i + j + k) * G3;
+
+        float X0 = xf - ((float)i - t);
+        float Y0 = yf - ((float)j - t);
+        float Z0 = zf - ((float)k - t);
+
+        int i1, j1, k1;
+        int i2, j2, k2;
+
+        if (X0 >= Y0) {
+            if (Y0 >= Z0) {
+                i1 = 1; j1 = 0; k1 = 0;
+                i2 = 1; j2 = 1; k2 = 0;
+            } else if (X0 >= Z0) {
+                i1 = 1; j1 = 0; k1 = 0;
+                i2 = 1; j2 = 0; k2 = 1;
+            } else {
+                i1 = 0; j1 = 0; k1 = 1;
+                i2 = 1; j2 = 0; k2 = 1;
+            }
+        } else {
+            if (Y0 < Z0) {
+                i1 = 0; j1 = 0; k1 = 1;
+                i2 = 0; j2 = 1; k2 = 1;
+            } else if (X0 < Z0) {
+                i1 = 0; j1 = 1; k1 = 0;
+                i2 = 0; j2 = 1; k2 = 1;
+            } else {
+                i1 = 0; j1 = 1; k1 = 0;
+                i2 = 1; j2 = 1; k2 = 0;
+            }
+        }
+
+        float x1 = X0 - (float)i1 + G3;
+        float y1 = Y0 - (float)j1 + G3;
+        float z1 = Z0 - (float)k1 + G3;
+
+        float x2 = X0 - (float)i2 + 2.0f * G3;
+        float y2 = Y0 - (float)j2 + 2.0f * G3;
+        float z2 = Z0 - (float)k2 + 2.0f * G3;
+
+        float x3 = X0 - 1.0f + 3.0f * G3;
+        float y3 = Y0 - 1.0f + 3.0f * G3;
+        float z3 = Z0 - 1.0f + 3.0f * G3;
+
+        float n0 = 0.0f;
+        float n1 = 0.0f;
+        float n2 = 0.0f;
+        float n3 = 0.0f;
+
+        float t0 = 0.6f - X0 * X0 - Y0 * Y0 - Z0 * Z0;
+        if (t0 > 0.0f) {
+            t0 *= t0;
+            n0 = t0 * t0 * dot3(hash3(i, j, k), X0, Y0, Z0);
+        }
+
+        float t1 = 0.6f - x1 * x1 - y1 * y1 - z1 * z1;
+        if (t1 > 0.0f) {
+            t1 *= t1;
+            n1 = t1 * t1 * dot3(hash3(i + i1, j + j1, k + k1), x1, y1, z1);
+        }
+
+        float t2 = 0.6f - x2 * x2 - y2 * y2 - z2 * z2;
+        if (t2 > 0.0f) {
+            t2 *= t2;
+            n2 = t2 * t2 * dot3(hash3(i + i2, j + j2, k + k2), x2, y2, z2);
+        }
+
+        float t3 = 0.6f - x3 * x3 - y3 * y3 - z3 * z3;
+        if (t3 > 0.0f) {
+            t3 *= t3;
+            n3 = t3 * t3 * dot3(hash3(i + 1, j + 1, k + 1), x3, y3, z3);
+        }
+
+        out[n] = 32.0f * (n0 + n1 + n2 + n3);
+    }
+
+    return _mm_load_ps(out);
+}
+
 float noise2d(float x, float y) {
     __m128 xv = _mm_set1_ps(x);
     __m128 yv = _mm_set1_ps(y);
@@ -151,10 +261,28 @@ float noise2d(float x, float y) {
     return _mm_cvtss_f32(r);
 }
 
+float noise3d(float x, float y, float z) {
+    __m128 xv = _mm_set1_ps(x);
+    __m128 yv = _mm_set1_ps(y);
+    __m128 zv = _mm_set1_ps(z);
+    __m128 r = noise3d_simd(xv, yv, zv);
+    return _mm_cvtss_f32(r);
+}
+
 void noise2d_batch4(const float* xs, const float* ys, float* out) {
     __m128 xv = _mm_loadu_ps(xs);
     __m128 yv = _mm_loadu_ps(ys);
     __m128 r = noise2d_simd(xv, yv);
+    _mm_storeu_ps(out, r);
+}
+
+void noise3d_batch4(const float* xs, const float* ys, const float* zs, float* out) {
+    __m128 xv = _mm_loadu_ps(xs);
+    __m128 yv = _mm_loadu_ps(ys);
+    __m128 zv = _mm_loadu_ps(zs);
+
+    __m128 r = noise3d_simd(xv, yv, zv);
+
     _mm_storeu_ps(out, r);
 }
 
@@ -167,6 +295,29 @@ float fbm2d(float x, float y, int octaves, float persistence, float lacunarity) 
     for (int i = 0; i < octaves; i++) {
         total += noise2d(x * frequency, y * frequency) * amplitude;
         max_value += amplitude;
+
+        amplitude *= persistence;
+        frequency *= lacunarity;
+    }
+
+    return total / max_value;
+}
+
+float fbm3d(float x, float y, float z, int octaves, float persistence, float lacunarity) {
+    float total = 0.0f;
+    float frequency = 1.0f;
+    float amplitude = 1.0f;
+    float max_value = 0.0f;
+
+    for (int i = 0; i < octaves; i++) {
+        total += noise3d(
+            x * frequency,
+            y * frequency,
+            z * frequency
+        ) * amplitude;
+
+        max_value += amplitude;
+
         amplitude *= persistence;
         frequency *= lacunarity;
     }
@@ -210,37 +361,61 @@ void fbm2d_batch4(
     _mm_storeu_ps(out, total);
 }
 
-float noise_height(int world_x, int world_z, int sea_level) {
-    float h = fbm2d((float)world_x * 0.015f, (float)world_z * 0.015f, 4, 0.5f, 2.0f);
-    float detail = fbm2d((float)world_x * 0.08f, (float)world_z * 0.08f, 2, 0.5f, 2.0f) * 0.25f;
-    return (float)(sea_level + (int)((h + detail) * 16.0f));
+void fbm3d_batch4(
+    const float* xs,
+    const float* ys,
+    const float* zs,
+    float* out,
+    int octaves,
+    float persistence,
+    float lacunarity
+) {
+    __m128 total = _mm_setzero_ps();
+    __m128 frequency = _mm_set1_ps(1.0f);
+    __m128 amplitude = _mm_set1_ps(1.0f);
+
+    float max_value = 0.0f;
+
+    __m128 xv = _mm_loadu_ps(xs);
+    __m128 yv = _mm_loadu_ps(ys);
+    __m128 zv = _mm_loadu_ps(zs);
+
+    for (int i = 0; i < octaves; i++) {
+        __m128 nx = _mm_mul_ps(xv, frequency);
+        __m128 ny = _mm_mul_ps(yv, frequency);
+        __m128 nz = _mm_mul_ps(zv, frequency);
+
+        __m128 n = noise3d_simd(nx, ny, nz);
+
+        total = _mm_add_ps(total, _mm_mul_ps(n, amplitude));
+
+        max_value += _mm_cvtss_f32(amplitude);
+
+        amplitude = _mm_mul_ps(amplitude, _mm_set1_ps(persistence));
+        frequency = _mm_mul_ps(frequency, _mm_set1_ps(lacunarity));
+    }
+
+    total = _mm_div_ps(total, _mm_set1_ps(max_value));
+
+    _mm_storeu_ps(out, total);
 }
 
-void noise_height_batch4(
-    const int* world_x,
-    const int* world_z,
-    float* out,
-    int sea_level
-) {
-    float xs0[4];
-    float zs0[4];
-    float xs1[4];
-    float zs1[4];
+float noise_height(int world_x, int world_z, int sea_level) {
+    float h = fbm2d(
+        (float)world_x * 0.015f,
+        (float)world_z * 0.015f,
+        4,
+        0.5f,
+        2.0f
+    );
 
-    for (int i = 0; i < 4; i++) {
-        xs0[i] = (float)world_x[i] * 0.015f;
-        zs0[i] = (float)world_z[i] * 0.015f;
-        xs1[i] = (float)world_x[i] * 0.08f;
-        zs1[i] = (float)world_z[i] * 0.08f;
-    }
+    float detail = fbm2d(
+        (float)world_x * 0.08f,
+        (float)world_z * 0.08f,
+        2,
+        0.5f,
+        2.0f
+    ) * 0.25f;
 
-    float h[4];
-    float d[4];
-
-    fbm2d_batch4(xs0, zs0, h, 4, 0.5f, 2.0f);
-    fbm2d_batch4(xs1, zs1, d, 2, 0.5f, 2.0f);
-
-    for (int i = 0; i < 4; i++) {
-        out[i] = (float)(sea_level + (int)((h[i] + d[i] * 0.25f) * 16.0f));
-    }
+    return (float)(sea_level + (int)((h + detail) * 16.0f));
 }

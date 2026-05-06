@@ -50,6 +50,14 @@ void player_jump(World* world, Player* p) {
     }
 }
 
+void player_set_noclip(Player* p, int enabled) {
+    p->noclip = enabled;
+
+    if (enabled) {
+        glm_vec3_zero(p->camera.vel);
+    }
+}
+
 static void move_axis(World* world, Player* p, int axis, float delta) {
     if (delta == 0.0f) return;
 
@@ -66,11 +74,20 @@ static void move_axis(World* world, Player* p, int axis, float delta) {
         } else if (delta < 0.0f) {
             p->camera.pos[axis] += EPSILON;
         }
+
         sync_aabb(p);
     }
 }
 
 void player_move_vel(World* world, Player* p, float dt) {
+    if (p->noclip) {
+        vec3 delta;
+        glm_vec3_scale(p->camera.vel, dt, delta);
+        glm_vec3_add(p->camera.pos, delta, p->camera.pos);
+        sync_aabb(p);
+        return;
+    }
+
     vec3 delta;
     glm_vec3_scale(p->camera.vel, dt, delta);
 
@@ -82,8 +99,13 @@ void player_move_vel(World* world, Player* p, float dt) {
         for (int axis = 0; axis < 3; axis++) {
             float original = p->camera.pos[axis];
             p->camera.pos[axis] = original + (delta[axis] > 0 ? -EPSILON : EPSILON);
+
             sync_aabb(p);
-            if (!aabb_collides(world, p)) break;
+
+            if (!aabb_collides(world, p)) {
+                break;
+            }
+
             p->camera.pos[axis] = original;
         }
     }
@@ -107,6 +129,10 @@ void player_init(Player* p) {
     p->speed = 50.0f;
     p->sensitivity = 0.00025f;
 
+    p->noclip = 0;
+    p->noclip_damping = 8.0f;
+    p->noclip_accel = 20.0f;
+
     sync_aabb(p);
     camera_calculate(&p->camera);
 }
@@ -119,11 +145,75 @@ void player_tick(World* world, Player* p, Input* in, float dt) {
     if (p->camera.rot[0] < -1.5f) p->camera.rot[0] = -1.5f;
 
     float speed = p->speed;
+
     if (input_down(in, GLFW_KEY_LEFT_SHIFT)) {
         speed *= 2.5f;
     }
 
-    vec3 forward_h = { p->camera.forward[0], 0.0f, p->camera.forward[2] };
+    if (p->noclip) {
+        vec3 accel = {0.0f, 0.0f, 0.0f};
+
+        if (input_down(in, GLFW_KEY_W))
+            glm_vec3_add(accel, p->camera.forward, accel);
+
+        if (input_down(in, GLFW_KEY_S)) {
+            vec3 back = {
+                -p->camera.forward[0],
+                -p->camera.forward[1],
+                -p->camera.forward[2]
+            };
+            glm_vec3_add(accel, back, accel);
+        }
+
+        if (input_down(in, GLFW_KEY_D))
+            glm_vec3_add(accel, p->camera.right, accel);
+
+        if (input_down(in, GLFW_KEY_A)) {
+            vec3 left = {
+                -p->camera.right[0],
+                -p->camera.right[1],
+                -p->camera.right[2]
+            };
+            glm_vec3_add(accel, left, accel);
+        }
+
+        if (input_down(in, GLFW_KEY_SPACE)) {
+            vec3 up = {0.0f, 1.0f, 0.0f};
+            glm_vec3_add(accel, up, accel);
+        }
+
+        if (input_down(in, GLFW_KEY_LEFT_CONTROL)) {
+            vec3 down = {0.0f, -1.0f, 0.0f};
+            glm_vec3_add(accel, down, accel);
+        }
+
+        if (glm_vec3_norm(accel) > 0.0f) {
+            glm_vec3_normalize(accel);
+            glm_vec3_scale(accel, p->noclip_accel * speed, accel);
+            glm_vec3_muladds(accel, dt, p->camera.vel);
+        }
+
+        float damping = p->noclip_damping;
+        float factor = 1.0f / (1.0f + damping * dt);
+
+        p->camera.vel[0] *= factor;
+        p->camera.vel[1] *= factor;
+        p->camera.vel[2] *= factor;
+
+        player_move_vel(world, p, dt);
+
+        camera_calculate(&p->camera);
+        sync_aabb(p);
+
+        return;
+    }
+
+    vec3 forward_h = {
+        p->camera.forward[0],
+        0.0f,
+        p->camera.forward[2]
+    };
+
     if (glm_vec3_norm(forward_h) > 0.001f) {
         glm_vec3_normalize(forward_h);
     }
@@ -135,17 +225,30 @@ void player_tick(World* world, Player* p, Input* in, float dt) {
 
     if (input_down(in, GLFW_KEY_W))
         glm_vec3_add(accel, forward_h, accel);
+
     if (input_down(in, GLFW_KEY_S))
-        glm_vec3_add(accel, (vec3){-forward_h[0], 0.0f, -forward_h[2]}, accel);
+        glm_vec3_add(accel, (vec3){
+            -forward_h[0],
+            0.0f,
+            -forward_h[2]
+        }, accel);
+
     if (input_down(in, GLFW_KEY_D))
         glm_vec3_add(accel, right_h, accel);
+
     if (input_down(in, GLFW_KEY_A))
-        glm_vec3_add(accel, (vec3){-right_h[0], 0.0f, -right_h[2]}, accel);
+        glm_vec3_add(accel, (vec3){
+            -right_h[0],
+            0.0f,
+            -right_h[2]
+        }, accel);
 
     vec3 flat = {accel[0], 0.0f, accel[2]};
+
     if (glm_vec3_norm(flat) > 0.0f) {
         glm_vec3_normalize(flat);
         glm_vec3_scale(flat, speed, flat);
+
         accel[0] = flat[0];
         accel[2] = flat[2];
     }
@@ -161,7 +264,10 @@ void player_tick(World* world, Player* p, Input* in, float dt) {
 
     float damping = 10.0f;
     float factor = 1.0f - damping * dt;
-    if (factor < 0.0f) factor = 0.0f;
+
+    if (factor < 0.0f) {
+        factor = 0.0f;
+    }
 
     p->camera.vel[0] *= factor;
     p->camera.vel[2] *= factor;
@@ -179,6 +285,7 @@ void player_get_view(Player* p, mat4 view) {
 
     vec3 target;
     glm_vec3_add(eye, p->camera.forward, target);
+
     glm_lookat(eye, target, p->camera.up, view);
 }
 

@@ -10,7 +10,7 @@
 #include <math.h>
 
 #define SEA_LEVEL 16
-#define BEACH_HEIGHT 2
+#define BEACH_HEIGHT 4
 
 static int gen_chunk_x = 0;
 static int gen_chunk_z = 0;
@@ -35,6 +35,7 @@ int lookup_atlas[] = {
     11,11,11,11,11,11,  // GOLD_ORE
     12,12,12,12,12,12,  // SAND
     13,13,13,13,13,13,  // GRAVEL
+    18,18,18,18,18,18,  // LAVA
 };
 
 int lookup_transparent[] = {
@@ -52,6 +53,7 @@ int lookup_transparent[] = {
     0, // GOLD_ORE
     0, // SAND
     0, // GRAVEL
+    0, // LAVA
 };
 
 inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
@@ -60,10 +62,11 @@ inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
 }
 
 static int get_terrain_height(int wx, int wz) {
-    float h = fbm2d(wx*0.025, wz*0.025, 4, 0.25, 0.5)*16.0;
-    float h2 = fbm2d(wx*0.05-100.0, wz*0.05-100.0, 2, 0.25, 1.5);
-    if (h2 < h) {h-=h2*12.0;}
-    return h+20.0f;
+    float h = fbm2d(wx*0.015, wz*0.015, 4, 0.5, 0.5)*24.0;
+    float h2 = fbm2d(wx*0.05-100.0, wz*0.05-100.0, 2, 0.5, 1.5);
+    float h3 = noise2d(wx*0.045, wz*0.045)*10.0;
+    if (h2 < h-h3*0.3) {h-=16.0f-h2*8.0;}
+    return h3+h+24.0f;
 }
 
 static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, int water_level) {
@@ -85,18 +88,7 @@ static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, 
         }
         
         if (terrain_height <= water_level + BEACH_HEIGHT) {
-            float blend = (terrain_height - water_level) / (float)BEACH_HEIGHT;
-            float random_factor = RANDF();
-            
-            if (random_factor < blend) {
-                return GRASS;
-            } else {
-                if (RAND(0, 1) == 0) {
-                    return GRAVEL;
-                } else {
-                    return SAND;
-                }
-            }
+            return SAND;
         }
         
         return GRASS;
@@ -166,7 +158,7 @@ void chunk_generate(Chunk* chunk) {
             int wz = gen_chunk_z * CHUNK_DEPTH + z;
 
             float density = fbm2d(wx * 0.08f, wz * 0.08f, 2, 0.5f, 2.0f);
-            if (density < 0.4f) continue;
+            if (density < 0.25f) continue;
 
             int terrain_height = get_terrain_height(wx, wz);
             if (terrain_height <= SEA_LEVEL + 6) continue;
@@ -180,15 +172,7 @@ void chunk_generate(Chunk* chunk) {
             if (chunk->data[surface_idx] != GRASS)
                 continue;
 
-            int trunk_h = 3 + RAND(0, 3);
-
-            for (int th = 1; th <= trunk_h; th++) {
-                int ty = surface_y + th;
-                if (ty >= CHUNK_HEIGHT) break;
-
-                int idx = x + CHUNK_WIDTH * (ty + CHUNK_HEIGHT * z);
-                chunk->data[idx] = LOG;
-            }
+            int trunk_h = 4 + RAND(0, 3);
 
             int canopy_base = surface_y + trunk_h;
 
@@ -240,6 +224,14 @@ void chunk_generate(Chunk* chunk) {
                     chunk->data[idx] = LEAVES;
                 }
             }
+            for (int th = 1; th <= trunk_h; th++) {
+                int ty = surface_y + th;
+                if (ty >= CHUNK_HEIGHT) break;
+
+                int idx = x + CHUNK_WIDTH * (ty + CHUNK_HEIGHT * z);
+                chunk->data[idx] = LOG;
+            }
+
         }
     }
 
@@ -365,11 +357,11 @@ void chunk_generate(Chunk* chunk) {
 }
 
 static inline int is_opaque_block(uint16_t tile_id) {
-    return tile_id != AIR && tile_id != LEAVES && tile_id != WATER;
+    return tile_id != AIR && tile_id != LEAVES && tile_id != WATER && tile_id != LAVA;
 }
 
-static inline int is_water_block(uint16_t tile_id) {
-    return tile_id == WATER;
+static inline int is_liquid_block(uint16_t tile_id) {
+    return tile_id == WATER || tile_id == LAVA;
 }
 
 static void free_render_request(Render_request* r) {
@@ -423,15 +415,15 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
     uint16_t down  = world_get_block(world, wx, wy - 1, wz);
 
     int render_front;
-    if (is_water_block(tile_id)) {
+    if (is_liquid_block(tile_id)) {
         // water culls by water
-        render_front = !is_water_block(front);
+        render_front = !is_liquid_block(front);
     } else {
         // non water blocks are never culled by water
-        render_front = lookup_transparent[front] || (is_water_block(front) ? 1 : 0);
+        render_front = lookup_transparent[front] || (is_liquid_block(front) ? 1 : 0);
     }
     if (render_front) {
-        if (is_water_block(tile_id)) {
+        if (is_liquid_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, FRONT, atlas_lookup(tile_id, FRONT));
         } else {
             tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, FRONT, atlas_lookup(tile_id, FRONT));
@@ -439,13 +431,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
     }
 
     int render_back;
-    if (is_water_block(tile_id)) {
-        render_back = !is_water_block(back);
+    if (is_liquid_block(tile_id)) {
+        render_back = !is_liquid_block(back);
     } else {
-        render_back = lookup_transparent[back] || (is_water_block(back) ? 1 : 0);
+        render_back = lookup_transparent[back] || (is_liquid_block(back) ? 1 : 0);
     }
     if (render_back) {
-        if (is_water_block(tile_id)) {
+        if (is_liquid_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, BACK, atlas_lookup(tile_id, BACK));
         } else {
             tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, BACK, atlas_lookup(tile_id, BACK));
@@ -453,13 +445,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
     }
 
     int render_left;
-    if (is_water_block(tile_id)) {
-        render_left = !is_water_block(left);
+    if (is_liquid_block(tile_id)) {
+        render_left = !is_liquid_block(left);
     } else {
-        render_left = lookup_transparent[left] || (is_water_block(left) ? 1 : 0);
+        render_left = lookup_transparent[left] || (is_liquid_block(left) ? 1 : 0);
     }
     if (render_left) {
-        if (is_water_block(tile_id)) {
+        if (is_liquid_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, LEFT, atlas_lookup(tile_id, LEFT));
         } else {
             tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, LEFT, atlas_lookup(tile_id, LEFT));
@@ -467,13 +459,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
     }
 
     int render_right;
-    if (is_water_block(tile_id)) {
-        render_right = !is_water_block(right);
+    if (is_liquid_block(tile_id)) {
+        render_right = !is_liquid_block(right);
     } else {
-        render_right = lookup_transparent[right] || (is_water_block(right) ? 1 : 0);
+        render_right = lookup_transparent[right] || (is_liquid_block(right) ? 1 : 0);
     }
     if (render_right) {
-        if (is_water_block(tile_id)) {
+        if (is_liquid_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, RIGHT, atlas_lookup(tile_id, RIGHT));
         } else {
             tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, RIGHT, atlas_lookup(tile_id, RIGHT));
@@ -481,13 +473,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
     }
 
     int render_up;
-    if (is_water_block(tile_id)) {
-        render_up = !is_water_block(up);
+    if (is_liquid_block(tile_id)) {
+        render_up = !is_liquid_block(up);
     } else {
-        render_up = lookup_transparent[up] || (is_water_block(up) ? 1 : 0);
+        render_up = lookup_transparent[up] || (is_liquid_block(up) ? 1 : 0);
     }
     if (render_up) {
-        if (is_water_block(tile_id)) {
+        if (is_liquid_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, UP, atlas_lookup(tile_id, UP));
         } else {
             tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, UP, atlas_lookup(tile_id, UP));
@@ -495,13 +487,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
     }
 
     int render_down;
-    if (is_water_block(tile_id)) {
-        render_down = !is_water_block(down);
+    if (is_liquid_block(tile_id)) {
+        render_down = !is_liquid_block(down);
     } else {
-        render_down = lookup_transparent[down] || (is_water_block(down) ? 1 : 0);
+        render_down = lookup_transparent[down] || (is_liquid_block(down) ? 1 : 0);
     }
     if (render_down) {
-        if (is_water_block(tile_id)) {
+        if (is_liquid_block(tile_id)) {
             tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, DOWN, atlas_lookup(tile_id, DOWN));
         } else {
             tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, DOWN, atlas_lookup(tile_id, DOWN));

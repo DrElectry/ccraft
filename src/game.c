@@ -23,10 +23,10 @@ Player player;
 HText demo_text;
 World world;
 
-Shader a, b, water_vertex, water_fragment;
-Program c, water_prog;
+Shader a, b, water_vertex, water_fragment, ba, bbb;
+Program c, water_prog, bc;
 
-mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix;
+mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix, hand_model;
 mat4 prev_view_proj;
 
 vec3 light_pos = { 20.0f, 40.0f, -30.0f };
@@ -38,8 +38,15 @@ float last_time = 0.0f;
 
 int wireframe = 0;
 int potato_mode = 0;
+int noclip = 0;
 float wdelay = 0.0f;
 float pdelay = 0.0f;
+float ndelay = 0.0f;
+
+float aa[64];
+int bb[64];
+
+int cc, dd; // for block in our hand
 
 Input input_manager;
 Texture texture_atlas, roughness;
@@ -55,27 +62,7 @@ void game_init() {
     glm_lookat(light_pos, target, up, light_view);
 
     world_init(&world);
-    rng_seed(0x11223344AABBCCDD);
-
-    int grid_size = 9;
-
-    for (int x = 0; x < grid_size; x++) {
-        for (int z = 0; z < grid_size; z++) {
-            // Set chunk position for seeded noise generation
-            chunk_set_position(x, z);
-            
-            Chunk chunk;
-            chunk_generate(&chunk);
-            vec2 pos = { (float)x, (float)z };
-            world_add_chunk(&world, &chunk, pos);
-        }
-    }
-
-    for (int x = 0; x < grid_size; x++) {
-        for (int z = 0; z < grid_size; z++) {
-            world_rebuild_chunk(&world, x, z);
-        }
-    }
+    rng_seed(0xDEADBEEFCAFEBABE);
 
     texture_atlas.mag_filter = GL_NEAREST;
     texture_atlas.min_filter = GL_NEAREST;
@@ -89,6 +76,8 @@ void game_init() {
 
     File vr = file_open("assets/tile/tile.vsh");
     File fr = file_open("assets/tile/tile.fsh");
+    File vb = file_open("assets/things/hand.vsh");
+    File fb = file_open("assets/things/hand.fsh");
     File water_vr = file_open("assets/tile/tile_water.vsh");
     File water_fr = file_open("assets/tile/tile_water.fsh");
 
@@ -99,6 +88,8 @@ void game_init() {
 
     a.type = GL_VERTEX_SHADER;
     b.type = GL_FRAGMENT_SHADER;
+    ba.type = GL_VERTEX_SHADER;
+    bbb.type = GL_FRAGMENT_SHADER;
     water_vertex.type = GL_VERTEX_SHADER;
     water_fragment.type = GL_FRAGMENT_SHADER;
 
@@ -106,14 +97,38 @@ void game_init() {
     shader_create(&b, fr.data);
     shader_create(&water_vertex, water_vr.data);
     shader_create(&water_fragment, water_fr.data);
+    shader_create(&ba, vb.data);
+    shader_create(&bbb, fb.data);
 
     program_create(&c, &a, &b);
+    program_create(&bc, &ba, &bbb);
     program_create(&water_prog, &water_vertex, &water_fragment);
 
     input_init(&input_manager, _win->glwin);
 
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, FRONT, 0);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, BACK, 0);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, LEFT, 0);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, RIGHT, 0);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, UP, 0);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, DOWN, 0);
+
+    block.data = aa;
+    block.data_size = cc;
+    block.triangles = bb;
+    block.tri_count = dd;
+
+    gfx_packet_static_request(&block);
+
+    block.pos[0] = block.pos[1] = block.pos[2] = 0.0f;
+    block.rot[0] = block.rot[1] = block.rot[2] = 0.0f;
+    block.scale[0] = block.scale[1] = block.scale[2] = 0.3f;
+
+    glm_mat4_identity(hand_model);
+    glm_translate(hand_model, (vec3){0.0f, 1.8f, 2.0f});
+
     text_init("assets/text/text.vsh", "assets/text/text.fsh", "assets/text.png");
-    text_create(&demo_text, "CCRAFT", 0x5F, 0, 0);
+    text_create(&demo_text, "CCRAFT DEMO", 0x5F, 0, 0);
 }
 
 static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
@@ -156,9 +171,15 @@ void game_tick(float dt) {
         potato_mode = !potato_mode;
         pdelay = 0.25f;
     }
+    if (input_down(&input_manager, GLFW_KEY_B) && ndelay < 0) {
+        noclip = !noclip;
+        player_set_noclip(&player, noclip);
+        ndelay = 0.25f;
+    }
 
     wdelay -= dt;
     pdelay -= dt;
+    ndelay -= dt;
 
     vec3 eye;
     player_get_eye(&player, eye);
@@ -185,7 +206,7 @@ void game_tick(float dt) {
             int py = hit.by + (int)hit.normal[1];
             int pz = hit.bz + (int)hit.normal[2];
 
-            world_set_block(&world, px, py, pz, GLASS);
+            world_set_block(&world, px, py, pz, LAVA);
             rebuild_chunks_for_block(&world, px, py, pz);
             place_delay = 0.2f;
         }
@@ -235,7 +256,6 @@ void game_draw(float time) {
     program_set_mat4(&c, "proj", (float*)projection);
     program_set_mat4(&c, "view", (float*)view);
 
-    // Set uniforms for water program too
     program_use(&water_prog);
     texture_bind(&texture_atlas, 0);
     texture_bind(&roughness, 1);
@@ -246,6 +266,20 @@ void game_draw(float time) {
     program_set_float(&water_prog, "time", time);
 
     world_render(&world, &c, &water_prog);
+
+    glDisable(GL_DEPTH_TEST);
+
+    program_use(&bc);
+    texture_bind(&texture_atlas, 0);
+    texture_bind(&roughness, 1);
+    program_set_int(&bc, "tex", 0);
+    program_set_int(&bc, "roug", 1);
+    program_set_mat4(&bc, "proj", (float*)projection);
+    program_set_mat4(&bc, "model", (float*)hand_model);
+
+    gfx_render(&block, &bc);
+
+    glEnable(GL_DEPTH_TEST);
 }
 
 void game_draw_hud() {

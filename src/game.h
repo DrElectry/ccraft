@@ -11,6 +11,7 @@ extern vec3 light_pos;
 extern vec3 light_dir;
 extern int wireframe;
 extern int potato_mode;
+extern int noclip;
 
 extern Player player;
 

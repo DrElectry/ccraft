@@ -86,11 +86,14 @@ static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, 
         if (terrain_height <= water_level) {
             return SAND;
         }
-        
+
         if (terrain_height <= water_level + BEACH_HEIGHT) {
+            if (RANDF() < 0.0035f) {
+                return LAVA;
+            }
             return SAND;
         }
-        
+
         return GRASS;
     }
 

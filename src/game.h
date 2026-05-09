@@ -9,6 +9,7 @@ extern mat4 projection, view, inv_projection, inv_view, light_proj, light_view, 
 extern mat4 prev_view_proj;
 extern vec3 light_pos;
 extern vec3 light_dir;
+
 extern int wireframe;
 extern int potato_mode;
 extern int noclip;

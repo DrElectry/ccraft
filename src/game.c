@@ -39,6 +39,7 @@ float last_time = 0.0f;
 int wireframe = 0;
 int potato_mode = 0;
 int noclip = 0;
+
 float wdelay = 0.0f;
 float pdelay = 0.0f;
 float ndelay = 0.0f;

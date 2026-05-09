@@ -39,7 +39,7 @@ void main() {
     if (out_uv.x < tile_size) {
         gAlbedo = data.rgb;
     } else {
-        gAlbedo = data.rgb*2.5f; // very VERY bad, but works for now
+        gAlbedo = data.rgb*4.0f; // very VERY bad, but works for now
     }
 
 

@@ -5,6 +5,7 @@
 #include "gfx.h"
 #include "fbo.h"
 #include "fm.h"
+#include "tex.h"
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
 
@@ -44,10 +45,20 @@ int main() {
     FBO ssrfb;
     FBO bloombfb;
     FBO bloomblfb;
+    FBO ffb;
 
-    Shader mainv, mainf, ssaof, ppf, ssrf, bloombf, bloomblf;
-    Program main, ssao, pp, ssr, bloomb, bloombl;
-    File mainfv, mainff, ssaoff, ppff, ssrff, bloombff, bloomblff;
+    Shader mainv, mainf, ssaof, ppf, ssrf, bloombf, bloomblf, crossf;
+    Program main, ssao, pp, ssr, bloomb, bloombl, cross;
+    File mainfv, mainff, ssaoff, ppff, ssrff, bloombff, bloomblff, crossff;
+
+    Texture crosshair;
+
+    crosshair.mag_filter = GL_NEAREST;
+    crosshair.min_filter = GL_NEAREST;
+    crosshair.wrap_s = GL_REPEAT;
+    crosshair.wrap_t = GL_REPEAT;
+
+    texture_create(&crosshair, "assets/crosshair.png");
 
     mainv.type = GL_VERTEX_SHADER;
     mainf.type = GL_FRAGMENT_SHADER;
@@ -56,6 +67,7 @@ int main() {
     ssrf.type = GL_FRAGMENT_SHADER;
     bloombf.type = GL_FRAGMENT_SHADER;
     bloomblf.type = GL_FRAGMENT_SHADER;
+    crossf.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
     mainff = file_open("assets/deferred/main.fsh");
@@ -64,6 +76,7 @@ int main() {
     ssrff = file_open("assets/deferred/ssr.fsh");
     bloombff = file_open("assets/deferred/bloomb.fsh");
     bloomblff = file_open("assets/deferred/bloombl.fsh");
+    crossff = file_open("assets/gui/crosshair.fsh");
 
     shader_create(&mainv, mainfv.data);
     shader_create(&mainf, mainff.data);
@@ -72,6 +85,7 @@ int main() {
     shader_create(&ssrf, ssrff.data);
     shader_create(&bloombf, bloombff.data);
     shader_create(&bloomblf, bloomblff.data);
+    shader_create(&crossf, crossff.data);
 
     program_create(&main, &mainv, &mainf);
     program_create(&ssao, &mainv, &ssaof);
@@ -79,6 +93,7 @@ int main() {
     program_create(&ssr, &mainv, &ssrf);
     program_create(&bloomb, &mainv, &bloombf);
     program_create(&bloombl, &mainv, &bloomblf);
+    program_create(&cross, &mainv, &crossf);
 
     fbo_create(&ssaofb, 1280, 720, 1);
     fbo_create(&prev_frame, 1280, 720, 1);
@@ -86,10 +101,12 @@ int main() {
     fbo_create(&ssrfb, 1280, 720, 1);
     fbo_create(&bloombfb, 1280, 720, 1);
     fbo_create(&bloomblfb, 1280, 720, 1);
+    fbo_create(&ffb, 1280, 720, 1);
 
     ssrfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloombfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloomblfb.color_formats[0] = FBO_COLOR_RGBA16F;
+    ffb.color_formats[1] = FBO_COLOR_RGBA16F;
 
     fbo_create(&gbuffer, 1280, 720, 4);
 
@@ -282,6 +299,8 @@ int main() {
 
         fbo_unbind();
 
+        fbo_bind(&ffb);
+
         program_use(&pp);
 
         fbo_bind_texture(&ppfb, 0, 0);
@@ -291,6 +310,17 @@ int main() {
         program_set_int(&pp, "colorTexture", 0);
         program_set_int(&pp, "depthTexture", 1);
         program_set_int(&pp, "bloomTexture", 2);
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
+        program_use(&cross);
+
+        fbo_bind_texture(&ffb, 0, 0);
+        texture_bind(&crosshair, 1);
+
+        program_set_int(&cross, "crosshair", 1);
 
         gfx_draw_fullscreen_quad();
 

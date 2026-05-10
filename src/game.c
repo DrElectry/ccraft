@@ -180,8 +180,15 @@ void game_init() {
     glm_mat4_identity(hand_model);
     glm_translate(hand_model, (vec3){0.0f, 1.8f, 2.0f});
 
-    text_init("assets/text/text.vsh", "assets/text/text.fsh", "assets/text.png");
-    text_create(&demo_text, "CCRAFT DEMO", 0x5F, 0, 0);
+    text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/text.png");
+    text_create(&demo_text, "CCRAFT", 0x5F, 0, 0);
+
+    sound_t* ambient;
+
+    ambient = sound_load("assets/sounds/ambient.wav");
+    sound_set_looping(ambient, true);
+    sound_set_volume(ambient, 0.5f);
+    sound_play(ambient);
 }
 
 static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
@@ -273,20 +280,26 @@ void game_tick(float dt) {
             int px = hit.bx + (int)hit.normal[0];
             int py = hit.by + (int)hit.normal[1];
             int pz = hit.bz + (int)hit.normal[2];
-            
-            uint16_t block = IRON_BLOCK;
 
-            int variant = RAND(0, 3);
-            sound_t* s = pick_pack_sound(block, variant);
-            if (s) {
-                sound_set_looping(s, false);
-                sound_set_volume(s, 1.0f);
-                sound_play(s);
+            vec3 p;
+
+            player_get_pos(&player, p);
+
+            if (py != p[1]) {
+                uint16_t block = IRON_BLOCK;
+
+                int variant = RAND(0, 3);
+                sound_t* s = pick_pack_sound(block, variant);
+                if (s) {
+                    sound_set_looping(s, false);
+                    sound_set_volume(s, 1.0f);
+                    sound_play(s);
+                }
+
+                world_set_block(&world, px, py, pz, block);
+                rebuild_chunks_for_block(&world, px, py, pz);
+                place_delay = 0.2f;
             }
-
-            world_set_block(&world, px, py, pz, block);
-            rebuild_chunks_for_block(&world, px, py, pz);
-            place_delay = 0.2f;
         }
     }
 

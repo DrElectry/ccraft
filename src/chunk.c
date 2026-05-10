@@ -56,6 +56,31 @@ int lookup_transparent[] = {
     0, // LAVA
 };
 
+int lookup_sounds[] = {
+    0, // AIR
+    0, // GRASS
+    2, // DIRT
+    0, // LEAVES
+    1, // STONE
+    1, // IRON_BLOCK
+    0, // WATER
+    3, // LOG
+    1, // GLASS
+    1, // COAL_ORE
+    1, // COPPER_ORE
+    1, // GOLD_ORE
+    2, // SAND
+    2, // GRAVEL
+    0, // LAVA
+};
+
+uint16_t chunk_sound_pack(uint16_t tile_id)
+{
+    if (tile_id >= (uint16_t)(sizeof(lookup_sounds) / sizeof(lookup_sounds[0])))
+        return 0;
+    return (uint16_t)lookup_sounds[tile_id];
+}
+
 inline int atlas_lookup(uint16_t tile_id, enum Tile_face face)
 {
     return lookup_atlas[tile_id * 6 + face];

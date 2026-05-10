@@ -17,6 +17,7 @@
 #include "vao.h"
 #include "vbo.h"
 #include "ebo.h"
+#include "sound.h"
 #include <GLFW/glfw3.h>
 
 Player player;
@@ -56,7 +57,56 @@ Render_request block; // in your hand
 
 static float break_delay = 0.0f;
 static float place_delay = 0.0f;
-// the quality of this code is the new level of shit
+
+static float g_footstep_delay = 0.0f;
+
+#define SOUND_VARIANTS_PER_PACK 4
+#define SOUND_PACK_COUNT 4
+
+static sound_t* g_packs[SOUND_PACK_COUNT][SOUND_VARIANTS_PER_PACK] = {{0}};
+static bool g_packs_loaded = false;
+
+static void packs_ensure_loaded(void) {
+    if (g_packs_loaded)
+        return;
+
+    int pack = 0;
+    g_packs[pack][0] = sound_load("assets/sounds/grass1.wav");
+    g_packs[pack][1] = sound_load("assets/sounds/grass2.wav");
+    g_packs[pack][2] = sound_load("assets/sounds/grass3.wav");
+    g_packs[pack][3] = sound_load("assets/sounds/grass4.wav");
+
+    pack = 1;
+    g_packs[pack][0] = sound_load("assets/sounds/stone1.wav");
+    g_packs[pack][1] = sound_load("assets/sounds/stone2.wav");
+    g_packs[pack][2] = sound_load("assets/sounds/stone3.wav");
+    g_packs[pack][3] = sound_load("assets/sounds/stone4.wav");
+
+    pack = 2;
+    g_packs[pack][0] = sound_load("assets/sounds/gravel1.wav");
+    g_packs[pack][1] = sound_load("assets/sounds/gravel2.wav");
+    g_packs[pack][2] = sound_load("assets/sounds/gravel3.wav");
+    g_packs[pack][3] = sound_load("assets/sounds/gravel4.wav");
+
+    pack = 3;
+    g_packs[pack][0] = sound_load("assets/sounds/wood1.wav");
+    g_packs[pack][1] = sound_load("assets/sounds/wood2.wav");
+    g_packs[pack][2] = sound_load("assets/sounds/wood3.wav");
+    g_packs[pack][3] = sound_load("assets/sounds/wood4.wav");
+
+    g_packs_loaded = true;
+}
+
+static sound_t* pick_pack_sound(uint16_t tile_id, int variant) {
+    uint16_t pack = chunk_sound_pack(tile_id);
+    if (pack >= SOUND_PACK_COUNT)
+        pack = 0;
+
+    uint16_t v = (uint16_t)(variant & (SOUND_VARIANTS_PER_PACK - 1));
+    return g_packs[pack][v];
+}
+
+
 
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
@@ -74,6 +124,8 @@ void game_init() {
     roughness.min_filter = GL_NEAREST;
     roughness.wrap_s = GL_REPEAT;
     roughness.wrap_t = GL_REPEAT;
+
+    sound_init();
 
     File vr = file_open("assets/tile/tile.vsh");
     File fr = file_open("assets/tile/tile.fsh");
@@ -152,7 +204,10 @@ void game_tick(float dt) {
 
     input_update(&input_manager);
 
+    packs_ensure_loaded();
+
     float current_time = (float)glfwGetTime();
+
     last_time = current_time;
 
     glm_perspective(glm_rad(60.0f), 1280.0f / 720.0f, 0.1f, 1000.0f, projection);
@@ -192,9 +247,21 @@ void game_tick(float dt) {
 
     break_delay -= dt;
     place_delay -= dt;
+    g_footstep_delay -= dt;
+
 
     if (hit.hit && break_delay <= 0.0f) {
         if (glfwGetMouseButton(input_manager.win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            uint16_t b = world_get_block(&world, hit.bx, hit.by, hit.bz);
+            int variant = RAND(0, 3);
+            sound_t* s = pick_pack_sound(b, variant);
+            if (s) {
+                sound_set_looping(s, false);
+                sound_set_volume(s, 1.0f);
+                sound_play(s);
+            }
+
+
             world_set_block(&world, hit.bx, hit.by, hit.bz, AIR);
             rebuild_chunks_for_block(&world, hit.bx, hit.by, hit.bz);
             break_delay = 0.2f;
@@ -206,10 +273,44 @@ void game_tick(float dt) {
             int px = hit.bx + (int)hit.normal[0];
             int py = hit.by + (int)hit.normal[1];
             int pz = hit.bz + (int)hit.normal[2];
+            
+            uint16_t block = IRON_BLOCK;
 
-            world_set_block(&world, px, py, pz, IRON_BLOCK);
+            int variant = RAND(0, 3);
+            sound_t* s = pick_pack_sound(block, variant);
+            if (s) {
+                sound_set_looping(s, false);
+                sound_set_volume(s, 1.0f);
+                sound_play(s);
+            }
+
+            world_set_block(&world, px, py, pz, block);
             rebuild_chunks_for_block(&world, px, py, pz);
             place_delay = 0.2f;
+        }
+    }
+
+    if (g_footstep_delay <= 0.0f) {
+        vec3 ppos;
+        player_get_pos(&player, ppos);
+
+        int wx = (int)floorf(ppos[0]);
+        int wz = (int)floorf(ppos[2]);
+        int wy = (int)floorf(ppos[1]);
+
+        uint16_t below = world_get_block(&world, wx, wy, wz);
+        if (below != AIR) {
+            float move_x = input_down(&input_manager, GLFW_KEY_W) || input_down(&input_manager, GLFW_KEY_S) ? 1.0f : 0.0f;
+            float move_z = input_down(&input_manager, GLFW_KEY_A) || input_down(&input_manager, GLFW_KEY_D) ? 1.0f : 0.0f;
+            if (move_x + move_z > 0.25f) {
+                int variant = RAND(0, 3);
+                sound_t* s = pick_pack_sound(below, variant);
+                if (s)
+                    sound_play(s);
+
+                g_footstep_delay = 0.25f;
+            }
+
         }
     }
 }
@@ -288,5 +389,19 @@ void game_draw_hud() {
 }
 
 void game_destroy() {
+    if (g_packs_loaded) {
+        for (int p = 0; p < SOUND_PACK_COUNT; p++) {
+            for (int v = 0; v < SOUND_VARIANTS_PER_PACK; v++) {
+                if (g_packs[p][v]) {
+                    sound_free(g_packs[p][v]);
+                    g_packs[p][v] = NULL;
+                }
+            }
+        }
+        g_packs_loaded = false;
+    }
+
     world_destroy(&world);
 }
+
+

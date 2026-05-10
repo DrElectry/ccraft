@@ -5,6 +5,7 @@ layout(location = 1) in vec2 in_uv;
 layout(location = 2) in vec3 in_normal;
 
 uniform mat4 proj;
+uniform mat4 view;
 uniform mat4 model;
 
 out vec2 out_uv;
@@ -13,12 +14,17 @@ out vec3 out_view_pos;
 
 void main()
 {
-    out_normal = in_normal;
     out_uv = in_uv;
 
-    vec4 view_pos = model * vec4(in_vert, 1.0);
+    vec4 world_pos = model * vec4(in_vert, 1.0);
+    vec4 view_pos  = view * world_pos;
 
     out_view_pos = view_pos.xyz;
+
+    mat3 normal_matrix = mat3(transpose(inverse(model)));
+    vec3 world_normal = normalize(normal_matrix * in_normal);
+
+    out_normal = mat3(view) * world_normal;
 
     gl_Position = proj * view_pos;
 }

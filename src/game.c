@@ -167,7 +167,7 @@ void game_init() {
     tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, DOWN, 0);
 
     block.data = aa;
-    block.data_size = cc;
+    block.data_size = cc*sizeof(float);
     block.triangles = bb;
     block.tri_count = dd;
 
@@ -178,7 +178,7 @@ void game_init() {
     block.scale[0] = block.scale[1] = block.scale[2] = 0.3f;
 
     glm_mat4_identity(hand_model);
-    glm_translate(hand_model, (vec3){0.0f, 1.8f, 2.0f});
+    glm_translate(hand_model, (vec3){50.0f, 50.0f, 50.0f});
 
     text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/text.png");
     text_create(&demo_text, "CCRAFT", 0x5F, 0, 0);
@@ -315,7 +315,7 @@ void game_tick(float dt) {
         if (below != AIR) {
             float move_x = input_down(&input_manager, GLFW_KEY_W) || input_down(&input_manager, GLFW_KEY_S) ? 1.0f : 0.0f;
             float move_z = input_down(&input_manager, GLFW_KEY_A) || input_down(&input_manager, GLFW_KEY_D) ? 1.0f : 0.0f;
-            if (move_x + move_z > 0.25f) {
+            if (move_x + move_z > 0.5f) {
                 int variant = RAND(0, 3);
                 sound_t* s = pick_pack_sound(below, variant);
                 if (s)
@@ -359,6 +359,70 @@ void game_shadow_pass(void) {
     program_set_mat4(&water_prog, "view", (float*)light_view);
 
     world_render(&world, &c, &water_prog);
+
+    vec3 eye;
+    player_get_eye(&player, eye);
+
+    glm_mat4_identity(hand_model);
+
+    vec3 fwd;
+    vec3 right;
+    vec3 upv;
+    glm_vec3_copy(player.camera.forward, fwd);
+    glm_vec3_copy(player.camera.right, right);
+    glm_vec3_copy(player.camera.up, upv);
+
+    float d = 0.7f;
+    float x = 0.3f;
+    float y = -0.5f;
+
+    vec3 hold_pos;
+    glm_vec3_scale(fwd, d, hold_pos);
+    glm_vec3_muladds(right, x, hold_pos);
+    glm_vec3_muladds(upv, y, hold_pos);
+    glm_vec3_add(hold_pos, eye, hold_pos);
+
+    glm_translate(hand_model, hold_pos);
+
+    mat4 rot;
+    glm_mat4_identity(rot);
+    rot[0][0] = right[0];
+    rot[0][1] = right[1];
+    rot[0][2] = right[2];
+    rot[1][0] = upv[0];
+    rot[1][1] = upv[1];
+    rot[1][2] = upv[2];
+    rot[2][0] = fwd[0];
+    rot[2][1] = fwd[1];
+    rot[2][2] = fwd[2];
+
+    glm_mat4_mul(hand_model, rot, hand_model);
+
+    glm_scale(hand_model, block.scale);
+
+    program_use(&bc);
+    texture_bind(&texture_atlas, 0);
+    texture_bind(&roughness, 1);
+    program_set_int(&bc, "tex", 0);
+    program_set_int(&bc, "roug", 1);
+    program_set_mat4(&bc, "proj", (float*)projection);
+    program_set_mat4(&bc, "view", (float*)view);
+    program_set_mat4(&bc, "model", (float*)hand_model);
+
+    // Render the hand into the G-buffer without depth testing / depth writing
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+
+    glDisable(GL_CULL_FACE);
+
+    vao_bind(&block.cache.vao);
+    glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
+
+    glEnable(GL_CULL_FACE);
+
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
+
     glViewport(0, 0, 1280, 720);
 }
 
@@ -382,7 +446,45 @@ void game_draw(float time) {
 
     world_render(&world, &c, &water_prog);
 
-    glDisable(GL_DEPTH_TEST);
+    vec3 eye;
+    player_get_eye(&player, eye);
+
+    glm_mat4_identity(hand_model);
+
+    vec3 fwd;
+    vec3 right;
+    vec3 upv;
+    glm_vec3_copy(player.camera.forward, fwd);
+    glm_vec3_copy(player.camera.right, right);
+    glm_vec3_copy(player.camera.up, upv);
+
+    float d = 0.55f;
+    float x = 0.2f;
+    float y = -0.6f;
+
+    vec3 hold_pos;
+    glm_vec3_scale(fwd, d, hold_pos);
+    glm_vec3_muladds(right, x, hold_pos);
+    glm_vec3_muladds(upv, y, hold_pos);
+    glm_vec3_add(hold_pos, eye, hold_pos);
+
+    glm_translate(hand_model, hold_pos);
+
+    mat4 rot;
+    glm_mat4_identity(rot);
+    rot[0][0] = right[0];
+    rot[0][1] = right[1];
+    rot[0][2] = right[2];
+    rot[1][0] = upv[0];
+    rot[1][1] = upv[1];
+    rot[1][2] = upv[2];
+    rot[2][0] = fwd[0];
+    rot[2][1] = fwd[1];
+    rot[2][2] = fwd[2];
+
+    glm_mat4_mul(hand_model, rot, hand_model);
+
+    glm_scale(hand_model, block.scale);
 
     program_use(&bc);
     texture_bind(&texture_atlas, 0);
@@ -390,12 +492,17 @@ void game_draw(float time) {
     program_set_int(&bc, "tex", 0);
     program_set_int(&bc, "roug", 1);
     program_set_mat4(&bc, "proj", (float*)projection);
+    program_set_mat4(&bc, "view", (float*)view);
     program_set_mat4(&bc, "model", (float*)hand_model);
 
-    gfx_render(&block, &bc);
+    glDisable(GL_CULL_FACE);
+    
+    vao_bind(&block.cache.vao);
+    glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
 
-    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
 }
+
 
 void game_draw_hud() {
     text_draw(&demo_text);

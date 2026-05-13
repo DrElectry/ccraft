@@ -108,7 +108,7 @@ float pcf(vec4 fragPosLightSpace)
     float bias = max(0.00001 * (1.0 - dot(normal, normalize(lightDir))), 0.0005);
 
     float shadow = 0.0;
-    float radius = 1.5;
+    float radius = 2.5;
 
     for (int i = 0; i < 32; i++)
     {

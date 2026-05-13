@@ -25,6 +25,8 @@ typedef enum : uint16_t {
     SAND = 12,
     GRAVEL = 13,
     LAVA = 14,
+    ROSE = 15,
+    GRASS_CROSS = 16,
 } Tile;
 
 typedef struct {

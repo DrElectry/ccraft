@@ -187,8 +187,15 @@ void game_init() {
 
     ambient = sound_load("assets/sounds/ambient.wav");
     sound_set_looping(ambient, true);
-    sound_set_volume(ambient, 0.5f);
+    sound_set_volume(ambient, 0.2f);
     sound_play(ambient);
+
+    sound_t* music;
+
+    music = sound_load("assets/sounds/taswell.wav");
+    sound_set_looping(music, true);
+    sound_set_volume(music, 0.5f);
+    sound_play(music);
 }
 
 static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
@@ -286,7 +293,7 @@ void game_tick(float dt) {
             player_get_pos(&player, p);
 
             if (py != p[1]) {
-                uint16_t block = IRON_BLOCK;
+                uint16_t block = ROSE;
 
                 int variant = RAND(0, 3);
                 sound_t* s = pick_pack_sound(block, variant);

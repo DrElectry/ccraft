@@ -36,6 +36,8 @@ int lookup_atlas[] = {
     12,12,12,12,12,12,  // SAND
     13,13,13,13,13,13,  // GRAVEL
     18,18,18,18,18,18,  // LAVA
+    32,32,32,32,32,32,  // ROSE
+    33,33,33,33,33,33,  // GRASS_CROSS
 };
 
 int lookup_transparent[] = {
@@ -54,6 +56,8 @@ int lookup_transparent[] = {
     0, // SAND
     0, // GRAVEL
     0, // LAVA
+    1, // ROSE
+    1, // GRASS_CROSS
 };
 
 int lookup_sounds[] = {
@@ -72,7 +76,36 @@ int lookup_sounds[] = {
     2, // SAND
     2, // GRAVEL
     0, // LAVA
+    0, // ROSE
+    0, // GRASS_CROSS
 };
+
+int lookup_cross[] = {
+    0, // AIR
+    0, // GRASS
+    0, // DIRT
+    0, // LEAVES
+    0, // STONE
+    0, // IRON_BLOCK
+    0, // WATER
+    0, // LOG
+    0, // GLASS
+    0, // COAL_ORE
+    0, // COPPER_ORE
+    0, // GOLD_ORE
+    0, // SAND
+    0, // GRAVEL
+    0, // LAVA
+    1, // ROSE
+    1, // GRASS_CROSS
+};
+
+static inline int is_cross_block(uint16_t tile_id) {
+    if (tile_id >= (uint16_t)(sizeof(lookup_cross) / sizeof(lookup_cross[0])))
+        return 0;
+    return lookup_cross[tile_id] != 0;
+}
+
 
 uint16_t chunk_sound_pack(uint16_t tile_id)
 {
@@ -263,6 +296,29 @@ void chunk_generate(Chunk* chunk) {
         }
     }
 
+    for (int x = 0; x < CHUNK_WIDTH; x++) {
+        for (int z = 0; z < CHUNK_DEPTH; z++) {
+            int wx = gen_chunk_x * CHUNK_WIDTH + x;
+            int wz = gen_chunk_z * CHUNK_DEPTH + z;
+            int terrain_height = get_terrain_height(wx, wz);
+            
+            if (terrain_height <= SEA_LEVEL + BEACH_HEIGHT + 1) continue;
+            
+            int surface_y = terrain_height;
+            int idx = x + CHUNK_WIDTH * (surface_y + CHUNK_HEIGHT * z);
+            if (chunk->data[idx] != GRASS) continue;
+            
+            if (RANDF() > 0.05f) continue;
+            
+            uint16_t decoration = (RANDF() < 0.7f) ? GRASS_CROSS : ROSE;
+            
+            int above_y = surface_y + 1;
+            if (above_y < CHUNK_HEIGHT) {
+                int above_idx = x + CHUNK_WIDTH * (above_y + CHUNK_HEIGHT * z);
+                chunk->data[above_idx] = decoration;
+            }
+        }
+    }
 
     for (int i = 0; i < 10; i++) { // ores
         {
@@ -538,9 +594,9 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
     int max_vertices = max_faces * 4;
     int max_indices = max_faces * 6;
 
-    float* model_vertices = (float*)malloc(max_vertices * 5 * sizeof(float));
+    float* model_vertices = (float*)malloc(max_vertices * 8 * sizeof(float)); // 8 attributes per vertex (xyz, uv, normal)
     int* model_indices = (int*)malloc(max_indices * sizeof(int));
-    float* water_vertices = (float*)malloc(max_vertices * 5 * sizeof(float));
+    float* water_vertices = (float*)malloc(max_vertices * 8 * sizeof(float));
     int* water_indices = (int*)malloc(max_indices * sizeof(int));
 
     int v_cursor = 0, i_cursor = 0;
@@ -564,9 +620,130 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
 
                 float pos[3] = {(float)x, (float)y, (float)z};
 
-                push_face_to_buffer(tile_id, pos, world, wx, wy, wz,
-                                  model_vertices, model_indices, &v_cursor, &i_cursor,
-                                  water_vertices, water_indices, &w_v_cursor, &w_i_cursor);
+                if (is_cross_block(tile_id)) {
+                    uint16_t front = world_get_block(world, wx, wy, wz + 1);
+                    uint16_t back  = world_get_block(world, wx, wy, wz - 1);
+                    uint16_t left  = world_get_block(world, wx - 1, wy, wz);
+                    uint16_t right = world_get_block(world, wx + 1, wy, wz);
+                    
+                    if (lookup_transparent[front] || lookup_transparent[back] || 
+                        lookup_transparent[left] || lookup_transparent[right]) {
+                        
+                        float uv[8];
+                        
+                        int atlas_tex1 = atlas_lookup(tile_id, FRONT);
+                        tile_atlas_getuv(atlas_tex1, uv);
+                        
+                        float verts1[4][3] = {
+                            {0.0f, 0.0f, 0.0f},
+                            {1.0f, 0.0f, 1.0f},
+                            {1.0f, 1.0f, 1.0f},
+                            {0.0f, 1.0f, 0.0f}
+                        };
+                        
+                        int v_start = v_cursor / 8;
+                        for (int i2 = 0; i2 < 4; i2++) {
+                            int base = v_cursor;
+                            model_vertices[base + 0] = verts1[i2][0] + pos[0];
+                            model_vertices[base + 1] = verts1[i2][1] + pos[1];
+                            model_vertices[base + 2] = verts1[i2][2] + pos[2];
+                            model_vertices[base + 3] = uv[i2 * 2 + 0];
+                            model_vertices[base + 4] = uv[i2 * 2 + 1];
+                            model_vertices[base + 5] = 0.707f;
+                            model_vertices[base + 6] = 0.0f;
+                            model_vertices[base + 7] = 0.707f;
+                            v_cursor += 8;
+                        }
+                        
+                        model_indices[i_cursor + 0] = v_start + 0;
+                        model_indices[i_cursor + 1] = v_start + 1;
+                        model_indices[i_cursor + 2] = v_start + 2;
+                        model_indices[i_cursor + 3] = v_start + 2;
+                        model_indices[i_cursor + 4] = v_start + 3;
+                        model_indices[i_cursor + 5] = v_start + 0;
+                        i_cursor += 6;
+                        
+                        v_start = v_cursor / 8;
+                        for (int i2 = 0; i2 < 4; i2++) {
+                            int base = v_cursor;
+                            model_vertices[base + 0] = verts1[i2][0] + pos[0];
+                            model_vertices[base + 1] = verts1[i2][1] + pos[1];
+                            model_vertices[base + 2] = verts1[i2][2] + pos[2];
+                            model_vertices[base + 3] = uv[i2 * 2 + 0];
+                            model_vertices[base + 4] = uv[i2 * 2 + 1];
+                            model_vertices[base + 5] = -0.707f;
+                            model_vertices[base + 6] = 0.0f;
+                            model_vertices[base + 7] = -0.707f;
+                            v_cursor += 8;
+                        }
+                        
+                        model_indices[i_cursor + 0] = v_start + 0;
+                        model_indices[i_cursor + 1] = v_start + 2;
+                        model_indices[i_cursor + 2] = v_start + 1;
+                        model_indices[i_cursor + 3] = v_start + 2;
+                        model_indices[i_cursor + 4] = v_start + 0;
+                        model_indices[i_cursor + 5] = v_start + 3;
+                        i_cursor += 6;
+                        
+                        int atlas_tex2 = atlas_lookup(tile_id, BACK);
+                        tile_atlas_getuv(atlas_tex2, uv);
+                        
+                        float verts2[4][3] = {
+                            {1.0f, 0.0f, 0.0f},
+                            {0.0f, 0.0f, 1.0f},
+                            {0.0f, 1.0f, 1.0f},
+                            {1.0f, 1.0f, 0.0f}
+                        };
+                        
+                        v_start = v_cursor / 8;
+                        for (int i2 = 0; i2 < 4; i2++) {
+                            int base = v_cursor;
+                            model_vertices[base + 0] = verts2[i2][0] + pos[0];
+                            model_vertices[base + 1] = verts2[i2][1] + pos[1];
+                            model_vertices[base + 2] = verts2[i2][2] + pos[2];
+                            model_vertices[base + 3] = uv[i2 * 2 + 0];
+                            model_vertices[base + 4] = uv[i2 * 2 + 1];
+                            model_vertices[base + 5] = -0.707f;
+                            model_vertices[base + 6] = 0.0f;
+                            model_vertices[base + 7] = 0.707f;
+                            v_cursor += 8;
+                        }
+                        
+                        model_indices[i_cursor + 0] = v_start + 0;
+                        model_indices[i_cursor + 1] = v_start + 1;
+                        model_indices[i_cursor + 2] = v_start + 2;
+                        model_indices[i_cursor + 3] = v_start + 2;
+                        model_indices[i_cursor + 4] = v_start + 3;
+                        model_indices[i_cursor + 5] = v_start + 0;
+                        i_cursor += 6;
+                        
+                        v_start = v_cursor / 8;
+                        for (int i2 = 0; i2 < 4; i2++) {
+                            int base = v_cursor;
+                            model_vertices[base + 0] = verts2[i2][0] + pos[0];
+                            model_vertices[base + 1] = verts2[i2][1] + pos[1];
+                            model_vertices[base + 2] = verts2[i2][2] + pos[2];
+                            model_vertices[base + 3] = uv[i2 * 2 + 0];
+                            model_vertices[base + 4] = uv[i2 * 2 + 1];
+                            model_vertices[base + 5] = 0.707f;
+                            model_vertices[base + 6] = 0.0f;
+                            model_vertices[base + 7] = -0.707f;
+                            v_cursor += 8;
+                        }
+                        
+                        model_indices[i_cursor + 0] = v_start + 0;
+                        model_indices[i_cursor + 1] = v_start + 2;
+                        model_indices[i_cursor + 2] = v_start + 1;
+                        model_indices[i_cursor + 3] = v_start + 2;
+                        model_indices[i_cursor + 4] = v_start + 0;
+                        model_indices[i_cursor + 5] = v_start + 3;
+                        i_cursor += 6;
+                    }
+                } else {
+                    push_face_to_buffer(tile_id, pos, world, wx, wy, wz,
+                                      model_vertices, model_indices, &v_cursor, &i_cursor,
+                                      water_vertices, water_indices, &w_v_cursor, &w_i_cursor);
+                }
             }
         }
     }

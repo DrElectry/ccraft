@@ -21,7 +21,7 @@ int main() {
 
     packet.width = 1280;
     packet.height = 720;
-    packet.title = "blocks";
+    packet.title = "ccraft";
 
     window_create(&packet);
 

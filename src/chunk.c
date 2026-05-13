@@ -100,6 +100,26 @@ int lookup_cross[] = {
     1, // GRASS_CROSS
 };
 
+int lookup_ignorecollision[] = {
+    0, // AIR
+    0, // GRASS
+    0, // DIRT
+    0, // LEAVES
+    0, // STONE
+    0, // IRON_BLOCK
+    0, // WATER
+    0, // LOG
+    0, // GLASS
+    0, // COAL_ORE
+    0, // COPPER_ORE
+    0, // GOLD_ORE
+    0, // SAND
+    0, // GRAVEL
+    0, // LAVA
+    1, // ROSE
+    1, // GRASS_CROSS
+};
+
 static inline int is_cross_block(uint16_t tile_id) {
     if (tile_id >= (uint16_t)(sizeof(lookup_cross) / sizeof(lookup_cross[0])))
         return 0;
@@ -308,7 +328,7 @@ void chunk_generate(Chunk* chunk) {
             int idx = x + CHUNK_WIDTH * (surface_y + CHUNK_HEIGHT * z);
             if (chunk->data[idx] != GRASS) continue;
             
-            if (RANDF() > 0.05f) continue;
+            if (RANDF() > 0.1f) continue;
             
             uint16_t decoration = (RANDF() < 0.7f) ? GRASS_CROSS : ROSE;
             

@@ -31,7 +31,7 @@ mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_s
 mat4 prev_view_proj;
 
 vec3 light_pos = { 20.0f, 40.0f, -30.0f };
-vec3 light_dir = { 2.0f, 4.0f, -3.0f };
+vec3 light_dir = { -2.0f, 4.0f, -3.0f };
 vec3 target = { 32.0f, 0.0f, 32.0f };
 vec3 up = { 0.0f, 1.0f, 0.0f };
 
@@ -336,7 +336,7 @@ void game_tick(float dt) {
 }
 
 void game_shadow_pass(void) {
-    glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
+    glm_ortho(-32.0f, 32.0f, -32.0f, 32.0f, 1.0f, 200.0f, light_proj);
 
     vec3 light_offset = { 20.0f, 40.0f, -30.0f };
     glm_vec3_add(player.camera.pos, light_offset, light_pos);

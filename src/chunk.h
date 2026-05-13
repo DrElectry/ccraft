@@ -38,6 +38,8 @@ typedef struct {
 
 struct World;
 
+extern int lookup_ignorecollision[];
+
 void chunk_set_position(int cx, int cz);
 void chunk_generate(Chunk* chunk);
 void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz);

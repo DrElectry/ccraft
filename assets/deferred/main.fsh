@@ -21,23 +21,44 @@ const vec3 FOG_COLOR = vec3(0.6, 0.7, 0.8);
 const float FOG_START = 100.0;
 const float FOG_END = 110.0;
 
-vec2 poissonDisk[16] = vec2[](
-vec2(-0.942, -0.399),
-vec2(0.945, -0.768),
-vec2(-0.094, -0.929),
-vec2(0.344, 0.293),
-vec2(-0.815, 0.457),
-vec2(-0.815, -0.879),
-vec2(-0.382, 0.276),
-vec2(0.974, 0.756),
-vec2(0.443, -0.975),
-vec2(0.537, -0.473),
-vec2(-0.264, -0.418),
-vec2(0.791, 0.190),
-vec2(-0.241, 0.997),
-vec2(-0.814, 0.914),
-vec2(0.199, 0.786),
-vec2(0.143, -0.141)
+const vec3 SUN_COLOR = vec3(1.0, 0.95, 0.85);
+const float SUN_INTENSITY = 20.0;
+const float SUN_SIZE = 0.015;
+const float SUN_GLOW = 0.05;
+
+vec2 poissonDisk[32] = vec2[](
+    vec2(-0.942, -0.399),
+    vec2(0.945, -0.768),
+    vec2(-0.094, -0.929),
+    vec2(0.344, 0.293),
+    vec2(-0.815, 0.457),
+    vec2(-0.815, -0.879),
+    vec2(-0.382, 0.276),
+    vec2(0.974, 0.756),
+    vec2(0.443, -0.975),
+    vec2(0.537, -0.473),
+    vec2(-0.264, -0.418),
+    vec2(0.791, 0.190),
+    vec2(-0.241, 0.997),
+    vec2(-0.814, 0.914),
+    vec2(0.199, 0.786),
+    vec2(0.143, -0.141),
+    vec2(-0.512, 0.623),
+    vec2(0.678, 0.432),
+    vec2(-0.321, -0.756),
+    vec2(0.876, -0.234),
+    vec2(-0.987, 0.123),
+    vec2(0.432, 0.876),
+    vec2(-0.654, -0.543),
+    vec2(0.234, -0.987),
+    vec2(-0.123, 0.765),
+    vec2(0.765, -0.432),
+    vec2(-0.876, -0.123),
+    vec2(0.543, 0.654),
+    vec2(-0.432, 0.987),
+    vec2(0.321, -0.678),
+    vec2(-0.678, 0.876),
+    vec2(0.987, -0.321)
 );
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0);
@@ -84,19 +105,45 @@ float pcf(vec4 fragPosLightSpace)
     mat2 rot = getRotation(out_uv);
 
     vec3 normal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
-    float bias = max(0.002 * (1.0 - dot(normal, normalize(lightDir))), 0.0005);
+    float bias = max(0.00001 * (1.0 - dot(normal, normalize(lightDir))), 0.0005);
 
     float shadow = 0.0;
     float radius = 1.5;
 
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 32; i++)
     {
         vec2 offset = rot * poissonDisk[i] * texelSize * radius;
         float closestDepth = texture(dShadow, proj.xy + offset).r;
         shadow += step(closestDepth, currentDepth - bias);
     }
 
-    return shadow / 16.0;
+    return shadow / 32.0;
+}
+
+float computeSunIntensity(vec3 viewDir, vec3 lightDir)
+{
+    float sunDot = dot(normalize(viewDir), normalize(lightDir));
+    float sunGlow = 0.0;
+    
+    if (sunDot > 0.995)
+    {
+        sunGlow = SUN_INTENSITY;
+    }
+    else if (sunDot > 0.98)
+    {
+        sunGlow = SUN_INTENSITY * 0.7;
+    }
+    else if (sunDot > 0.96)
+    {
+        sunGlow = SUN_INTENSITY * 0.3;
+    }
+    else if (sunDot > 1.0 - SUN_GLOW)
+    {
+        float t = (sunDot - (1.0 - SUN_GLOW)) / SUN_GLOW;
+        sunGlow = SUN_INTENSITY * 0.1 * (1.0 - t);
+    }
+    
+    return sunGlow;
 }
 
 void main()
@@ -111,12 +158,15 @@ void main()
     bool isSky = depth > 0.9999;
 
     vec3 worldPos = reconstructWorldPosition(depth);
+    vec3 cameraPos = getCameraPos();
+    vec3 viewDir = normalize(cameraPos - worldPos);
+    
     vec4 fragPosLightSpace = light_space_matrix * vec4(worldPos, 1.0);
 
     float shadow = pcf(fragPosLightSpace);
 
     vec3 L = normalize(lightDir);
-    vec3 V = normalize(-worldPos);
+    vec3 V = viewDir;
     vec3 H = normalize(L + V);
 
     float NdotL = max(dot(normal, L), 0.0);
@@ -134,13 +184,21 @@ void main()
 
     vec3 directLighting = ambient + diffuse;
 
+    float sunIntensity = 0.0;
+    if (isSky)
+    {
+        vec3 toCamera = normalize(cameraPos - worldPos);
+        sunIntensity = computeSunIntensity(toCamera, L);
+        directLighting += SUN_COLOR * sunIntensity;
+    }
+
     vec3 finalColor;
     if (!isSky)
         finalColor = directLighting + ssrColor * ssrAlpha;
     else
         finalColor = directLighting;
 
-    float dist = length(worldPos - getCameraPos());
+    float dist = length(worldPos - cameraPos);
     float fogFactor = clamp((FOG_END - dist) / (FOG_END - FOG_START), 0.0, 1.0);
 
     finalColor = mix(FOG_COLOR, finalColor, fogFactor);

@@ -41,7 +41,8 @@ void main() {
     vec3 color = vga_color(fg);
 
     if (sample_color.rgb != vec3(1.0))
-       color = vga_color(bg);
+       if (bg == 0u) { discard; }
+       color = vga_color(fg);
 
     frag_color = vec4(color, 1.0);
 }

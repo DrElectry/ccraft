@@ -26,39 +26,23 @@ const float SUN_INTENSITY = 20.0;
 const float SUN_SIZE = 0.015;
 const float SUN_GLOW = 0.05;
 
-vec2 poissonDisk[32] = vec2[](
-    vec2(-0.942, -0.399),
-    vec2(0.945, -0.768),
-    vec2(-0.094, -0.929),
-    vec2(0.344, 0.293),
-    vec2(-0.815, 0.457),
-    vec2(-0.815, -0.879),
-    vec2(-0.382, 0.276),
-    vec2(0.974, 0.756),
-    vec2(0.443, -0.975),
-    vec2(0.537, -0.473),
-    vec2(-0.264, -0.418),
-    vec2(0.791, 0.190),
-    vec2(-0.241, 0.997),
-    vec2(-0.814, 0.914),
-    vec2(0.199, 0.786),
-    vec2(0.143, -0.141),
-    vec2(-0.512, 0.623),
-    vec2(0.678, 0.432),
-    vec2(-0.321, -0.756),
-    vec2(0.876, -0.234),
-    vec2(-0.987, 0.123),
-    vec2(0.432, 0.876),
-    vec2(-0.654, -0.543),
-    vec2(0.234, -0.987),
-    vec2(-0.123, 0.765),
-    vec2(0.765, -0.432),
-    vec2(-0.876, -0.123),
-    vec2(0.543, 0.654),
-    vec2(-0.432, 0.987),
-    vec2(0.321, -0.678),
-    vec2(-0.678, 0.876),
-    vec2(0.987, -0.321)
+vec2 poissonDisk[64] = vec2[](
+    vec2(-0.942, -0.399), vec2(0.945, -0.768), vec2(-0.094, -0.929), vec2(0.344, 0.293),
+    vec2(-0.815, 0.457), vec2(-0.815, -0.879), vec2(-0.382, 0.276), vec2(0.974, 0.756),
+    vec2(0.443, -0.975), vec2(0.537, -0.473), vec2(-0.264, -0.418), vec2(0.791, 0.190),
+    vec2(-0.241, 0.997), vec2(-0.814, 0.914), vec2(0.199, 0.786), vec2(0.143, -0.141),
+    vec2(-0.512, 0.623), vec2(0.678, 0.432), vec2(-0.321, -0.756), vec2(0.876, -0.234),
+    vec2(-0.987, 0.123), vec2(0.432, 0.876), vec2(-0.654, -0.543), vec2(0.234, -0.987),
+    vec2(-0.123, 0.765), vec2(0.765, -0.432), vec2(-0.876, -0.123), vec2(0.543, 0.654),
+    vec2(-0.432, 0.987), vec2(0.321, -0.678), vec2(-0.678, 0.876), vec2(0.987, -0.321),
+    vec2(0.234, 0.567), vec2(-0.345, 0.456), vec2(0.654, -0.123), vec2(-0.876, 0.234),
+    vec2(0.111, -0.555), vec2(-0.555, -0.111), vec2(0.789, 0.456), vec2(-0.123, -0.789),
+    vec2(0.456, -0.654), vec2(-0.789, 0.123), vec2(0.321, 0.876), vec2(-0.654, 0.321),
+    vec2(0.555, -0.789), vec2(-0.987, -0.456), vec2(0.876, 0.555), vec2(-0.456, -0.987),
+    vec2(0.123, -0.321), vec2(-0.321, -0.654), vec2(0.654, 0.789), vec2(-0.789, 0.555),
+    vec2(0.456, -0.876), vec2(-0.111, 0.987), vec2(0.987, -0.234), vec2(-0.234, -0.555),
+    vec2(0.345, 0.789), vec2(-0.567, -0.234), vec2(0.789, -0.567), vec2(-0.876, 0.789),
+    vec2(0.555, 0.111), vec2(-0.432, -0.321), vec2(0.678, -0.456), vec2(-0.345, 0.123)
 );
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0);
@@ -110,40 +94,14 @@ float pcf(vec4 fragPosLightSpace)
     float shadow = 0.0;
     float radius = 5.0;
 
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < 64; i++)
     {
         vec2 offset = rot * poissonDisk[i] * texelSize * radius;
         float closestDepth = texture(dShadow, proj.xy + offset).r;
         shadow += step(closestDepth, currentDepth - bias);
     }
 
-    return shadow / 32.0;
-}
-
-float computeSunIntensity(vec3 viewDir, vec3 lightDir)
-{
-    float sunDot = dot(normalize(viewDir), normalize(lightDir));
-    float sunGlow = 0.0;
-    
-    if (sunDot > 0.995)
-    {
-        sunGlow = SUN_INTENSITY;
-    }
-    else if (sunDot > 0.98)
-    {
-        sunGlow = SUN_INTENSITY * 0.7;
-    }
-    else if (sunDot > 0.96)
-    {
-        sunGlow = SUN_INTENSITY * 0.3;
-    }
-    else if (sunDot > 1.0 - SUN_GLOW)
-    {
-        float t = (sunDot - (1.0 - SUN_GLOW)) / SUN_GLOW;
-        sunGlow = SUN_INTENSITY * 0.1 * (1.0 - t);
-    }
-    
-    return sunGlow;
+    return shadow / 64.0;
 }
 
 void main()
@@ -183,14 +141,6 @@ void main()
     vec3 diffuse = albedo * lightColor * NdotL * (1.0 - shadow);
 
     vec3 directLighting = ambient + diffuse;
-
-    float sunIntensity = 0.0;
-    if (isSky)
-    {
-        vec3 toCamera = normalize(cameraPos - worldPos);
-        sunIntensity = computeSunIntensity(toCamera, L);
-        directLighting += SUN_COLOR * sunIntensity;
-    }
 
     vec3 finalColor;
     if (!isSky)

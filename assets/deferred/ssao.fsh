@@ -72,24 +72,26 @@ void main()
     }
 
     vec3 p0 = clipToView(out_uv, d0);
-    vec3 n0_raw = texture(gNormal, out_uv).rgb;
-    vec3 n0 = normalize(n0_raw * 2.0 - 1.0);
+    vec3 n0 = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
 
     vec3 r = texture(gNoise, out_uv * 8.0).rgb;
+
     vec3 tangent = normalize(r - n0 * dot(r, n0));
     vec3 bitangent = cross(n0, tangent);
     mat3 tbn = mat3(tangent, bitangent, n0);
 
     float occ = 0.0;
 
+    const float invSamples = 1.0 / float(samples);
+
     for (int i = 0; i < samples; i++)
     {
-        vec3 offset = ssaoKernel[i];
-        vec3 s = p0 + tbn * offset;
+        vec3 s = p0 + (tbn * ssaoKernel[i]);
 
         vec4 clip = proj * vec4(s, 1.0);
-        clip.xyz /= clip.w;
-        vec2 uv = clipToTexture(clip.xy);
+        float invW = 1.0 / clip.w;
+        vec2 ndc = clip.xy * invW;
+        vec2 uv = ndc * 0.5 + 0.5;
 
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
             continue;
@@ -97,18 +99,22 @@ void main()
         float d = texture(gDepth, uv).r;
         if (d >= 0.9999) continue;
 
-        vec3 p = clipToView(uv, d);
+        float sampleZ = clipToView(uv, d).z;
+        float depthDiff = sampleZ - p0.z;
 
-        float depthDiff = p.z - p0.z;
-        float range = smoothstep(0.0, 1.0, ssaoRadius / abs(p0.z - p.z + 0.0001));
-        float occlusion = range * step(bias, depthDiff);
+        if (depthDiff <= bias)
+            continue;
 
-        occ += occlusion;
+        float ndot = dot(n0, normalize(tbn * ssaoKernel[i]));
+
+        float range = smoothstep(0.0, 1.0,
+            ssaoRadius / (abs(depthDiff) + 0.0001));
+
+        occ += range * ndot;
     }
 
-    occ /= float(samples);
-    occ*=0.6;
-    occ = clamp(occ, 0.0, 1.0);
+    occ *= invSamples;
+    occ *= 0.6;
 
-    fragColor = 1.0 - occ;
+    fragColor = 1.0 - clamp(occ, 0.0, 1.0);
 }

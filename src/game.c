@@ -18,10 +18,11 @@
 #include "vbo.h"
 #include "ebo.h"
 #include "sound.h"
+#include "obj.h"
 #include <GLFW/glfw3.h>
 
 Player player;
-HText demo_text;
+HText name, fps, pos;
 World world;
 
 Shader a, b, water_vertex, water_fragment, ba, bbb;
@@ -29,6 +30,9 @@ Program c, water_prog, bc;
 
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix, hand_model;
 mat4 prev_view_proj;
+
+Render_request* tung; // obj demos
+Render_request* sphere;
 
 vec3 light_pos = { 20.0f, 40.0f, -30.0f };
 vec3 light_dir = { -2.0f, 4.0f, -3.0f };
@@ -51,7 +55,7 @@ int bb[64];
 int cc, dd; // for block in our hand
 
 Input input_manager;
-Texture texture_atlas, roughness;
+Texture texture_atlas, roughness, tungt, tungs, spheres;
 
 Render_request block; // in your hand
 
@@ -137,6 +141,10 @@ void game_init() {
     texture_create(&texture_atlas, "assets/terrain.png");
     texture_create(&roughness, "assets/shiny.png");
 
+    texture_create(&tungt, "assets/tung.png");
+    texture_create(&tungs, "assets/tungs.png");
+    texture_create(&spheres, "assets/sphere.png");
+
     player_init(&player);
 
     a.type = GL_VERTEX_SHADER;
@@ -181,7 +189,9 @@ void game_init() {
     glm_translate(hand_model, (vec3){50.0f, 50.0f, 50.0f});
 
     text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/text.png");
-    text_create(&demo_text, "CCRAFT", 0x5F, 0, 0);
+    text_create(&name, "CCRAFT", 0x0F, 0, 0);
+    text_create(&fps, "FPS", 0x0F, 0, 16);
+    text_create(&pos, "POS", 0x0F, 0, 32);
 
     sound_t* ambient;
 
@@ -196,6 +206,24 @@ void game_init() {
     sound_set_looping(music, true);
     sound_set_volume(music, 0.5f);
     sound_play(music);
+
+    tung = obj_load_render_request("assets/tung.obj");
+    sphere = obj_load_render_request("assets/sphere.obj");
+
+    player_get_pos(&player, tung->pos);
+
+    tung->pos[1]-=30.0f;
+    tung->pos[0]-=31.0f;
+    tung->pos[2]+=1.0f;
+
+    player_get_pos(&player, sphere->pos);
+
+    sphere->pos[1]-=28.0f;
+    sphere->pos[0]-=28.0f;
+    sphere->pos[2]+=1.0f;
+    sphere->scale[0]=0.5f;
+    sphere->scale[1]=0.5f;
+    sphere->scale[2]=0.5f;
 }
 
 static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
@@ -288,12 +316,22 @@ void game_tick(float dt) {
             int py = hit.by + (int)hit.normal[1];
             int pz = hit.bz + (int)hit.normal[2];
 
-            vec3 p;
-
-            player_get_pos(&player, p);
-
-            if (py != p[1]) {
-                uint16_t block = ROSE;
+            vec3 player_pos;
+            player_get_pos(&player, player_pos);
+            
+            float player_min_x = player_pos[0] - 0.3f;
+            float player_max_x = player_pos[0] + 0.3f;
+            float player_min_y = player_pos[1];
+            float player_max_y = player_pos[1] + 1.8f;
+            float player_min_z = player_pos[2] - 0.3f;
+            float player_max_z = player_pos[2] + 0.3f;
+            
+            int collision = (px + 1 > player_min_x && px < player_max_x) &&
+                            (py + 1 > player_min_y && py < player_max_y) &&
+                            (pz + 1 > player_min_z && pz < player_max_z);
+            
+            if (!collision) {
+                uint16_t block = LEAVES;
 
                 int variant = RAND(0, 3);
                 sound_t* s = pick_pack_sound(block, variant);
@@ -366,6 +404,17 @@ void game_shadow_pass(void) {
     program_set_mat4(&water_prog, "view", (float*)light_view);
 
     world_render(&world, &c, &water_prog);
+
+    program_use(&c);
+
+    texture_bind(&tungt, 0);
+    texture_bind(&tungs, 1);
+
+    gfx_render(tung, &c);
+
+    texture_bind(&spheres, 0);
+
+    gfx_render(sphere, &c);
 
     vec3 eye;
     player_get_eye(&player, eye);
@@ -453,6 +502,17 @@ void game_draw(float time) {
 
     world_render(&world, &c, &water_prog);
 
+    program_use(&c);
+
+    texture_bind(&tungt, 0);
+    texture_bind(&tungs, 1);
+
+    gfx_render(tung, &c);
+
+    texture_bind(&spheres, 0);
+
+    gfx_render(sphere, &c);
+
     vec3 eye;
     player_get_eye(&player, eye);
 
@@ -512,7 +572,9 @@ void game_draw(float time) {
 
 
 void game_draw_hud() {
-    text_draw(&demo_text);
+    text_draw(&name);
+    text_draw(&fps);
+    text_draw(&pos);
 }
 
 void game_destroy() {

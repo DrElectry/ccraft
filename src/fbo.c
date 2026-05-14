@@ -54,7 +54,6 @@ void fbo_create(FBO* fbo, int width, int height, int color_count)
         );
     }
 
-    // ---- DEPTH BUFFER ----
     glGenTextures(1, &fbo->depth_attachment);
     glBindTexture(GL_TEXTURE_2D, fbo->depth_attachment);
 

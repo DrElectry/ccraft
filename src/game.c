@@ -51,6 +51,8 @@ float ndelay = 0.0f;
 float aa[64];
 int bb[64];
 
+// shitcode
+
 int cc, dd; // for block in our hand
 
 Input input_manager;
@@ -454,19 +456,12 @@ void game_shadow_pass(void) {
     program_set_mat4(&bc, "view", (float*)view);
     program_set_mat4(&bc, "model", (float*)hand_model);
 
-    // Render the hand into the G-buffer without depth testing / depth writing
-    glDisable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-
     glDisable(GL_CULL_FACE);
 
     vao_bind(&block.cache.vao);
     glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
 
     glEnable(GL_CULL_FACE);
-
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
 
     glViewport(0, 0, 1280, 720);
 }

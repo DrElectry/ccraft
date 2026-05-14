@@ -282,6 +282,7 @@ void game_tick(float dt) {
     place_delay -= dt;
     g_footstep_delay -= dt;
 
+    text->rot[1]+=dt;
 
     if (hit.hit && break_delay <= 0.0f) {
         if (glfwGetMouseButton(input_manager.win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {

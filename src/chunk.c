@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define SEA_LEVEL 16
+#define SEA_LEVEL 24
 #define BEACH_HEIGHT 4
 
 static int gen_chunk_x = 0;
@@ -38,6 +38,7 @@ int lookup_atlas[] = {
     18,18,18,18,18,18,  // LAVA
     32,32,32,32,32,32,  // ROSE
     33,33,33,33,33,33,  // GRASS_CROSS
+    14,14,14,14,14,14,  // BORDER
 };
 
 int lookup_transparent[] = {
@@ -58,6 +59,7 @@ int lookup_transparent[] = {
     0, // LAVA
     1, // ROSE
     1, // GRASS_CROSS
+    0, // BORDER
 };
 
 int lookup_sounds[] = {
@@ -78,6 +80,7 @@ int lookup_sounds[] = {
     0, // LAVA
     0, // ROSE
     0, // GRASS_CROSS
+    1, // BORDER
 };
 
 int lookup_cross[] = {
@@ -98,6 +101,7 @@ int lookup_cross[] = {
     0, // LAVA
     1, // ROSE
     1, // GRASS_CROSS
+    0, // BORDER
 };
 
 int lookup_ignorecollision[] = {
@@ -107,7 +111,7 @@ int lookup_ignorecollision[] = {
     0, // LEAVES
     0, // STONE
     0, // IRON_BLOCK
-    0, // WATER
+    1, // WATER
     0, // LOG
     0, // GLASS
     0, // COAL_ORE
@@ -115,9 +119,10 @@ int lookup_ignorecollision[] = {
     0, // GOLD_ORE
     0, // SAND
     0, // GRAVEL
-    0, // LAVA
+    1, // LAVA
     1, // ROSE
     1, // GRASS_CROSS
+    0, // BORDER
 };
 
 static inline int is_cross_block(uint16_t tile_id) {
@@ -144,11 +149,16 @@ static int get_terrain_height(int wx, int wz) {
     float h2 = fbm2d(wx*0.05-100.0, wz*0.05-100.0, 2, 0.5, 1.5);
     float h3 = noise2d(wx*0.045, wz*0.045)*10.0;
     if (h2 < h-h3*0.3) {h-=16.0f-h2*8.0;}
-    return h3+h+24.0f;
+    return h3+h+32.0f;
 }
+
 
 static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, int water_level) {
     int distance_to_water = terrain_height - water_level;
+
+    if (wy == 0) {
+        return BORDER;
+    }
     
     if (wy <= water_level && wy > terrain_height) {
         return WATER;
@@ -510,13 +520,13 @@ static void finalize_render_request(Render_request* r, float* vertices, int* ind
 static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int wx, int wy, int wz,
                                   float* model_verts, int* model_inds, int* v_cur, int* i_cur,
                                   float* water_verts, int* water_inds, int* w_v_cur, int* w_i_cur) {
-    
     uint16_t front = world_get_block(world, wx, wy, wz + 1);
     uint16_t back  = world_get_block(world, wx, wy, wz - 1);
     uint16_t left  = world_get_block(world, wx - 1, wy, wz);
     uint16_t right = world_get_block(world, wx + 1, wy, wz);
     uint16_t up    = world_get_block(world, wx, wy + 1, wz);
     uint16_t down  = world_get_block(world, wx, wy - 1, wz);
+
 
     int render_front;
     if (is_liquid_block(tile_id)) {

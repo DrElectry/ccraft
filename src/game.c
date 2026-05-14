@@ -31,8 +31,7 @@ Program c, water_prog, bc;
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix, hand_model;
 mat4 prev_view_proj;
 
-Render_request* tung; // obj demos
-Render_request* sphere;
+Render_request* text; // demo for screenshot
 
 vec3 light_pos = { 20.0f, 40.0f, -30.0f };
 vec3 light_dir = { -2.0f, 4.0f, -3.0f };
@@ -55,7 +54,7 @@ int bb[64];
 int cc, dd; // for block in our hand
 
 Input input_manager;
-Texture texture_atlas, roughness, tungt, tungs, spheres;
+Texture texture_atlas, roughness, brightt, textt;
 
 Render_request block; // in your hand
 
@@ -141,9 +140,8 @@ void game_init() {
     texture_create(&texture_atlas, "assets/terrain.png");
     texture_create(&roughness, "assets/shiny.png");
 
-    texture_create(&tungt, "assets/tung.png");
-    texture_create(&tungs, "assets/tungs.png");
-    texture_create(&spheres, "assets/sphere.png");
+    texture_create(&brightt, "assets/brightxt.png");
+    texture_create(&textt, "assets/txt.png");
 
     player_init(&player);
 
@@ -207,23 +205,16 @@ void game_init() {
     sound_set_volume(music, 0.5f);
     sound_play(music);
 
-    tung = obj_load_render_request("assets/tung.obj");
-    sphere = obj_load_render_request("assets/sphere.obj");
+    text = obj_load_render_request("assets/text.obj");
 
-    player_get_pos(&player, tung->pos);
+    player_get_pos(&player, text->pos);
 
-    tung->pos[1]-=30.0f;
-    tung->pos[0]-=31.0f;
-    tung->pos[2]+=1.0f;
-
-    player_get_pos(&player, sphere->pos);
-
-    sphere->pos[1]-=28.0f;
-    sphere->pos[0]-=28.0f;
-    sphere->pos[2]+=1.0f;
-    sphere->scale[0]=0.5f;
-    sphere->scale[1]=0.5f;
-    sphere->scale[2]=0.5f;
+    text->pos[1]-=20.0f;
+    text->pos[0]-=28.0f;
+    text->pos[2]+=1.0f;
+    text->scale[0]=0.5f;
+    text->scale[1]=0.5f;
+    text->scale[2]=0.5f;
 }
 
 static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
@@ -407,14 +398,11 @@ void game_shadow_pass(void) {
 
     program_use(&c);
 
-    texture_bind(&tungt, 0);
-    texture_bind(&tungs, 1);
+    texture_bind(&textt, 0);
 
-    gfx_render(tung, &c);
+    texture_bind(&brightt, 1);
 
-    texture_bind(&spheres, 0);
-
-    gfx_render(sphere, &c);
+    gfx_render(text, &c);
 
     vec3 eye;
     player_get_eye(&player, eye);
@@ -504,14 +492,11 @@ void game_draw(float time) {
 
     program_use(&c);
 
-    texture_bind(&tungt, 0);
-    texture_bind(&tungs, 1);
+    texture_bind(&textt, 0);
 
-    gfx_render(tung, &c);
+    texture_bind(&brightt, 1);
 
-    texture_bind(&spheres, 0);
-
-    gfx_render(sphere, &c);
+    gfx_render(text, &c);
 
     vec3 eye;
     player_get_eye(&player, eye);

@@ -14,12 +14,15 @@ out vec3 out_view_pos;
 
 void main()
 {
-    out_normal = in_normal;
     out_uv = in_uv;
 
     vec4 world_pos = model * vec4(in_vert, 1.0);
     vec4 view_pos = view * world_pos;
+
     out_view_pos = view_pos.xyz;
+
+    mat3 normalMatrix = transpose(inverse(mat3(model)));
+    out_normal = normalize(normalMatrix * in_normal);
 
     gl_Position = proj * view_pos;
 }

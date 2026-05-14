@@ -1,10 +1,11 @@
 #include "player.h"
 #include "world.h"
+#include "chunk.h"
 #include <cglm/cglm.h>
 #include <math.h>
 
 static int is_solid(uint16_t b) {
-    return b != 0;
+    return b != 0 && lookup_ignorecollision[b]==0;
 }
 
 static void sync_aabb(Player* p) {

@@ -232,6 +232,30 @@ void chunk_generate(Chunk* chunk) {
         }
     }
 
+    for (int x = 0; x < CHUNK_WIDTH; x++) {
+        for (int z = 0; z < CHUNK_DEPTH; z++) {
+            int wx = gen_chunk_x * CHUNK_WIDTH + x;
+            int wz = gen_chunk_z * CHUNK_DEPTH + z;
+            int terrain_height = get_terrain_height(wx, wz);
+            
+            if (terrain_height <= SEA_LEVEL + BEACH_HEIGHT + 1) continue;
+            
+            int surface_y = terrain_height;
+            int idx = x + CHUNK_WIDTH * (surface_y + CHUNK_HEIGHT * z);
+            if (chunk->data[idx] != GRASS) continue;
+            
+            if (RANDF() > 0.25f) continue;
+            
+            uint16_t decoration = (RANDF() < 0.9f) ? GRASS_CROSS : ROSE;
+            
+            int above_y = surface_y + 1;
+            if (above_y < CHUNK_HEIGHT) {
+                int above_idx = x + CHUNK_WIDTH * (above_y + CHUNK_HEIGHT * z);
+                chunk->data[above_idx] = decoration;
+            }
+        }
+    }
+
     for (int x = 2; x < CHUNK_WIDTH - 2; x += 5) {
         for (int z = 2; z < CHUNK_DEPTH - 2; z += 5) {
 
@@ -313,30 +337,6 @@ void chunk_generate(Chunk* chunk) {
                 chunk->data[idx] = LOG;
             }
 
-        }
-    }
-
-    for (int x = 0; x < CHUNK_WIDTH; x++) {
-        for (int z = 0; z < CHUNK_DEPTH; z++) {
-            int wx = gen_chunk_x * CHUNK_WIDTH + x;
-            int wz = gen_chunk_z * CHUNK_DEPTH + z;
-            int terrain_height = get_terrain_height(wx, wz);
-            
-            if (terrain_height <= SEA_LEVEL + BEACH_HEIGHT + 1) continue;
-            
-            int surface_y = terrain_height;
-            int idx = x + CHUNK_WIDTH * (surface_y + CHUNK_HEIGHT * z);
-            if (chunk->data[idx] != GRASS) continue;
-            
-            if (RANDF() > 0.1f) continue;
-            
-            uint16_t decoration = (RANDF() < 0.7f) ? GRASS_CROSS : ROSE;
-            
-            int above_y = surface_y + 1;
-            if (above_y < CHUNK_HEIGHT) {
-                int above_idx = x + CHUNK_WIDTH * (above_y + CHUNK_HEIGHT * z);
-                chunk->data[above_idx] = decoration;
-            }
         }
     }
 

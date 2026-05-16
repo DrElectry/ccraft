@@ -8,8 +8,6 @@ uint64_t rng_get_world_seed(void) {
     return world_seed;
 }
 
-
-
 void rng_seed(uint64_t seed) {
     world_seed = seed;
 

@@ -117,7 +117,7 @@ void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
     glm_lookat(light_pos, target, up, light_view);
 
-    rng_seed(0xCAFEBABEDEADBEEF);
+    rng_seed(0x0000000000000000);
     world_init(&world);
 
     texture_atlas.mag_filter = GL_NEAREST;

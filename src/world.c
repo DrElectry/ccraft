@@ -289,7 +289,6 @@ void world_tick(World* world, vec3 ppos) {
         if (!world_get_chunk(world, cx, cz)) {
             for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
                 if (world->index_map[i] == -1) {
-                    // Set chunk position for noise-based terrain (noise now fully deterministic)
                     chunk_set_position(cx, cz);
                     
                     Chunk chunk;

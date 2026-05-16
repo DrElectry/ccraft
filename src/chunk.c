@@ -15,6 +15,7 @@
 static int gen_chunk_x = 0;
 static int gen_chunk_z = 0;
 
+
 void chunk_set_position(int cx, int cz) {
     gen_chunk_x = cx;
     gen_chunk_z = cz;

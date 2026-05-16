@@ -11,6 +11,9 @@ void rng_seed(uint64_t seed);
 uint64_t rng_next();
 void rng_seed_chunk(int cx, int cz);
 
+uint64_t rng_get_world_seed(void);
+
+
 int rng_int(int min, int max);
 float rng_float();
 

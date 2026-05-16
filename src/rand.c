@@ -2,9 +2,17 @@
 
 RNG global_rng;
 
-#define WORLD_SEED 0xdeadbeefcafebabeULL
+uint64_t world_seed = 0xdeadbeefcafebabeULL;
+
+uint64_t rng_get_world_seed(void) {
+    return world_seed;
+}
+
+
 
 void rng_seed(uint64_t seed) {
+    world_seed = seed;
+
     if (seed == 0)
         seed = 0x9e3779b97f4a7c15ULL;
     global_rng.state = seed;
@@ -28,7 +36,8 @@ float rng_float() {
 }
 
 void rng_seed_chunk(int cx, int cz) {
-    uint64_t combined = WORLD_SEED;
+    uint64_t combined = world_seed;
+
     combined ^= (uint64_t)(cx * 123456789) + (uint64_t)(cz * 987654321);
     combined ^= (combined >> 33) * 0x9e3779b97f4a7c15ULL;
     rng_seed(combined);

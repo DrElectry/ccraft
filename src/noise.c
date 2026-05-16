@@ -1,14 +1,15 @@
 #include "noise.h"
+#include "rand.h"
 #include <immintrin.h>
 #include <math.h>
 #include <stdint.h>
 
 #if defined(_MSC_VER)
-    #define ALIGN16 __declspec(align(16))
+#define ALIGN16 __declspec(align(16))
 #elif defined(__GNUC__) || defined(__clang__)
-    #define ALIGN16 __attribute__((aligned(16)))
+#define ALIGN16 __attribute__((aligned(16)))
 #else
-    #define ALIGN16
+#define ALIGN16
 #endif
 
 static const float F2 = 0.3660254037844386f;
@@ -27,10 +28,20 @@ static const float grad3d[12][3] = {
     {0,1,1}, {0,-1,1}, {0,1,-1}, {0,-1,-1}
 };
 
+static uint64_t g_world_seed = 0;
+
+void noise_set_seed(uint64_t seed) {
+    g_world_seed = seed;
+}
+
 static inline uint32_t hash_int(uint32_t x) {
+    uint64_t s = g_world_seed;
+    x ^= (uint32_t)s;
+    x ^= (uint32_t)(s >> 32);
     x ^= x << 13;
     x ^= x >> 17;
     x ^= x << 5;
+    x += (uint32_t)(s * 0x9E3779B9u);
     return x;
 }
 
@@ -61,7 +72,6 @@ static inline __m128 floor_ps(__m128 x) {
 
 static inline __m128 noise2d_simd(__m128 x, __m128 y) {
     __m128 s = _mm_mul_ps(_mm_add_ps(x, y), _mm_set1_ps(F2));
-
     __m128 xs = _mm_add_ps(x, s);
     __m128 ys = _mm_add_ps(y, s);
 
@@ -255,35 +265,19 @@ static inline __m128 noise3d_simd(__m128 x, __m128 y, __m128 z) {
 }
 
 float noise2d(float x, float y) {
-    __m128 xv = _mm_set1_ps(x);
-    __m128 yv = _mm_set1_ps(y);
-    __m128 r = noise2d_simd(xv, yv);
-    return _mm_cvtss_f32(r);
+    return _mm_cvtss_f32(noise2d_simd(_mm_set1_ps(x), _mm_set1_ps(y)));
 }
 
 float noise3d(float x, float y, float z) {
-    __m128 xv = _mm_set1_ps(x);
-    __m128 yv = _mm_set1_ps(y);
-    __m128 zv = _mm_set1_ps(z);
-    __m128 r = noise3d_simd(xv, yv, zv);
-    return _mm_cvtss_f32(r);
+    return _mm_cvtss_f32(noise3d_simd(_mm_set1_ps(x), _mm_set1_ps(y), _mm_set1_ps(z)));
 }
 
 void noise2d_batch4(const float* xs, const float* ys, float* out) {
-    __m128 xv = _mm_loadu_ps(xs);
-    __m128 yv = _mm_loadu_ps(ys);
-    __m128 r = noise2d_simd(xv, yv);
-    _mm_storeu_ps(out, r);
+    _mm_storeu_ps(out, noise2d_simd(_mm_loadu_ps(xs), _mm_loadu_ps(ys)));
 }
 
 void noise3d_batch4(const float* xs, const float* ys, const float* zs, float* out) {
-    __m128 xv = _mm_loadu_ps(xs);
-    __m128 yv = _mm_loadu_ps(ys);
-    __m128 zv = _mm_loadu_ps(zs);
-
-    __m128 r = noise3d_simd(xv, yv, zv);
-
-    _mm_storeu_ps(out, r);
+    _mm_storeu_ps(out, noise3d_simd(_mm_loadu_ps(xs), _mm_loadu_ps(ys), _mm_loadu_ps(zs)));
 }
 
 float fbm2d(float x, float y, int octaves, float persistence, float lacunarity) {
@@ -295,7 +289,6 @@ float fbm2d(float x, float y, int octaves, float persistence, float lacunarity) 
     for (int i = 0; i < octaves; i++) {
         total += noise2d(x * frequency, y * frequency) * amplitude;
         max_value += amplitude;
-
         amplitude *= persistence;
         frequency *= lacunarity;
     }
@@ -310,14 +303,8 @@ float fbm3d(float x, float y, float z, int octaves, float persistence, float lac
     float max_value = 0.0f;
 
     for (int i = 0; i < octaves; i++) {
-        total += noise3d(
-            x * frequency,
-            y * frequency,
-            z * frequency
-        ) * amplitude;
-
+        total += noise3d(x * frequency, y * frequency, z * frequency) * amplitude;
         max_value += amplitude;
-
         amplitude *= persistence;
         frequency *= lacunarity;
     }
@@ -325,55 +312,30 @@ float fbm3d(float x, float y, float z, int octaves, float persistence, float lac
     return total / max_value;
 }
 
-void fbm2d_batch4(
-    const float* xs,
-    const float* ys,
-    float* out,
-    int octaves,
-    float persistence,
-    float lacunarity
-) {
+void fbm2d_batch4(const float* xs, const float* ys, float* out, int octaves, float persistence, float lacunarity) {
     __m128 total = _mm_setzero_ps();
     __m128 frequency = _mm_set1_ps(1.0f);
     __m128 amplitude = _mm_set1_ps(1.0f);
-
     float max_value = 0.0f;
 
     __m128 xv = _mm_loadu_ps(xs);
     __m128 yv = _mm_loadu_ps(ys);
 
     for (int i = 0; i < octaves; i++) {
-        __m128 nx = _mm_mul_ps(xv, frequency);
-        __m128 ny = _mm_mul_ps(yv, frequency);
-
-        __m128 n = noise2d_simd(nx, ny);
-
+        __m128 n = noise2d_simd(_mm_mul_ps(xv, frequency), _mm_mul_ps(yv, frequency));
         total = _mm_add_ps(total, _mm_mul_ps(n, amplitude));
-
         max_value += _mm_cvtss_f32(amplitude);
-
         amplitude = _mm_mul_ps(amplitude, _mm_set1_ps(persistence));
         frequency = _mm_mul_ps(frequency, _mm_set1_ps(lacunarity));
     }
 
-    total = _mm_div_ps(total, _mm_set1_ps(max_value));
-
-    _mm_storeu_ps(out, total);
+    _mm_storeu_ps(out, _mm_div_ps(total, _mm_set1_ps(max_value)));
 }
 
-void fbm3d_batch4(
-    const float* xs,
-    const float* ys,
-    const float* zs,
-    float* out,
-    int octaves,
-    float persistence,
-    float lacunarity
-) {
+void fbm3d_batch4(const float* xs, const float* ys, const float* zs, float* out, int octaves, float persistence, float lacunarity) {
     __m128 total = _mm_setzero_ps();
     __m128 frequency = _mm_set1_ps(1.0f);
     __m128 amplitude = _mm_set1_ps(1.0f);
-
     float max_value = 0.0f;
 
     __m128 xv = _mm_loadu_ps(xs);
@@ -381,41 +343,18 @@ void fbm3d_batch4(
     __m128 zv = _mm_loadu_ps(zs);
 
     for (int i = 0; i < octaves; i++) {
-        __m128 nx = _mm_mul_ps(xv, frequency);
-        __m128 ny = _mm_mul_ps(yv, frequency);
-        __m128 nz = _mm_mul_ps(zv, frequency);
-
-        __m128 n = noise3d_simd(nx, ny, nz);
-
+        __m128 n = noise3d_simd(_mm_mul_ps(xv, frequency), _mm_mul_ps(yv, frequency), _mm_mul_ps(zv, frequency));
         total = _mm_add_ps(total, _mm_mul_ps(n, amplitude));
-
         max_value += _mm_cvtss_f32(amplitude);
-
         amplitude = _mm_mul_ps(amplitude, _mm_set1_ps(persistence));
         frequency = _mm_mul_ps(frequency, _mm_set1_ps(lacunarity));
     }
 
-    total = _mm_div_ps(total, _mm_set1_ps(max_value));
-
-    _mm_storeu_ps(out, total);
+    _mm_storeu_ps(out, _mm_div_ps(total, _mm_set1_ps(max_value)));
 }
 
 float noise_height(int world_x, int world_z, int sea_level) {
-    float h = fbm2d(
-        (float)world_x * 0.015f,
-        (float)world_z * 0.015f,
-        4,
-        0.5f,
-        2.0f
-    );
-
-    float detail = fbm2d(
-        (float)world_x * 0.08f,
-        (float)world_z * 0.08f,
-        2,
-        0.5f,
-        2.0f
-    ) * 0.25f;
-
+    float h = fbm2d(world_x * 0.015f, world_z * 0.015f, 4, 0.5f, 2.0f);
+    float detail = fbm2d(world_x * 0.08f, world_z * 0.08f, 2, 0.5f, 2.0f) * 0.25f;
     return (float)(sea_level + (int)((h + detail) * 16.0f));
 }

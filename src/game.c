@@ -20,10 +20,13 @@
 #include "sound.h"
 #include "obj.h"
 #include <GLFW/glfw3.h>
+#include <string.h>
 
 Player player;
 HText name, fps, pos;
 World world;
+
+File world_file;
 
 Shader a, b, water_vertex, water_fragment, ba, bbb;
 Program c, water_prog, bc;
@@ -111,14 +114,41 @@ static sound_t* pick_pack_sound(uint16_t tile_id, int variant) {
     return g_packs[pack][v];
 }
 
-
+void new_world(const char* filename) {
+    File file = file_create(filename);
+    
+    file_addwrite(&file, "CCRAFT", 6);
+    
+    uint64_t seed = rng_get_world_seed();
+    file_addwrite(&file, (char*)&seed, 8);
+    
+    float player_data[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    file_addwrite(&file, (char*)player_data, 20);
+    
+    int zero = 0;
+    file_addwrite(&file, (char*)&zero, sizeof(int));
+}
 
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
     glm_lookat(light_pos, target, up, light_view);
 
-    rng_seed(0x0000000000000000);
+    uint64_t seed = 0x0000000000000000;
+
+    if (file_exists("worlds/main.dat")) {
+        world_file = file_open("worlds/main.dat");
+    } else {
+        printf("worlds/main.dat does not exist, creating a new world...\n");
+        new_world("worlds/main.dat");
+    }
+
+    world_file = file_open("worlds/main.dat");
+
+    memcpy(&seed, world_file.data + 6, 8);
+    rng_seed(seed);
     world_init(&world);
+
+    world_load(&world, &world_file);
 
     texture_atlas.mag_filter = GL_NEAREST;
     texture_atlas.min_filter = GL_NEAREST;
@@ -558,6 +588,8 @@ void game_draw_hud() {
 }
 
 void game_destroy() {
+    world_save(&world, "worlds/main.dat");
+
     if (g_packs_loaded) {
         for (int p = 0; p < SOUND_PACK_COUNT; p++) {
             for (int v = 0; v < SOUND_VARIANTS_PER_PACK; v++) {

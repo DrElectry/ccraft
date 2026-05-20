@@ -1,9 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <string.h>
 #include "world.h"
 #include "rand.h"
+#include "log.h"
 #include "noise.h"
+#include "fm.h"
 
 void world_init(World* world) {
     world->chunks_map = malloc(sizeof(Chunk) * MAX_LOADED_CHUNKS);
@@ -21,6 +24,56 @@ void world_init(World* world) {
     }
 
     world->pending_count = 0;
+}
+
+void world_load(World* world, File* file) {
+    ASSERT(memcmp(file->data, "CCRAFT", 6) == 0, "%s is not a valid ccraft file", file->src);
+    
+    int offset = 6; // CCRAFT header
+    
+    // 8 bytes seed
+    uint64_t seed;
+    memcpy(&seed, file->data + offset, 8);
+    offset += 8;
+    rng_seed(seed);
+    
+    // player data (20 bytes)
+    float player_data[5];
+    memcpy(player_data, file->data + offset, 20);
+    offset += 20;
+    
+    int total_changes;
+    memcpy(&total_changes, file->data + offset, sizeof(int));
+    offset += sizeof(int);
+    
+    // capacity
+    if (world->pending_block_capacity < total_changes) {
+        world->pending_block_capacity = total_changes;
+        world->pending_block_changes = realloc(world->pending_block_changes, 
+            sizeof(BlockChange) * world->pending_block_capacity);
+    }
+    
+    int changes_size = total_changes * sizeof(BlockChange);
+    memcpy(world->pending_block_changes, file->data + offset, changes_size);
+    world->pending_block_count = total_changes;
+}
+
+void world_save(World* world, const char* filename) {
+    File file = file_create(filename);
+    
+    file_addwrite(&file, "CCRAFT", 6);
+    
+    uint64_t seed = rng_get_world_seed();
+    file_addwrite(&file, (char*)&seed, 8);
+    
+    float player_data[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    file_addwrite(&file, (char*)player_data, 20);
+    
+    int actual_count = world->pending_block_count;
+    file_addwrite(&file, (char*)&actual_count, sizeof(int));
+    
+    file_addwrite(&file, (char*)world->pending_block_changes, 
+                  actual_count * sizeof(BlockChange));
 }
 
 void world_add_chunk(World* world, Chunk* chunk, vec2 position) {

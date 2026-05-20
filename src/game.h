@@ -23,4 +23,5 @@ void game_shadow_pass(void);
 void game_draw_hud();
 void game_destroy();
 
+
 #endif

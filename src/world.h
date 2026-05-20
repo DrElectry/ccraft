@@ -2,6 +2,7 @@
 #define WORLD_H
 
 #include "chunk.h"
+#include "fm.h"
 #include <cglm/cglm.h>
 #include <stdint.h>
 
@@ -62,5 +63,8 @@ void world_queue_block_change(World* world, int x, int y, int z, uint16_t block)
 
 void world_render(World* world, void* active_program, void* water_program);
 void world_tick(World* world, vec3 ppos);
+
+void world_load(World* world, File* file);
+void world_save(World* world, const char* filename);
 
 #endif

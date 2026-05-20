@@ -9,5 +9,7 @@ typedef struct {
 } File;
 
 File file_open(const char *src);
+int file_exists(const char* src);
+File file_create(const char* src);
 
 #endif

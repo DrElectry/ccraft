@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 static unsigned int next_id = 1;
 
@@ -35,6 +36,38 @@ File file_open(const char *src) {
            src, read, file.size);
 
     file.data[file.size] = '\0';
+
+    return file;
+}
+
+int file_exists(const char* src) {
+    FILE *fp = fopen(src, "rb");
+    if (fp) {
+        fclose(fp);
+        return 1;
+    }
+    return 0;
+}
+
+File file_create(const char* src) {
+    File file;
+    file.id = next_id++;
+    file.src = strdup(src);
+    file.data = NULL;
+    file.size = 0;
+
+    ASSERT(file.src != NULL, "Failed to allocate memory for file src: %s", src);
+
+    FILE *fp = fopen(src, "wb");
+    ASSERT(fp != NULL, "Failed to create file: %s", src);
+
+    fclose(fp);
+
+    file.data = (char *)malloc(1);
+    ASSERT(file.data != NULL, "Failed to allocate memory for empty file buffer");
+
+    file.data[0] = '\0';
+    file.size = 0;
 
     return file;
 }

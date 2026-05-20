@@ -35,8 +35,7 @@ float rng_float() {
 
 void rng_seed_chunk(int cx, int cz) {
     uint64_t combined = world_seed;
-
     combined ^= (uint64_t)(cx * 123456789) + (uint64_t)(cz * 987654321);
     combined ^= (combined >> 33) * 0x9e3779b97f4a7c15ULL;
-    rng_seed(combined);
+    global_rng.state = combined;
 }

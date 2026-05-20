@@ -221,8 +221,10 @@ static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, 
 }
 
 void chunk_generate(Chunk* chunk) {
-    // seed per chunk
+    RNG saved_rng = global_rng;
+
     rng_seed_chunk(gen_chunk_x, gen_chunk_z);
+
     
     chunk->data = (uint16_t*)malloc(CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t));
 
@@ -469,7 +471,11 @@ void chunk_generate(Chunk* chunk) {
 
     chunk->model = (Render_request){0};
     chunk->water_model = (Render_request){0};
+
+    // Restore RNG state so chunk generation doesn't affect future chunks.
+    global_rng = saved_rng;
 }
+
 
 static inline int is_opaque_block(uint16_t tile_id) {
     return tile_id != AIR && tile_id != LEAVES && tile_id != WATER && tile_id != LAVA;

@@ -267,7 +267,7 @@ void game_tick(float dt) {
         player_set_noclip(&player, noclip);
         ndelay = 0.25f;
     }
-
+    
     wdelay -= dt;
     pdelay -= dt;
     ndelay -= dt;

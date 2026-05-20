@@ -17,14 +17,27 @@
 #define WORLD_RENDER_DISTANCE 8
 #endif
 
+typedef struct BlockChange {
+    int x;
+    int y;
+    int z;
+    uint16_t block;
+} BlockChange; // gcc will probably pad it
+
+// for block changes i decided to hold 64000 of those in memory, which i can easily allocate
+// then, when we load the chunk we check those block changes
+
 typedef struct World {
     Chunk* chunks_map;
     vec2* positions_map;
     int* index_map;
 
-    // Chunk rebuild queue
     vec2 pending_rebuilds[MAX_PENDING_REBUILDS];
     int pending_count;
+
+    BlockChange* pending_block_changes;
+    int pending_block_count;
+    int pending_block_capacity;
 
 } World;
 
@@ -44,6 +57,8 @@ void world_rebuild_chunk(World* world, int cx, int cz);
 
 void world_queue_rebuild(World* world, int cx, int cz);
 void world_process_rebuild_queue(World* world);
+
+void world_queue_block_change(World* world, int x, int y, int z, uint16_t block);
 
 void world_render(World* world, void* active_program, void* water_program);
 void world_tick(World* world, vec3 ppos);

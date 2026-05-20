@@ -10,6 +10,10 @@ void world_init(World* world) {
     world->positions_map = malloc(sizeof(vec2) * MAX_LOADED_CHUNKS);
     world->index_map = malloc(sizeof(int) * MAX_LOADED_CHUNKS);
 
+    world->pending_block_capacity = 64000;
+    world->pending_block_changes = malloc(sizeof(BlockChange) * world->pending_block_capacity);
+    world->pending_block_count = 0;
+
     noise_set_seed(rng_get_world_seed());
 
     for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
@@ -100,6 +104,33 @@ uint16_t world_get_block_at(World* world, vec3 p) {
     return world_get_block(world, wx, wy, wz);
 }
 
+void world_queue_block_change(World* world, int x, int y, int z, uint16_t block) {
+    if (world->pending_block_count >= world->pending_block_capacity) {
+        world->pending_block_capacity *= 2;
+        world->pending_block_changes = realloc(world->pending_block_changes, 
+            sizeof(BlockChange) * world->pending_block_capacity);
+        if (!world->pending_block_changes) {
+            printf("Failed to expand block change buffer\n");
+            return;
+        }
+    }
+
+    for (int i = 0; i < world->pending_block_count; i++) {
+        if (world->pending_block_changes[i].x == x && 
+            world->pending_block_changes[i].y == y &&
+            world->pending_block_changes[i].z == z) {
+            world->pending_block_changes[i].block = block;
+            return;
+        }
+    }
+
+    world->pending_block_changes[world->pending_block_count].x = x;
+    world->pending_block_changes[world->pending_block_count].y = y;
+    world->pending_block_changes[world->pending_block_count].z = z;
+    world->pending_block_changes[world->pending_block_count].block = block;
+    world->pending_block_count++;
+}
+
 int world_set_block(World* world, int wx, int wy, int wz, uint16_t block) {
     if (wy < 0 || wy >= CHUNK_HEIGHT)
         return 0;
@@ -108,14 +139,27 @@ int world_set_block(World* world, int wx, int wy, int wz, uint16_t block) {
     int cz = floor_div(wz, CHUNK_DEPTH);
 
     Chunk* chunk = world_get_chunk(world, cx, cz);
-    if (!chunk)
-        return 0;
+    if (!chunk) {
+        world_queue_block_change(world, wx, wy, wz, block);
+        return 1;
+    }
 
     int lx = floor_mod(wx, CHUNK_WIDTH);
     int lz = floor_mod(wz, CHUNK_DEPTH);
 
     int index = lx + CHUNK_WIDTH * (wy + CHUNK_HEIGHT * lz);
+    // persisting :0
+    world_queue_block_change(world, wx, wy, wz, block);
     chunk->data[index] = block;
+
+    
+    world_queue_rebuild(world, cx, cz);
+    
+    if (lx == 0) world_queue_rebuild(world, cx - 1, cz);
+    if (lx == CHUNK_WIDTH - 1) world_queue_rebuild(world, cx + 1, cz);
+    if (lz == 0) world_queue_rebuild(world, cx, cz - 1);
+    if (lz == CHUNK_DEPTH - 1) world_queue_rebuild(world, cx, cz + 1);
+    
     return 1;
 }
 
@@ -208,10 +252,12 @@ void world_destroy(World* world) {
     free(world->chunks_map);
     free(world->positions_map);
     free(world->index_map);
+    free(world->pending_block_changes);
 
     world->chunks_map = NULL;
     world->positions_map = NULL;
     world->index_map = NULL;
+    world->pending_block_changes = NULL;
 }
 
 void world_tick(World* world, vec3 ppos) {
@@ -294,6 +340,26 @@ void world_tick(World* world, vec3 ppos) {
                     Chunk chunk;
                     chunk_generate(&chunk);
 
+                    for (int k = 0; k < world->pending_block_count; k++) {
+                        int bx = world->pending_block_changes[k].x;
+                        int by = world->pending_block_changes[k].y;
+                        int bz = world->pending_block_changes[k].z;
+                        
+                        int chunk_min_x = cx * CHUNK_WIDTH;
+                        int chunk_max_x = chunk_min_x + CHUNK_WIDTH;
+                        int chunk_min_z = cz * CHUNK_DEPTH;
+                        int chunk_max_z = chunk_min_z + CHUNK_DEPTH;
+                        
+                        if (bx >= chunk_min_x && bx < chunk_max_x &&
+                            bz >= chunk_min_z && bz < chunk_max_z &&
+                            by >= 0 && by < CHUNK_HEIGHT) {
+                            int lx = bx - chunk_min_x;
+                            int lz = bz - chunk_min_z;
+                            int index = lx + CHUNK_WIDTH * (by + CHUNK_HEIGHT * lz);
+                            chunk.data[index] = world->pending_block_changes[k].block;
+                        }
+                    }
+
                     world->chunks_map[i] = chunk;
                     world->positions_map[i][0] = (float)cx;
                     world->positions_map[i][1] = (float)cz;
@@ -321,6 +387,5 @@ void world_tick(World* world, vec3 ppos) {
         }
     }
 
-    // one chunk per frame at max
     world_process_rebuild_queue(world);
 }

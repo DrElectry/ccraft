@@ -297,7 +297,6 @@ void game_tick(float dt) {
                 sound_play(s);
             }
 
-
             world_set_block(&world, hit.bx, hit.by, hit.bz, AIR);
             rebuild_chunks_for_block(&world, hit.bx, hit.by, hit.bz);
             break_delay = 0.2f;

@@ -134,6 +134,7 @@ void game_init() {
     glm_lookat(light_pos, target, up, light_view);
 
     uint64_t seed = 0x0000000000000000;
+    rng_seed(seed);
 
     if (file_exists("worlds/main.dat")) {
         world_file = file_open("worlds/main.dat");
@@ -354,7 +355,7 @@ void game_tick(float dt) {
                             (pz + 1 > player_min_z && pz < player_max_z);
             
             if (!collision) {
-                uint16_t block = LEAVES;
+                uint16_t block = IRON_BLOCK;
 
                 int variant = RAND(0, 3);
                 sound_t* s = pick_pack_sound(block, variant);

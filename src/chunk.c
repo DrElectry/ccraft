@@ -472,7 +472,7 @@ void chunk_generate(Chunk* chunk) {
     chunk->model = (Render_request){0};
     chunk->water_model = (Render_request){0};
 
-    // Restore RNG state so chunk generation doesn't affect future chunks.
+    // restoring rng state
     global_rng = saved_rng;
 }
 
@@ -773,7 +773,7 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                         model_indices[i_cursor + 2] = v_start + 1;
                         model_indices[i_cursor + 3] = v_start + 2;
                         model_indices[i_cursor + 4] = v_start + 0;
-                        model_indices[i_cursor + 5] = v_start + 3;
+                        model_indices[i_cursor + 5] = v_start + 3; // that was hell to write
                         i_cursor += 6;
                     }
                 } else {

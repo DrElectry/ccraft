@@ -8,8 +8,37 @@
 #include "tex.h"
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
 
 int main() {
+    // temporal
+
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+
+    struct sockaddr_in a;
+    memset(&a, 0, sizeof(a));
+
+    a.sin_family = AF_INET;
+    a.sin_port = htons(25565);
+    inet_pton(AF_INET, "127.0.0.1", &a.sin_addr); // local host on our port
+
+    connect(s, (struct sockaddr*)&a, sizeof(a));
+
+    char b[128];
+    int n = recv(s, b, sizeof(b) - 1, 0);
+
+    if (n > 0)
+    {
+        b[n] = 0;
+        printf("%s", b);
+    }
+
+    close(s);
+
     ASSERT(glfwInit(), "no glfw");
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);

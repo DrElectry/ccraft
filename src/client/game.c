@@ -26,6 +26,8 @@ Player player;
 HText name, fps, pos;
 World world;
 
+uint16_t blockih = FIRST_TILE;
+
 File world_file;
 
 Shader a, b, water_vertex, water_fragment, ba, bbb;
@@ -268,9 +270,10 @@ static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
 void game_tick(float dt) {
     glm_mat4_mul(projection, view, prev_view_proj);
 
-    input_update(&input_manager);
-
     packs_ensure_loaded();
+    
+    glfwPollEvents();
+    input_update(&input_manager);
 
     float current_time = (float)glfwGetTime();
 
@@ -298,6 +301,8 @@ void game_tick(float dt) {
         player_set_noclip(&player, noclip);
         ndelay = 0.25f;
     }
+    
+    printf("%f %f\n", input_manager.scroll_y, input_manager.scroll_x);
     
     wdelay -= dt;
     pdelay -= dt;
@@ -355,17 +360,15 @@ void game_tick(float dt) {
                             (pz + 1 > player_min_z && pz < player_max_z);
             
             if (!collision) {
-                uint16_t block = IRON_BLOCK;
-
                 int variant = RAND(0, 3);
-                sound_t* s = pick_pack_sound(block, variant);
+                sound_t* s = pick_pack_sound(blockih, variant);
                 if (s) {
                     sound_set_looping(s, false);
                     sound_set_volume(s, 1.0f);
                     sound_play(s);
                 }
 
-                world_set_block(&world, px, py, pz, block);
+                world_set_block(&world, px, py, pz, blockih);
                 rebuild_chunks_for_block(&world, px, py, pz);
                 place_delay = 0.2f;
             }

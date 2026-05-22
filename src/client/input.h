@@ -16,6 +16,9 @@ typedef struct {
     double mouse_dx;
     double mouse_dy;
 
+    double scroll_x;
+    double scroll_y;
+
     int first_mouse;
 } Input;
 
@@ -24,5 +27,6 @@ void input_update(Input* in);
 
 int input_down(Input* in, int key);
 int input_pressed(Input* in, int key);
+int input_released(Input* in, int key);
 
 #endif

@@ -4,32 +4,32 @@ SRC_DIR = src
 LIB_DIR = lib
 BUILD_DIR = build
 
-TARGET = blocks
+CLIENT = blocks
+SERVER = server
 
 CFLAGS = -O2 -I$(SRC_DIR) -I$(LIB_DIR)
 LDFLAGS = -lglfw -lGL -lcglm -lm
 
-SRCS = $(shell find $(SRC_DIR) -name '*.c') \
-       $(shell find $(LIB_DIR) -name '*.c')
+CSRCS = $(shell find $(SRC_DIR)/client -name '*.c')
+SSRCS = $(shell find $(SRC_DIR)/server -name '*.c')
+LIB_SRCS = $(shell find $(LIB_DIR) -name '*.c')
 
-HDRS = $(shell find $(SRC_DIR) -name '*.h') \
-       $(shell find $(LIB_DIR) -name '*.h')
+COBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(CSRCS) $(LIB_SRCS))
+SOBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SSRCS) $(LIB_SRCS))
 
-OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
+all: $(CLIENT) $(SERVER)
 
-all: $(TARGET)
+$(CLIENT): $(COBJS)
+	$(CC) $(COBJS) $(LDFLAGS) -o $(CLIENT)
 
-$(TARGET): $(OBJS)
-	$(CC) $(OBJS) $(LDFLAGS) -o $(TARGET)
+$(SERVER): $(SOBJS)
+	$(CC) $(SOBJS) $(LDFLAGS) -o $(SERVER)
 
-$(BUILD_DIR)/%.o: %.c $(HDRS)
+$(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-run:
-	./$(TARGET)
-
 clean:
-	rm -rf $(BUILD_DIR) $(TARGET)
+	rm -rf $(BUILD_DIR) $(CLIENT) $(SERVER)
 
-.PHONY: all clean
+.PHONY: all clean run-client run-server

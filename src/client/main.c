@@ -14,7 +14,11 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
-int main() {
+#include "packets.h"
+
+uint64_t seed;
+
+int main(int argc, char* argv) {
     // temporal
 
     int s = socket(AF_INET, SOCK_STREAM, 0);
@@ -28,13 +32,14 @@ int main() {
 
     connect(s, (struct sockaddr*)&a, sizeof(a));
 
-    char b[128];
-    int n = recv(s, b, sizeof(b) - 1, 0);
+    Seedpckt p;
 
-    if (n > 0)
+    recv(s, &p, sizeof(p), 0);
+
+    if (p.type == PKT_SEED)
     {
-        b[n] = 0;
-        printf("%s", b);
+        printf("seed: %llu\n", p.seed);
+        seed = p.seed;
     }
 
     close(s);

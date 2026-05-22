@@ -4,6 +4,9 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
+#include "packets.h"
+#include "globals.h"
+
 int main()
 {
     int s = socket(AF_INET, SOCK_STREAM, 0);
@@ -12,19 +15,23 @@ int main()
     memset(&a, 0, sizeof(a));
 
     a.sin_family = AF_INET;
-    a.sin_port = htons(25565);
+    a.sin_port = htons(SERVER_PORT);
     a.sin_addr.s_addr = INADDR_ANY;
 
     bind(s, (struct sockaddr*)&a, sizeof(a));
     listen(s, 10);
 
-    printf("Server is listening on port 25565...\n");
+    printf("Server is listening on port %d...\n", SERVER_PORT);
 
     while (1)
     {
         int c = accept(s, 0, 0);
-        char m[] = "hi\n";
-        send(c, m, sizeof(m), 0);
+        Seedpckt p;
+
+        p.type = PKT_SEED;
+        p.seed = WORLD_SEED;
+
+        send(c, &p, sizeof(p), 0);
         close(c);
     }
 }

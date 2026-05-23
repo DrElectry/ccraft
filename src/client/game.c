@@ -599,7 +599,9 @@ void game_draw_hud() {
 }
 
 void game_destroy() {
-    world_save(&world, "worlds/main.dat");
+    if (!__onserv) {
+        world_save(&world, "worlds/main.dat");
+    }
 
     if (g_packs_loaded) {
         for (int p = 0; p < SOUND_PACK_COUNT; p++) {

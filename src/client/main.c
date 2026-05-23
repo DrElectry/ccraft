@@ -16,26 +16,45 @@
 
 uint64_t __servseed;
 
-
+char __servip[256] = "127.0.0.1";
 int __onserv;
 int __servport;
 
 int main(int argc, char* argv[]) {
-
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "-connect") == 0)
         {
             if (i + 1 < argc)
             {
-                __servport = atoi(argv[i + 1]);
-                __onserv = 1;
+                char* address = argv[i + 1];
+
+                char* colon = strchr(address, ':');
+
+                if (colon)
+                {
+                    size_t ip_len = colon - address;
+
+                    strncpy(__servip, address, ip_len);
+                    __servip[ip_len] = '\0';
+
+                    __servport = atoi(colon + 1);
+
+                    __onserv = 1;
+                }
+                else
+                {
+                    fprintf(stderr, "invalid format. use ip:port\n");
+                    return 1;
+                }
             }
         }
     }
 
-    if (__onserv) {
-        if (network_connect_and_handshake("127.0.0.1", __servport, &__servseed) != 0) {
+    if (__onserv)
+    {
+        if (network_connect_and_handshake(__servip, __servport, &__servseed) != 0)
+        {
             fprintf(stderr, "network handshake failed\n");
             return 1;
         }

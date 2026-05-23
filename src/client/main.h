@@ -10,5 +10,6 @@ extern uint64_t __servseed;
 
 extern int __onserv;
 extern int __servport;
+extern char __servip[256];
 
 #endif

@@ -2,7 +2,13 @@
 
 ![Demo](pictures/frame.gif)
 
-ccraft is a W.I.P. Minecraft clone written in C using OpenGL, GLFW, and cglm, along with several single-header libraries including glad, khrplatform, stb_image, and miniaudio.
+ccraft is a W.I.P sandbox minecraft voxel like game. currently not much had been implemented, but it features
+
+- the core "minecraft" game (chunks management, placing and breaking blocks, player movement with physics, collisions, infinite world generation),
+- deferred rendering (effects like shadows, SSAO, SSR, bloom, DOF, vignette),
+- gui (text renderer, crosshair),
+- world saving and loading (currently only worlds/main.dat is supported),
+- and even a W.I.P multiplayer ;)
 
 ## CREDITS
 

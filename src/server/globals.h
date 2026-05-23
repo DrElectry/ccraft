@@ -3,7 +3,10 @@
 
 #define SERVER_PORT 25565
 
-#define WORLD_SEED 0xDEADBEEFCAFEBABE
+#define MAX_CLIENTS 32
+#define SERVER_PORT 25565
+#define UPDATE_RATE 20
+#define WORLD_SEED 0x123456789ABCDEF0ULL
 // amazing seed
 
 #endif

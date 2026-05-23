@@ -1,0 +1,33 @@
+#ifndef CLIENT_NETWORK_H
+#define CLIENT_NETWORK_H
+
+#include <stdint.h>
+
+#define CLIENT_MAX_REMOTES 32
+
+#define UPDATE_RATE 20
+
+typedef struct {
+    uint32_t client_id;
+    uint8_t active;
+    float pos[3];
+    float rot[3];
+    uint8_t on_ground;
+} RemotePlayer;
+
+int network_init(int server_port);
+
+int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed);
+
+// polls sockets for incoming frame
+void network_pump(void);
+
+void network_send_player_state(uint32_t client_id, const float pos[3], const float rot[3], uint8_t on_ground);
+
+uint64_t network_get_seed(void);
+
+RemotePlayer* network_get_remote_players(void);
+
+uint32_t network_get_local_client_id(void);
+
+#endif

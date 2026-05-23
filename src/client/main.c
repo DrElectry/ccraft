@@ -10,18 +10,18 @@
 #include <cglm/cglm.h>
 #include <stdio.h>
 #include <string.h>
+#include "main.h"
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-
-#include "packets.h"
+#include "network.h"
 
 uint64_t __servseed;
+
 
 int __onserv;
 int __servport;
 
 int main(int argc, char* argv[]) {
+
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "-connect") == 0)
@@ -35,28 +35,10 @@ int main(int argc, char* argv[]) {
     }
 
     if (__onserv) {
-        int s = socket(AF_INET, SOCK_STREAM, 0);
-
-        struct sockaddr_in a;
-        memset(&a, 0, sizeof(a));
-
-        a.sin_family = AF_INET;
-        a.sin_port = htons(__servport);
-        inet_pton(AF_INET, "127.0.0.1", &a.sin_addr); // local host on our port
-
-        connect(s, (struct sockaddr*)&a, sizeof(a));
-
-        Seedpckt p;
-
-        recv(s, &p, sizeof(p), 0);
-
-        if (p.type == PKT_SEED)
-        {
-            printf("seed: %llu\n", p.seed);
-            __servseed = p.seed;
+        if (network_connect_and_handshake("127.0.0.1", __servport, &__servseed) != 0) {
+            fprintf(stderr, "network handshake failed\n");
+            return 1;
         }
-
-        close(s);
     }
 
     ASSERT(glfwInit(), "no glfw");
@@ -68,8 +50,8 @@ int main(int argc, char* argv[]) {
 
     Window packet;
 
-    packet.width = 1280;
-    packet.height = 720;
+    packet.width = WIDTH;
+    packet.height = HEIGHT;
     packet.title = "ccraft";
 
     window_create(&packet);
@@ -144,20 +126,20 @@ int main(int argc, char* argv[]) {
     program_create(&bloombl, &mainv, &bloomblf);
     program_create(&cross, &mainv, &crossf);
 
-    fbo_create(&ssaofb, 1280, 720, 1);
-    fbo_create(&prev_frame, 1280, 720, 1);
-    fbo_create(&ppfb, 1280, 720, 1);
-    fbo_create(&ssrfb, 1280, 720, 1);
-    fbo_create(&bloombfb, 1280, 720, 1);
-    fbo_create(&bloomblfb, 1280, 720, 1);
-    fbo_create(&ffb, 1280, 720, 1);
+    fbo_create(&ssaofb, WIDTH, HEIGHT, 1);
+    fbo_create(&prev_frame, WIDTH, HEIGHT, 1);
+    fbo_create(&ppfb, WIDTH, HEIGHT, 1);
+    fbo_create(&ssrfb, WIDTH, HEIGHT, 1);
+    fbo_create(&bloombfb, WIDTH, HEIGHT, 1);
+    fbo_create(&bloomblfb, WIDTH, HEIGHT, 1);
+    fbo_create(&ffb, WIDTH, HEIGHT, 1);
 
     ssrfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloombfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloomblfb.color_formats[0] = FBO_COLOR_RGBA16F;
     ffb.color_formats[1] = FBO_COLOR_RGBA16F;
 
-    fbo_create(&gbuffer, 1280, 720, 4);
+    fbo_create(&gbuffer, WIDTH, HEIGHT, 4);
 
     gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
@@ -214,7 +196,7 @@ int main(int argc, char* argv[]) {
         // yuck yuck copying
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prev_frame.id);
-        glBlitFramebuffer(0, 0, 1280, 720, 0, 0, 1280, 720, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        glBlitFramebuffer(0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_LINEAR);
         fbo_unbind();
 
         fbo_bind(&gbuffer);
@@ -370,6 +352,8 @@ int main(int argc, char* argv[]) {
         texture_bind(&crosshair, 1);
 
         program_set_int(&cross, "crosshair", 1);
+        program_set_float(&cross, "width", (float)WIDTH);
+        program_set_float(&cross, "height", (float)HEIGHT);
 
         gfx_draw_fullscreen_quad();
 

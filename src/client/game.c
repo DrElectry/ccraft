@@ -21,6 +21,8 @@
 #include "main.h"
 #include "obj.h"
 #include "sound_pack.h"
+#include "main.h"
+#include "network.h"
 #include <GLFW/glfw3.h>
 #include <string.h>
 
@@ -34,6 +36,8 @@ File world_file;
 
 Shader a, b, water_vertex, water_fragment, ba, bbb;
 Program c, water_prog, bc;
+
+static Render_request* remote_players[CLIENT_MAX_REMOTES] = {NULL};
 
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix, hand_model;
 mat4 prev_view_proj;
@@ -63,7 +67,7 @@ int bb[64];
 int cc, dd; // for block in our hand
 
 Input input_manager;
-Texture texture_atlas, roughness, brightt, textt;
+Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess;
 
 Render_request block; // in your hand
 
@@ -123,6 +127,9 @@ void game_init() {
 
     texture_create(&texture_atlas, "assets/terrain.png");
     texture_create(&roughness, "assets/shiny.png");
+    
+    texture_create(&player_tex, "assets/player.png");
+    texture_create(&player_shininess, "assets/player.png");
 
     texture_create(&brightt, "assets/brightxt.png");
     texture_create(&textt, "assets/txt.png");
@@ -209,14 +216,34 @@ void game_tick(float dt) {
     glfwPollEvents();
     input_update(&input_manager);
 
+    if (__onserv) {
+        network_pump();
+    }
+
     float current_time = (float)glfwGetTime();
 
     last_time = current_time;
 
-    glm_perspective(glm_rad(60.0f), 1280.0f / 720.0f, 0.1f, 1000.0f, projection);
+    glm_perspective(glm_rad(60.0f), ((float)WIDTH) / ((float)HEIGHT), 0.1f, 1000.0f, projection);
 
     player_tick(&world, &player, &input_manager, dt);
     player_get_view(&player, view);
+
+    if (__onserv) {
+        static float last_send = 0.0f;
+        float now = (float)glfwGetTime();
+        if (now - last_send >= 1.0f / UPDATE_RATE) {
+            vec3 player_pos;
+            player_get_pos(&player, player_pos);
+            network_send_player_state(
+                network_get_local_client_id(),
+                player_pos,
+                player.camera.rot,
+                0
+            );
+            last_send = now;
+        }
+    }
 
     glm_mat4_inv(projection, inv_projection);
     glm_mat4_inv(view, inv_view);
@@ -333,6 +360,10 @@ void game_tick(float dt) {
 }
 
 void game_shadow_pass(void) {
+    if (__onserv) {
+        network_pump();
+    }
+
     glm_ortho(-32.0f, 32.0f, -32.0f, 32.0f, 1.0f, 200.0f, light_proj);
 
     vec3 light_offset = { 20.0f, 40.0f, -30.0f };
@@ -371,6 +402,41 @@ void game_shadow_pass(void) {
     texture_bind(&brightt, 1);
 
     gfx_render(text, &c);
+
+    if (__onserv) {
+        network_pump();
+
+        RemotePlayer* remotes = network_get_remote_players();
+        for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
+            if (!remotes[i].active) continue;
+
+            if (!remote_players[i]) {
+                remote_players[i] = obj_load_render_request("assets/player.obj");
+                if (remote_players[i]) {
+                    gfx_packet_static_request(remote_players[i]);
+                }
+            }
+
+            if (remote_players[i]) {
+                remote_players[i]->pos[0] = remotes[i].pos[0];
+                remote_players[i]->pos[1] = remotes[i].pos[1]+0.9f; // hardcoded yuck yuck
+                remote_players[i]->pos[2] = remotes[i].pos[2];
+                
+                remote_players[i]->rot[0] = 0.0f;
+                remote_players[i]->rot[1] = remotes[i].rot[1];
+                remote_players[i]->rot[2] = 0.0f;
+                
+                remote_players[i]->scale[0] = 0.5f;
+                remote_players[i]->scale[1] = 0.5f;
+                remote_players[i]->scale[2] = 0.5f;
+
+                texture_bind(&player_tex, 0);
+                texture_bind(&player_shininess, 1);
+                
+                gfx_render(remote_players[i], &c);
+            }
+        }
+    }
 
     vec3 eye;
     player_get_eye(&player, eye);
@@ -428,7 +494,7 @@ void game_shadow_pass(void) {
 
     glEnable(GL_CULL_FACE);
 
-    glViewport(0, 0, 1280, 720);
+    glViewport(0, 0, WIDTH, HEIGHT);
 }
 
 void game_draw(float time) {
@@ -453,10 +519,43 @@ void game_draw(float time) {
 
     program_use(&c);
 
+    if (__onserv) {
+        network_pump();
+
+        RemotePlayer* remotes = network_get_remote_players();
+        for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
+            if (!remotes[i].active) continue;
+
+            if (!remote_players[i]) {
+                remote_players[i] = obj_load_render_request("assets/player.obj");
+                if (remote_players[i]) {
+                    gfx_packet_static_request(remote_players[i]);
+                }
+            }
+
+            if (remote_players[i]) {
+                remote_players[i]->pos[0] = remotes[i].pos[0];
+                remote_players[i]->pos[1] = remotes[i].pos[1]+0.9f; // hardcoded yuck yuck
+                remote_players[i]->pos[2] = remotes[i].pos[2];
+                
+                remote_players[i]->rot[0] = 0.0f;
+                remote_players[i]->rot[1] = remotes[i].rot[1];
+                remote_players[i]->rot[2] = 0.0f;
+                
+                remote_players[i]->scale[0] = 0.5f;
+                remote_players[i]->scale[1] = 0.5f;
+                remote_players[i]->scale[2] = 0.5f;
+
+                texture_bind(&player_tex, 0);
+                texture_bind(&player_shininess, 1);
+                
+                gfx_render(remote_players[i], &c);
+            }
+        }
+    }
+
     texture_bind(&textt, 0);
-
     texture_bind(&brightt, 1);
-
     gfx_render(text, &c);
 
     vec3 eye;
@@ -516,7 +615,6 @@ void game_draw(float time) {
     glEnable(GL_CULL_FACE);
 }
 
-
 void game_draw_hud() {
     text_draw(&name);
     text_draw(&fps);
@@ -528,9 +626,14 @@ void game_destroy() {
         world_save(&world, "worlds/main.dat");
     }
     
+    // Clean up remote player render requests
+    for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
+        if (remote_players[i]) {
+            free(remote_players[i]);
+            remote_players[i] = NULL;
+        }
+    }
+    
     sound_pack_destroy();
-
     world_destroy(&world);
 }
-
-

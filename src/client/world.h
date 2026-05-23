@@ -67,4 +67,7 @@ void world_tick(World* world, vec3 ppos);
 void world_load(World* world, File* file);
 void world_save(World* world, const char* filename);
 
+void rebuild_chunks_for_block(World* world, int wx, int wy, int wz);
+void new_world(const char* filename);
+
 #endif

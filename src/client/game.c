@@ -20,6 +20,7 @@
 #include "sound.h"
 #include "main.h"
 #include "obj.h"
+#include "sound_pack.h"
 #include <GLFW/glfw3.h>
 #include <string.h>
 
@@ -70,67 +71,6 @@ static float break_delay = 0.0f;
 static float place_delay = 0.0f;
 
 static float g_footstep_delay = 0.0f;
-
-#define SOUND_VARIANTS_PER_PACK 4
-#define SOUND_PACK_COUNT 4
-
-static sound_t* g_packs[SOUND_PACK_COUNT][SOUND_VARIANTS_PER_PACK] = {{0}};
-static bool g_packs_loaded = false;
-
-static void packs_ensure_loaded(void) {
-    if (g_packs_loaded)
-        return;
-
-    int pack = 0;
-    g_packs[pack][0] = sound_load("assets/sounds/grass1.wav");
-    g_packs[pack][1] = sound_load("assets/sounds/grass2.wav");
-    g_packs[pack][2] = sound_load("assets/sounds/grass3.wav");
-    g_packs[pack][3] = sound_load("assets/sounds/grass4.wav");
-
-    pack = 1;
-    g_packs[pack][0] = sound_load("assets/sounds/stone1.wav");
-    g_packs[pack][1] = sound_load("assets/sounds/stone2.wav");
-    g_packs[pack][2] = sound_load("assets/sounds/stone3.wav");
-    g_packs[pack][3] = sound_load("assets/sounds/stone4.wav");
-
-    pack = 2;
-    g_packs[pack][0] = sound_load("assets/sounds/gravel1.wav");
-    g_packs[pack][1] = sound_load("assets/sounds/gravel2.wav");
-    g_packs[pack][2] = sound_load("assets/sounds/gravel3.wav");
-    g_packs[pack][3] = sound_load("assets/sounds/gravel4.wav");
-
-    pack = 3;
-    g_packs[pack][0] = sound_load("assets/sounds/wood1.wav");
-    g_packs[pack][1] = sound_load("assets/sounds/wood2.wav");
-    g_packs[pack][2] = sound_load("assets/sounds/wood3.wav");
-    g_packs[pack][3] = sound_load("assets/sounds/wood4.wav");
-
-    g_packs_loaded = true;
-}
-
-static sound_t* pick_pack_sound(uint16_t tile_id, int variant) {
-    uint16_t pack = chunk_sound_pack(tile_id);
-    if (pack >= SOUND_PACK_COUNT)
-        pack = 0;
-
-    uint16_t v = (uint16_t)(variant & (SOUND_VARIANTS_PER_PACK - 1));
-    return g_packs[pack][v];
-}
-
-void new_world(const char* filename) {
-    File file = file_create(filename);
-    
-    file_addwrite(&file, "CCRAFT", 6);
-    
-    uint64_t seed = rng_get_world_seed();
-    file_addwrite(&file, (char*)&seed, 8);
-    
-    float player_data[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-    file_addwrite(&file, (char*)player_data, 20);
-    
-    int zero = 0; // nice code
-    file_addwrite(&file, (char*)&zero, sizeof(int));
-}
 
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
@@ -259,21 +199,6 @@ void game_init() {
     text->scale[0]=0.5f;
     text->scale[1]=0.5f;
     text->scale[2]=0.5f;
-}
-
-static void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
-    int cx = (wx >= 0) ? wx / CHUNK_WIDTH : (wx - CHUNK_WIDTH + 1) / CHUNK_WIDTH;
-    int cz = (wz >= 0) ? wz / CHUNK_DEPTH : (wz - CHUNK_DEPTH + 1) / CHUNK_DEPTH;
-
-    world_rebuild_chunk(world, cx, cz);
-
-    int lx = wx - cx * CHUNK_WIDTH;
-    int lz = wz - cz * CHUNK_DEPTH;
-
-    if (lx == 0) world_rebuild_chunk(world, cx - 1, cz);
-    if (lx == CHUNK_WIDTH - 1) world_rebuild_chunk(world, cx + 1, cz);
-    if (lz == 0) world_rebuild_chunk(world, cx, cz - 1);
-    if (lz == CHUNK_DEPTH - 1) world_rebuild_chunk(world, cx, cz + 1);
 }
 
 void game_tick(float dt) {
@@ -602,18 +527,8 @@ void game_destroy() {
     if (!__onserv) {
         world_save(&world, "worlds/main.dat");
     }
-
-    if (g_packs_loaded) {
-        for (int p = 0; p < SOUND_PACK_COUNT; p++) {
-            for (int v = 0; v < SOUND_VARIANTS_PER_PACK; v++) {
-                if (g_packs[p][v]) {
-                    sound_free(g_packs[p][v]);
-                    g_packs[p][v] = NULL;
-                }
-            }
-        }
-        g_packs_loaded = false;
-    }
+    
+    sound_pack_destroy();
 
     world_destroy(&world);
 }

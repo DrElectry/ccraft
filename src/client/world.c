@@ -184,7 +184,7 @@ void world_queue_block_change(World* world, int x, int y, int z, uint16_t block)
     world->pending_block_count++;
 }
 
-// help me.
+// help me
 
 int world_set_block(World* world, int wx, int wy, int wz, uint16_t block) {
     if (wy < 0 || wy >= CHUNK_HEIGHT)
@@ -216,6 +216,36 @@ int world_set_block(World* world, int wx, int wy, int wz, uint16_t block) {
     if (lz == CHUNK_DEPTH - 1) world_queue_rebuild(world, cx, cz + 1);
     
     return 1;
+}
+
+void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
+    int cx = (wx >= 0) ? wx / CHUNK_WIDTH : (wx - CHUNK_WIDTH + 1) / CHUNK_WIDTH;
+    int cz = (wz >= 0) ? wz / CHUNK_DEPTH : (wz - CHUNK_DEPTH + 1) / CHUNK_DEPTH;
+
+    world_rebuild_chunk(world, cx, cz);
+
+    int lx = wx - cx * CHUNK_WIDTH;
+    int lz = wz - cz * CHUNK_DEPTH;
+
+    if (lx == 0) world_rebuild_chunk(world, cx - 1, cz);
+    if (lx == CHUNK_WIDTH - 1) world_rebuild_chunk(world, cx + 1, cz);
+    if (lz == 0) world_rebuild_chunk(world, cx, cz - 1);
+    if (lz == CHUNK_DEPTH - 1) world_rebuild_chunk(world, cx, cz + 1);
+}
+
+void new_world(const char* filename) {
+    File file = file_create(filename);
+    
+    file_addwrite(&file, "CCRAFT", 6);
+    
+    uint64_t seed = rng_get_world_seed();
+    file_addwrite(&file, (char*)&seed, 8);
+    
+    float player_data[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    file_addwrite(&file, (char*)player_data, 20);
+    
+    int zero = 0; // nice code
+    file_addwrite(&file, (char*)&zero, sizeof(int));
 }
 
 void world_set_block_at(World* world, vec3 p, uint16_t block) {

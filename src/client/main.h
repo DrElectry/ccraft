@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
-extern uint64_t seed;
+extern uint64_t __servseed;
+
+extern int __onserv;
+extern int __servport;
 
 #endif

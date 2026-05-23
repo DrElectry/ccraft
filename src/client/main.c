@@ -16,33 +16,48 @@
 
 #include "packets.h"
 
-uint64_t seed;
+uint64_t __servseed;
 
-int main(int argc, char* argv) {
-    // temporal
+int __onserv;
+int __servport;
 
-    int s = socket(AF_INET, SOCK_STREAM, 0);
-
-    struct sockaddr_in a;
-    memset(&a, 0, sizeof(a));
-
-    a.sin_family = AF_INET;
-    a.sin_port = htons(25565);
-    inet_pton(AF_INET, "127.0.0.1", &a.sin_addr); // local host on our port
-
-    connect(s, (struct sockaddr*)&a, sizeof(a));
-
-    Seedpckt p;
-
-    recv(s, &p, sizeof(p), 0);
-
-    if (p.type == PKT_SEED)
+int main(int argc, char* argv[]) {
+    for (int i = 1; i < argc; i++)
     {
-        printf("seed: %llu\n", p.seed);
-        seed = p.seed;
+        if (strcmp(argv[i], "-connect") == 0)
+        {
+            if (i + 1 < argc)
+            {
+                __servport = atoi(argv[i + 1]);
+                __onserv = 1;
+            }
+        }
     }
 
-    close(s);
+    if (__onserv) {
+        int s = socket(AF_INET, SOCK_STREAM, 0);
+
+        struct sockaddr_in a;
+        memset(&a, 0, sizeof(a));
+
+        a.sin_family = AF_INET;
+        a.sin_port = htons(__servport);
+        inet_pton(AF_INET, "127.0.0.1", &a.sin_addr); // local host on our port
+
+        connect(s, (struct sockaddr*)&a, sizeof(a));
+
+        Seedpckt p;
+
+        recv(s, &p, sizeof(p), 0);
+
+        if (p.type == PKT_SEED)
+        {
+            printf("seed: %llu\n", p.seed);
+            __servseed = p.seed;
+        }
+
+        close(s);
+    }
 
     ASSERT(glfwInit(), "no glfw");
 

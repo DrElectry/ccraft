@@ -184,6 +184,8 @@ void world_queue_block_change(World* world, int x, int y, int z, uint16_t block)
     world->pending_block_count++;
 }
 
+// help me.
+
 int world_set_block(World* world, int wx, int wy, int wz, uint16_t block) {
     if (wy < 0 || wy >= CHUNK_HEIGHT)
         return 0;

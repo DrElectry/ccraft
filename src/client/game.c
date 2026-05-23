@@ -135,23 +135,32 @@ void new_world(const char* filename) {
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
     glm_lookat(light_pos, target, up, light_view);
-
+    
+    uint64_t seed = 0x0000000000000000;
     rng_seed(seed);
 
-    //if (file_exists("worlds/main.dat")) {
-        //world_file = file_open("worlds/main.dat");
-    //} else {
-        //printf("worlds/main.dat does not exist, creating a new world...\n");
-        //new_world("worlds/main.dat");
-    //}
+    if (__onserv) {
+        rng_seed(__servseed);
+    } else {
+        if (file_exists("worlds/main.dat")) {
+        world_file = file_open("worlds/main.dat");
+        } else {
+            printf("worlds/main.dat does not exist, creating a new world...\n");
+            new_world("worlds/main.dat");
+        }
 
-    //world_file = file_open("worlds/main.dat");
+        world_file = file_open("worlds/main.dat");
 
-    //memcpy(&seed, world_file.data + 6, 8);
-    rng_seed(seed);
+        memcpy(&seed, world_file.data + 6, 8);
+
+        rng_seed(seed);
+
+    }
     world_init(&world);
 
-    //world_load(&world, &world_file);
+    if (!__onserv) {
+        world_load(&world, &world_file);
+    }
 
     texture_atlas.mag_filter = GL_NEAREST;
     texture_atlas.min_filter = GL_NEAREST;

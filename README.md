@@ -10,6 +10,16 @@ ccraft is a W.I.P sandbox minecraft voxel like game. currently not much had been
 - world saving and loading (currently only worlds/main.dat is supported),
 - and even a W.I.P multiplayer ;)
 
+### Multiplayer
+
+As i said, multiplayer is under construction, it is still very buggy, but if you want to try it:
+
+- run the "server" binary (currently only runs on linux), port and the world seed can be configured inside server/globals.h.
+- connect to the server using the -connect <IP:PORT> flag.
+- enjoy.
+
+The server runs on 64 TPS without any interpolation.
+
 ## CREDITS
 
 Music: “Taswell” by C418 (from Minecraft: Volume Beta)

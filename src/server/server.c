@@ -21,6 +21,8 @@ typedef struct {
     uint16_t block_type;
 } ServerBlockChange;
 
+// just a little stinky tcp server
+
 static ServerBlockChange* g_pending_block_changes = NULL;
 static int g_pending_block_count = 0;
 static int g_pending_block_capacity = 0;

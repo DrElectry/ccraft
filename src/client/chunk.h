@@ -20,7 +20,7 @@ typedef enum : uint16_t {
     LOG = 7,
     GLASS = 8,
     COAL_ORE = 9,
-    COPPER_ORE = 10,
+    IRON_ORE = 10, // was copper before but i decided to rename to iron
     GOLD_ORE = 11,
     SAND = 12,
     GRAVEL = 13,

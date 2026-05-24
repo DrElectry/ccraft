@@ -1,4 +1,4 @@
-#define MINIAUDIO_IMPLEMENTATION
+#define MINIAUDIO_IMPLEMENTATION // pentupling the compile times
 #include "miniaudio.h"
 
 #include <stdio.h>

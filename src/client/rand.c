@@ -3,6 +3,8 @@
 
 RNG global_rng;
 
+// simple xorshift64 *random* numbers generator
+
 uint64_t world_seed = 0xdeadbeefcafebabeULL;
 
 uint64_t rng_get_world_seed(void) {

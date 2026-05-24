@@ -420,7 +420,7 @@ void chunk_generate(Chunk* chunk) {
                 int idx = rx + CHUNK_WIDTH * (ry + CHUNK_HEIGHT * rz);
 
                 if (chunk->data[idx] == STONE)
-                    chunk->data[idx] = COPPER_ORE;
+                    chunk->data[idx] = IRON_ORE;
 
                 x += dx;
                 y += dy;

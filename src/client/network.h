@@ -5,7 +5,7 @@
 
 #define CLIENT_MAX_REMOTES 32
 
-#define UPDATE_RATE 64
+#define UPDATE_RATE 64 // same as in src/server/globals.h
 
 typedef struct {
     uint32_t client_id;

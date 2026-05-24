@@ -10,6 +10,10 @@
 
 #include "packets.h"
 
+#include <stdint.h>
+
+#include "world.h"
+
 // a little abstraction layer between raw ass sockets and our prestige ccraft client
 
 static int g_sock = -1;
@@ -149,6 +153,19 @@ void network_send_player_state(uint32_t client_id, const float pos[3], const flo
     send(g_sock, &p, sizeof(p), 0);
 }
 
+void network_send_block_change(uint32_t client_id, int32_t x, int32_t y, int32_t z, uint16_t type) {
+    if (g_sock < 0) return;
+
+    BlockUpdatePacket b;
+    b.type = PKT_BLOCK_UPDATE;
+    b.block_type = type;
+    b.x = x;
+    b.y = y;
+    b.z = z;
+
+    send(g_sock, &b, sizeof(b), 0);
+}
+
 static void handle_packet(uint8_t* buffer, ssize_t bytes) {
     if (bytes <= 0) return;
 
@@ -200,7 +217,12 @@ static void handle_packet(uint8_t* buffer, ssize_t bytes) {
         return;
     }
 
-    if (type == PKT_BLOCK_UPDATE || type == PKT_CHUNK_DATA) {
+    if (type == PKT_BLOCK_UPDATE) {
+        if (bytes < (ssize_t)sizeof(BlockUpdatePacket)) return;
+        BlockUpdatePacket* bu = (BlockUpdatePacket*)buffer;
+        extern World world;
+        world_set_block(&world, bu->x, bu->y, bu->z, bu->block_type);
+        rebuild_chunks_for_block(&world, bu->x, bu->y, bu->z);
         return;
     }
 }

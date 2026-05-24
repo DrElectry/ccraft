@@ -292,8 +292,12 @@ void game_tick(float dt) {
                 sound_play(s);
             }
 
-            world_set_block(&world, hit.bx, hit.by, hit.bz, AIR);
-            rebuild_chunks_for_block(&world, hit.bx, hit.by, hit.bz);
+            if (!__onserv) {
+                world_set_block(&world, hit.bx, hit.by, hit.bz, AIR);
+                rebuild_chunks_for_block(&world, hit.bx, hit.by, hit.bz);
+            } else {
+                network_send_block_change(network_get_local_client_id(), hit.bx, hit.by, hit.bz, AIR);
+            }
             break_delay = 0.2f;
         }
     }
@@ -327,8 +331,12 @@ void game_tick(float dt) {
                     sound_play(s);
                 }
 
-                world_set_block(&world, px, py, pz, blockih);
-                rebuild_chunks_for_block(&world, px, py, pz);
+                if (!__onserv) {
+                    world_set_block(&world, px, py, pz, blockih);
+                    rebuild_chunks_for_block(&world, px, py, pz);
+                } else {
+                    network_send_block_change(network_get_local_client_id(), px, py, pz, blockih);
+                }
                 place_delay = 0.2f;
             }
         }
@@ -626,7 +634,6 @@ void game_destroy() {
         world_save(&world, "worlds/main.dat");
     }
     
-    // Clean up remote player render requests
     for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
         if (remote_players[i]) {
             free(remote_players[i]);

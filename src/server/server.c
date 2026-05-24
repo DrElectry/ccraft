@@ -73,7 +73,8 @@ void* handle_client(void* arg) {
                 BlockUpdatePacket* block = (BlockUpdatePacket*)buffer;
                 pthread_mutex_lock(&global_server.clients_mutex);
                 for (int i = 0; i < MAX_CLIENTS; i++) {
-                    if (global_server.clients[i].active && global_server.clients[i].client_id != client->client_id) {
+                    if (global_server.clients[i].active) {
+                        // relay to everyone INCLUDING the sender
                         send(global_server.clients[i].socket, block, sizeof(BlockUpdatePacket), 0);
                     }
                 }

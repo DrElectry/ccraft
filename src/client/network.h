@@ -5,7 +5,7 @@
 
 #define CLIENT_MAX_REMOTES 32
 
-#define UPDATE_RATE 20
+#define UPDATE_RATE 64
 
 typedef struct {
     uint32_t client_id;
@@ -23,6 +23,7 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
 void network_pump(void);
 
 void network_send_player_state(uint32_t client_id, const float pos[3], const float rot[3], uint8_t on_ground);
+void network_send_block_change(uint32_t client_id, int32_t x, int32_t y, int32_t z, uint16_t type);
 
 uint64_t network_get_seed(void);
 

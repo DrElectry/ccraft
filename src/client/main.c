@@ -34,12 +34,20 @@ int main(int argc, char* argv[]) {
                 if (colon)
                 {
                     size_t ip_len = colon - address;
-
+                    
+                    if (ip_len >= sizeof(__servip)) {
+                        fprintf(stderr, "IP too long\n");
+                        return 1;
+                    }
+                    
                     strncpy(__servip, address, ip_len);
                     __servip[ip_len] = '\0';
-
+                    
+                    if (strcmp(__servip, "localhost") == 0) {
+                        strcpy(__servip, "127.0.0.1");
+                    }
+                    
                     __servport = atoi(colon + 1);
-
                     __onserv = 1;
                 }
                 else

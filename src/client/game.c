@@ -27,7 +27,7 @@
 #include <string.h>
 
 Player player;
-HText name, fps, pos;
+HText name;
 World world;
 
 uint16_t blockih = FIRST_TILE;
@@ -178,9 +178,7 @@ void game_init() {
     glm_translate(hand_model, (vec3){50.0f, 50.0f, 50.0f});
 
     text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/text.png");
-    text_create(&name, "CCRAFT", 0x0F, 0, 0);
-    text_create(&fps, "FPS", 0x0F, 0, 16);
-    text_create(&pos, "POS", 0x0F, 0, 32);
+    text_create(&name, "0.108", 0x0F, 0, 0);
 
     sound_t* ambient;
 
@@ -625,8 +623,6 @@ void game_draw(float time) {
 
 void game_draw_hud() {
     text_draw(&name);
-    text_draw(&fps);
-    text_draw(&pos);
 }
 
 void game_destroy() {

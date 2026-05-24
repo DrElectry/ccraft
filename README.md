@@ -16,6 +16,7 @@ As i said, multiplayer is under construction, it is still very buggy, but if you
 
 - run the "server" binary (currently only runs on linux), port and the world seed can be configured inside server/globals.h.
 - connect to the server using the -connect <IP:PORT> flag.
+- you can also use 'localhost' as the ip.
 - enjoy.
 
 The server runs on 64 TPS without any interpolation.

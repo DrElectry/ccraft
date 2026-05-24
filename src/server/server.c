@@ -6,24 +6,29 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <netinet/tcp.h>
 
 #include "globals.h"
 
 Server global_server;
-
-// basically huge, overcomplicated, a little stinky TCP packet manager.
 
 void* handle_client(void* arg) {
     Client* client = (Client*)arg;
     uint8_t buffer[4096];
     
     HandshakePacket handshake;
-    handshake.type = PKT_HANDSHAKE; // that where we will send the world later
+    handshake.type = PKT_HANDSHAKE;
     handshake.client_id = client->client_id;
     handshake.seed = WORLD_SEED;
-    send(client->socket, &handshake, sizeof(handshake), 0);
+    if (send(client->socket, &handshake, sizeof(handshake), 0) < 0) {
+        perror("send handshake");
+        close(client->socket);
+        return NULL;
+    }
     
-    PlayerSpawnPacket spawn; // after some time we init this and
+    PlayerSpawnPacket spawn;
     spawn.type = PKT_PLAYER_SPAWN;
     spawn.client_id = client->client_id;
     memcpy(spawn.pos, client->pos, sizeof(spawn.pos));
@@ -43,49 +48,79 @@ void* handle_client(void* arg) {
     }
     pthread_mutex_unlock(&global_server.clients_mutex);
     
+    int send_buf_size = 256 * 1024;
+    int recv_buf_size = 256 * 1024;
+    setsockopt(client->socket, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
+    setsockopt(client->socket, SOL_SOCKET, SO_RCVBUF, &recv_buf_size, sizeof(recv_buf_size));
+    
     while (client->active) {
-        int bytes = recv(client->socket, buffer, sizeof(buffer), MSG_DONTWAIT);
+        int bytes = recv(client->socket, buffer, sizeof(buffer), 0);
         
         if (bytes > 0) {
-            uint8_t type = buffer[0];
-            
-            if (type == PKT_PLAYER_STATE) {
-                PlayerStatePacket* state = (PlayerStatePacket*)buffer;
-                memcpy(client->pos, state->pos, sizeof(client->pos));
-                memcpy(client->rot, state->rot, sizeof(client->rot));
-                client->on_ground = state->on_ground;
+            // now we are processing all of the packets
+            int offset = 0;
+            while (offset < bytes) {
+                uint8_t type = buffer[offset];
                 
-                printf("[srv] got state from %u pos=(%f,%f,%f) rot=(%f,%f,%f)\n",
-                       client->client_id,
-                       state->pos[0], state->pos[1], state->pos[2],
-                       state->rot[0], state->rot[1], state->rot[2]);
-
-                pthread_mutex_lock(&global_server.clients_mutex);
-                for (int i = 0; i < MAX_CLIENTS; i++) {
-                    if (global_server.clients[i].active && global_server.clients[i].client_id != client->client_id) {
-                        send(global_server.clients[i].socket, state, sizeof(PlayerStatePacket), 0);
+                if (type == PKT_PLAYER_STATE) {
+                    if (offset + sizeof(PlayerStatePacket) > bytes) {
+                        break;
                     }
-                }
-                pthread_mutex_unlock(&global_server.clients_mutex);
+                    PlayerStatePacket* state = (PlayerStatePacket*)(buffer + offset);
+                    memcpy(client->pos, state->pos, sizeof(client->pos));
+                    memcpy(client->rot, state->rot, sizeof(client->rot));
+                    client->on_ground = state->on_ground;
+                    
+                    printf("[srv] got state from %u pos=(%f,%f,%f) rot=(%f,%f,%f)\n",
+                           client->client_id,
+                           state->pos[0], state->pos[1], state->pos[2],
+                           state->rot[0], state->rot[1], state->rot[2]);
 
-            }
-            else if (type == PKT_BLOCK_UPDATE) {
-                BlockUpdatePacket* block = (BlockUpdatePacket*)buffer;
-                pthread_mutex_lock(&global_server.clients_mutex);
-                for (int i = 0; i < MAX_CLIENTS; i++) {
-                    if (global_server.clients[i].active) {
-                        // relay to everyone INCLUDING the sender
-                        send(global_server.clients[i].socket, block, sizeof(BlockUpdatePacket), 0);
+                    pthread_mutex_lock(&global_server.clients_mutex);
+                    for (int i = 0; i < MAX_CLIENTS; i++) {
+                        if (global_server.clients[i].active && global_server.clients[i].client_id != client->client_id) {
+                            if (send(global_server.clients[i].socket, state, sizeof(PlayerStatePacket), 0) < 0) {
+                                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                                    global_server.clients[i].active = 0;
+                                    close(global_server.clients[i].socket);
+                                }
+                            }
+                        }
                     }
+                    pthread_mutex_unlock(&global_server.clients_mutex);
+                    offset += sizeof(PlayerStatePacket);
                 }
-                pthread_mutex_unlock(&global_server.clients_mutex);
+                else if (type == PKT_BLOCK_UPDATE) {
+                    if (offset + sizeof(BlockUpdatePacket) > bytes) {
+                        break; // incomplete packet, wait for next recv
+                    }
+                    BlockUpdatePacket* block = (BlockUpdatePacket*)(buffer + offset);
+                    pthread_mutex_lock(&global_server.clients_mutex);
+                    for (int i = 0; i < MAX_CLIENTS; i++) {
+                        if (global_server.clients[i].active) {
+                            if (send(global_server.clients[i].socket, block, sizeof(BlockUpdatePacket), 0) < 0) {
+                                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                                    global_server.clients[i].active = 0;
+                                    close(global_server.clients[i].socket);
+                                }
+                            }
+                        }
+                    }
+                    pthread_mutex_unlock(&global_server.clients_mutex);
+                    offset += sizeof(BlockUpdatePacket);
+                }
+                else {
+                    printf("[srv] Unknown packet type %d from client %u\n", type, client->client_id);
+                    offset++;
+                }
             }
         }
         else if (bytes == 0) {
             break;
         }
-        
-        usleep(1000000 / UPDATE_RATE);
+        else if (bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+            break;
+        }
     }
     
     client->active = 0;
@@ -177,6 +212,9 @@ void server_start(Server* server) {
                 continue;
             }
             
+            int flag = 1;
+            setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
+            
             int slot = -1;
             pthread_mutex_lock(&server->clients_mutex);
             for (int i = 0; i < MAX_CLIENTS; i++) {
@@ -208,7 +246,12 @@ void server_broadcast(Server* server, const void* data, size_t size, uint32_t ex
     pthread_mutex_lock(&server->clients_mutex);
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (server->clients[i].active && server->clients[i].client_id != exclude_id) {
-            send(server->clients[i].socket, data, size, 0);
+            if (send(server->clients[i].socket, data, size, 0) < 0) {
+                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                    server->clients[i].active = 0;
+                    close(server->clients[i].socket);
+                }
+            }
         }
     }
     pthread_mutex_unlock(&server->clients_mutex);

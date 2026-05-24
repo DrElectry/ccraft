@@ -21,6 +21,10 @@ static uint64_t g_seed = 0;
 static uint32_t g_local_client_id = 0;
 static RemotePlayer g_remotes[CLIENT_MAX_REMOTES];
 
+// for multiple recv calls
+static uint8_t recv_buffer[65536];
+static size_t recv_buffer_len = 0;
+
 static void set_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) return;
@@ -32,6 +36,7 @@ int network_init(int server_port) {
     memset(g_remotes, 0, sizeof(g_remotes));
     g_seed = 0;
     g_local_client_id = 0;
+    recv_buffer_len = 0;
     return 0;
 }
 
@@ -129,6 +134,7 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
             *out_seed = hp.seed;
             g_local_client_id = hp.client_id;
             printf("Connected. client_id: %u, seed: %llu\n", g_local_client_id, (unsigned long long)hp.seed);
+            recv_buffer_len = 0; // Reset receive buffer
             return 0;
         }
         usleep(1000);
@@ -166,14 +172,14 @@ void network_send_block_change(uint32_t client_id, int32_t x, int32_t y, int32_t
     send(g_sock, &b, sizeof(b), 0);
 }
 
-static void handle_packet(uint8_t* buffer, ssize_t bytes) {
-    if (bytes <= 0) return;
-
-    uint8_t type = buffer[0];
+static void process_packet(const uint8_t* data, size_t len) {
+    if (len < 1) return;
+    
+    uint8_t type = data[0];
 
     if (type == PKT_PLAYER_SPAWN) {
-        if (bytes < (ssize_t)sizeof(PlayerSpawnPacket)) return;
-        PlayerSpawnPacket* sp = (PlayerSpawnPacket*)buffer;
+        if (len < sizeof(PlayerSpawnPacket)) return;
+        PlayerSpawnPacket* sp = (PlayerSpawnPacket*)data;
 
         RemotePlayer* rp = find_remote(sp->client_id);
         if (!rp) rp = alloc_remote(sp->client_id);
@@ -187,8 +193,8 @@ static void handle_packet(uint8_t* buffer, ssize_t bytes) {
     }
 
     if (type == PKT_PLAYER_DESPAWN) {
-        if (bytes < (ssize_t)sizeof(PlayerDespawnPacket)) return;
-        PlayerDespawnPacket* dp = (PlayerDespawnPacket*)buffer;
+        if (len < sizeof(PlayerDespawnPacket)) return;
+        PlayerDespawnPacket* dp = (PlayerDespawnPacket*)data;
 
         RemotePlayer* rp = find_remote(dp->client_id);
         if (rp) {
@@ -199,8 +205,8 @@ static void handle_packet(uint8_t* buffer, ssize_t bytes) {
     }
 
     if (type == PKT_PLAYER_STATE) {
-        if (bytes < (ssize_t)sizeof(PlayerStatePacket)) return;
-        PlayerStatePacket* st = (PlayerStatePacket*)buffer;
+        if (len < sizeof(PlayerStatePacket)) return;
+        PlayerStatePacket* st = (PlayerStatePacket*)data;
 
         if (st->client_id == g_local_client_id) return;
 
@@ -218,8 +224,8 @@ static void handle_packet(uint8_t* buffer, ssize_t bytes) {
     }
 
     if (type == PKT_BLOCK_UPDATE) {
-        if (bytes < (ssize_t)sizeof(BlockUpdatePacket)) return;
-        BlockUpdatePacket* bu = (BlockUpdatePacket*)buffer;
+        if (len < sizeof(BlockUpdatePacket)) return;
+        BlockUpdatePacket* bu = (BlockUpdatePacket*)data;
         extern World world;
         world_set_block(&world, bu->x, bu->y, bu->z, bu->block_type);
         rebuild_chunks_for_block(&world, bu->x, bu->y, bu->z);
@@ -230,22 +236,71 @@ static void handle_packet(uint8_t* buffer, ssize_t bytes) {
 void network_pump(void) {
     if (g_sock < 0) return;
 
-    uint8_t buffer[4096];
-
-    while (1) {
-        ssize_t n = recv(g_sock, buffer, sizeof(buffer), MSG_DONTWAIT);
-        if (n > 0) {
-            handle_packet(buffer, n);
-            continue;
+    uint8_t temp[4096];
+    ssize_t n = recv(g_sock, temp, sizeof(temp), MSG_DONTWAIT);
+    
+    if (n > 0) {
+        if (recv_buffer_len + n > sizeof(recv_buffer)) {
+            // overflow
+            fprintf(stderr, "Network: receive buffer overflow, resetting\n");
+            recv_buffer_len = 0;
+            return;
         }
-        if (n == 0) {
+        memcpy(recv_buffer + recv_buffer_len, temp, n);
+        recv_buffer_len += n;
+        
+        // processing multiple packets
+        size_t offset = 0;
+        while (offset < recv_buffer_len) {
+            if (recv_buffer_len - offset < 1) break;
+            
+            uint8_t type = recv_buffer[offset];
+            size_t pkt_size = 0;
+            
+            switch (type) {
+                case PKT_PLAYER_SPAWN:
+                    pkt_size = sizeof(PlayerSpawnPacket);
+                    break;
+                case PKT_PLAYER_DESPAWN:
+                    pkt_size = sizeof(PlayerDespawnPacket);
+                    break;
+                case PKT_PLAYER_STATE:
+                    pkt_size = sizeof(PlayerStatePacket);
+                    break;
+                case PKT_BLOCK_UPDATE:
+                    pkt_size = sizeof(BlockUpdatePacket);
+                    break;
+                default:
+                    // Unknown packet type - skip 1 byte to avoid infinite loop
+                    fprintf(stderr, "Network: unknown packet type %d, skipping\n", type);
+                    pkt_size = 1;
+                    break;
+            }
+            
+            if (recv_buffer_len - offset >= pkt_size) {
+                process_packet(recv_buffer + offset, pkt_size);
+                offset += pkt_size;
+            } else {
+                break;
+            }
+        }
+        
+        if (offset > 0) {
+            memmove(recv_buffer, recv_buffer + offset, recv_buffer_len - offset);
+            recv_buffer_len -= offset;
+        }
+    }
+    else if (n == 0) {
+        close(g_sock);
+        g_sock = -1;
+        recv_buffer_len = 0;
+        return;
+    }
+    else if (n < 0) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK) {
             close(g_sock);
             g_sock = -1;
-            return;
-        }
-        if (n < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) return;
-            return;
+            recv_buffer_len = 0;
         }
     }
 }

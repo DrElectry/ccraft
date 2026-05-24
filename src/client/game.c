@@ -178,7 +178,7 @@ void game_init() {
     glm_translate(hand_model, (vec3){50.0f, 50.0f, 50.0f});
 
     text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/text.png");
-    text_create(&name, "0.108", 0x0F, 0, 0);
+    text_create(&name, "0.30", 0x0F, 0, 0);
 
     sound_t* ambient;
 

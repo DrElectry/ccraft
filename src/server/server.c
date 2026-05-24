@@ -14,6 +14,89 @@
 
 Server global_server;
 
+typedef struct {
+    int32_t x;
+    int32_t y;
+    int32_t z;
+    uint16_t block_type;
+} ServerBlockChange;
+
+static ServerBlockChange* g_pending_block_changes = NULL;
+static int g_pending_block_count = 0;
+static int g_pending_block_capacity = 0;
+static pthread_mutex_t g_block_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void server_add_block_change(int32_t x, int32_t y, int32_t z, uint16_t block_type) {
+    pthread_mutex_lock(&g_block_mutex);
+    
+    for (int i = 0; i < g_pending_block_count; i++) {
+        if (g_pending_block_changes[i].x == x && 
+            g_pending_block_changes[i].y == y &&
+            g_pending_block_changes[i].z == z) {
+            g_pending_block_changes[i].block_type = block_type;
+            pthread_mutex_unlock(&g_block_mutex);
+            return;
+        }
+    }
+    
+    if (g_pending_block_count >= g_pending_block_capacity) {
+        int new_capacity = g_pending_block_capacity == 0 ? 64000 : g_pending_block_capacity * 2;
+        ServerBlockChange* new_changes = realloc(g_pending_block_changes, sizeof(ServerBlockChange) * new_capacity);
+        if (new_changes) {
+            g_pending_block_changes = new_changes;
+            g_pending_block_capacity = new_capacity;
+        } else {
+            pthread_mutex_unlock(&g_block_mutex);
+            return;
+        }
+    }
+    
+    g_pending_block_changes[g_pending_block_count].x = x;
+    g_pending_block_changes[g_pending_block_count].y = y;
+    g_pending_block_changes[g_pending_block_count].z = z;
+    g_pending_block_changes[g_pending_block_count].block_type = block_type;
+    g_pending_block_count++;
+    
+    pthread_mutex_unlock(&g_block_mutex);
+}
+
+static void send_world_snapshot(Client* client) {
+    pthread_mutex_lock(&g_block_mutex);
+    
+    if (g_pending_block_count == 0) {
+        pthread_mutex_unlock(&g_block_mutex);
+        return;
+    }
+    
+    size_t data_size = sizeof(WorldSnapshotPacket) + g_pending_block_count * sizeof(BlockChangeData);
+    
+    uint8_t* buffer = malloc(data_size);
+    if (!buffer) {
+        pthread_mutex_unlock(&g_block_mutex);
+        return;
+    }
+    
+    WorldSnapshotPacket* header = (WorldSnapshotPacket*)buffer;
+    header->type = PKT_WORLD_SNAPSHOT;
+    header->count = g_pending_block_count;
+    
+    BlockChangeData* blocks = (BlockChangeData*)(buffer + sizeof(WorldSnapshotPacket));
+    for (int i = 0; i < g_pending_block_count; i++) {
+        blocks[i].x = g_pending_block_changes[i].x;
+        blocks[i].y = g_pending_block_changes[i].y;
+        blocks[i].z = g_pending_block_changes[i].z;
+        blocks[i].block_type = g_pending_block_changes[i].block_type;
+    }
+    
+    send(client->socket, buffer, data_size, 0);
+    free(buffer);
+    
+    printf("[srv] Sent world snapshot with %d block changes to client %u\n", 
+           g_pending_block_count, client->client_id);
+    
+    pthread_mutex_unlock(&g_block_mutex);
+}
+
 void* handle_client(void* arg) {
     Client* client = (Client*)arg;
     uint8_t buffer[4096];
@@ -47,6 +130,8 @@ void* handle_client(void* arg) {
         }
     }
     pthread_mutex_unlock(&global_server.clients_mutex);
+    
+    send_world_snapshot(client);
     
     int send_buf_size = 256 * 1024;
     int recv_buf_size = 256 * 1024;
@@ -95,6 +180,9 @@ void* handle_client(void* arg) {
                         break; // incomplete packet, wait for next recv
                     }
                     BlockUpdatePacket* block = (BlockUpdatePacket*)(buffer + offset);
+                    
+                    server_add_block_change(block->x, block->y, block->z, block->block_type);
+                    
                     pthread_mutex_lock(&global_server.clients_mutex);
                     for (int i = 0; i < MAX_CLIENTS; i++) {
                         if (global_server.clients[i].active) {
@@ -146,6 +234,10 @@ void server_init(Server* server) {
     memset(server->clients, 0, sizeof(server->clients));
     server->running = 0;
     pthread_mutex_init(&server->clients_mutex, NULL);
+    
+    g_pending_block_changes = NULL;
+    g_pending_block_count = 0;
+    g_pending_block_capacity = 0;
 }
 
 void server_start(Server* server) {
@@ -273,4 +365,12 @@ void server_stop(Server* server) {
     pthread_mutex_unlock(&server->clients_mutex);
     close(server->server_socket);
     pthread_mutex_destroy(&server->clients_mutex);
+    
+    pthread_mutex_lock(&g_block_mutex);
+    if (g_pending_block_changes) {
+        free(g_pending_block_changes);
+        g_pending_block_changes = NULL;
+    }
+    pthread_mutex_unlock(&g_block_mutex);
+    pthread_mutex_destroy(&g_block_mutex);
 }

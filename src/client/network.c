@@ -231,6 +231,21 @@ static void process_packet(const uint8_t* data, size_t len) {
         rebuild_chunks_for_block(&world, bu->x, bu->y, bu->z);
         return;
     }
+
+    if (type == PKT_WORLD_SNAPSHOT) {
+        if (len < sizeof(WorldSnapshotPacket)) return;
+        WorldSnapshotPacket* snap = (WorldSnapshotPacket*)data;
+        BlockChangeData* blocks = (BlockChangeData*)(data + sizeof(WorldSnapshotPacket));
+        
+        printf("[client] Received world snapshot with %u block changes\n", snap->count);
+        
+        extern World world;
+        for (uint32_t i = 0; i < snap->count; i++) {
+            world_set_block(&world, blocks[i].x, blocks[i].y, blocks[i].z, blocks[i].block_type);
+            rebuild_chunks_for_block(&world, blocks[i].x, blocks[i].y, blocks[i].z);
+        }
+        return;
+    }
 }
 
 void network_pump(void) {
@@ -270,6 +285,14 @@ void network_pump(void) {
                 case PKT_BLOCK_UPDATE:
                     pkt_size = sizeof(BlockUpdatePacket);
                     break;
+                case PKT_WORLD_SNAPSHOT:
+                    if (recv_buffer_len - offset >= sizeof(WorldSnapshotPacket)) {
+                        WorldSnapshotPacket* snap = (WorldSnapshotPacket*)(recv_buffer + offset);
+                        pkt_size = sizeof(WorldSnapshotPacket) + snap->count * sizeof(BlockChangeData);
+                    } else {
+                        pkt_size = 0;
+                    }
+                    break;
                 default:
                     // Unknown packet type - skip 1 byte to avoid infinite loop
                     fprintf(stderr, "Network: unknown packet type %d, skipping\n", type);
@@ -277,7 +300,7 @@ void network_pump(void) {
                     break;
             }
             
-            if (recv_buffer_len - offset >= pkt_size) {
+            if (pkt_size > 0 && recv_buffer_len - offset >= pkt_size) {
                 process_packet(recv_buffer + offset, pkt_size);
                 offset += pkt_size;
             } else {

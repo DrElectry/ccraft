@@ -10,7 +10,8 @@ enum {
     PKT_PLAYER_DESPAWN,
     PKT_CHUNK_DATA,
     PKT_BLOCK_UPDATE,
-    PKT_PING
+    PKT_PING,
+    PKT_WORLD_SNAPSHOT
 };
 
 #pragma pack(push, 1)
@@ -48,6 +49,18 @@ typedef struct {
     int32_t z;
     uint16_t block_type;
 } BlockUpdatePacket;
+
+typedef struct {
+    uint8_t type;
+    uint32_t count;
+} WorldSnapshotPacket;
+
+typedef struct {
+    int32_t x;
+    int32_t y;
+    int32_t z;
+    uint16_t block_type;
+} BlockChangeData;
 
 #pragma pack(pop)
 

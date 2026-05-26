@@ -173,7 +173,7 @@ int main(int argc, char* argv[]) {
     gbuffer.color_formats[2] = FBO_COLOR_RGBA16F;
     gbuffer.color_formats[3] = FBO_COLOR_RG16F;
 
-    fbo_create_depth(&shadow_pass, 4096, 4096);
+    fbo_create_depth(&shadow_pass, 2048, 2048);
 
     game_init();
 

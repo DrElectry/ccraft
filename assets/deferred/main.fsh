@@ -89,10 +89,10 @@ float pcf(vec4 fragPosLightSpace)
     mat2 rot = getRotation(out_uv);
 
     vec3 normal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
-    float bias = max(0.00001 * (1.0 - dot(normal, normalize(lightDir))), 0.0005);
+    float bias = max(0.0001 * (1.0 - dot(normal, normalize(lightDir))), 0.001);
 
     float shadow = 0.0;
-    float radius = 5.0;
+    float radius = 4.0;
 
     for (int i = 0; i < 64; i++)
     {

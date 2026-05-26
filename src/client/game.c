@@ -30,7 +30,7 @@ Player player;
 HText name;
 World world;
 
-uint16_t blockih = FIRST_TILE;
+uint16_t blockih = IRON_BLOCK;
 
 File world_file;
 
@@ -373,14 +373,20 @@ void game_shadow_pass(void) {
     glm_ortho(-32.0f, 32.0f, -32.0f, 32.0f, 1.0f, 200.0f, light_proj);
 
     vec3 light_offset = { 20.0f, 40.0f, -30.0f };
-    glm_vec3_add(player.camera.pos, light_offset, light_pos);
-    glm_lookat(light_pos, player.camera.pos, up, light_view);
+    
+    vec3 rounded_pos;
+    rounded_pos[0] = floorf(player.camera.pos[0]);
+    rounded_pos[1] = floorf(player.camera.pos[1]);
+    rounded_pos[2] = floorf(player.camera.pos[2]);
+    
+    glm_vec3_add(rounded_pos, light_offset, light_pos);
+    glm_lookat(light_pos, rounded_pos, up, light_view);
     glm_mat4_mul(light_proj, light_view, light_space_matrix);
 
     glm_vec3_copy(light_offset, light_dir);
     glm_vec3_normalize(light_dir);
 
-    glViewport(0, 0, 4096, 4096);
+    glViewport(0, 0, 2048, 2048);
     glEnable(GL_DEPTH_TEST);
     glClear(GL_DEPTH_BUFFER_BIT);
     program_use(&c);
@@ -404,9 +410,7 @@ void game_shadow_pass(void) {
     program_use(&c);
 
     texture_bind(&textt, 0);
-
     texture_bind(&brightt, 1);
-
     gfx_render(text, &c);
 
     if (__onserv) {
@@ -425,7 +429,7 @@ void game_shadow_pass(void) {
 
             if (remote_players[i]) {
                 remote_players[i]->pos[0] = remotes[i].pos[0];
-                remote_players[i]->pos[1] = remotes[i].pos[1]+0.9f; // hardcoded yuck yuck
+                remote_players[i]->pos[1] = remotes[i].pos[1]+0.9f;
                 remote_players[i]->pos[2] = remotes[i].pos[2];
                 
                 remote_players[i]->rot[0] = 0.0f;

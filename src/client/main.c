@@ -25,6 +25,9 @@ char __nickname[32];
 
 int main(int argc, char* argv[]) {
     rng_seed((unsigned int)time(NULL));
+    char nnickname[32];
+    snprintf(nnickname, sizeof(nnickname), "player%i", RAND(0, 9999));
+    strcpy(__nickname, nnickname);
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "-connect") == 0)
@@ -65,13 +68,17 @@ int main(int argc, char* argv[]) {
             if (i + 1 < argc) {
                 char* nickname = argv[i + 1];
                 if (strlen(nickname) > 32) {
-                    char new_nickname[50];
-                    snprintf(new_nickname, sizeof(new_nickname), "player%i", RAND(0, 9999));
-                    printf("Nickname too long! Using: %s\n", new_nickname);
+                    snprintf(nnickname, sizeof(nnickname), "player%i", RAND(0, 9999));
+                    printf("Nickname too long! Using: %s\n", nnickname);
+                    strcpy(__nickname, nnickname);
+                } else {
+                    strcpy(__nickname, nickname);
                 }
             }
         }
     }
+
+    printf("Playing as '%s'\n", __nickname);
 
     if (__onserv)
     {

@@ -9,12 +9,13 @@
 
 typedef struct {
     int socket;
+    pthread_t thread;
     uint32_t client_id;
+    char nickname[MAX_NICKNAME_LEN];
+    int active;
     float pos[3];
     float rot[3];
-    uint8_t active;
     uint8_t on_ground;
-    pthread_t thread;
 } Client;
 
 typedef struct {

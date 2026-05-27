@@ -6,6 +6,7 @@
 #define CLIENT_MAX_REMOTES 32
 
 #define UPDATE_RATE 64 // same as in src/server/globals.h
+#define MAX_NICKNAME_LEN 32
 
 typedef struct {
     uint32_t client_id;
@@ -13,11 +14,12 @@ typedef struct {
     float pos[3];
     float rot[3];
     uint8_t on_ground;
+    char nickname[MAX_NICKNAME_LEN];
 } RemotePlayer;
 
 int network_init(int server_port);
 
-int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed);
+int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed, const char*  nickname);
 
 // polls sockets for incoming frame
 void network_pump(void);

@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
 
     if (__onserv)
     {
-        if (network_connect_and_handshake(__servip, __servport, &__servseed) != 0)
+        if (network_connect_and_handshake(__servip, __servport, &__servseed, __nickname) != 0)
         {
             fprintf(stderr, "network handshake failed\n");
             return 1;

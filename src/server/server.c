@@ -99,14 +99,45 @@ static void send_world_snapshot(Client* client) {
     pthread_mutex_unlock(&g_block_mutex);
 }
 
+
 void* handle_client(void* arg) {
     Client* client = (Client*)arg;
     uint8_t buffer[4096];
+    
+    HandshakePacket handshake_recv;
+    memset(&handshake_recv, 0, sizeof(handshake_recv));
+    
+    size_t got = 0;
+    while (got < sizeof(HandshakePacket)) {
+        int bytes = recv(client->socket, ((uint8_t*)&handshake_recv) + got, 
+                        sizeof(HandshakePacket) - got, 0);
+        if (bytes > 0) {
+            got += bytes;
+        } else if (bytes == 0 || (bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+            close(client->socket);
+            return NULL;
+        }
+    }
+    
+    strncpy(client->nickname, handshake_recv.nickname, MAX_NICKNAME_LEN - 1);
+    client->nickname[MAX_NICKNAME_LEN - 1] = '\0';
+    
+    struct sockaddr_in client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+    char client_ip[INET_ADDRSTRLEN];
+    if (getpeername(client->socket, (struct sockaddr*)&client_addr, &addr_len) == 0) {
+        inet_ntop(AF_INET, &(client_addr.sin_addr), client_ip, INET_ADDRSTRLEN);
+    } else {
+        strcpy(client_ip, "unknown");
+    }
+    
+    printf("%s joined as <%s>\n", client_ip, client->nickname);
     
     HandshakePacket handshake;
     handshake.type = PKT_HANDSHAKE;
     handshake.client_id = client->client_id;
     handshake.seed = WORLD_SEED;
+    strncpy(handshake.nickname, client->nickname, MAX_NICKNAME_LEN);
     if (send(client->socket, &handshake, sizeof(handshake), 0) < 0) {
         perror("send handshake");
         close(client->socket);
@@ -118,6 +149,7 @@ void* handle_client(void* arg) {
     spawn.client_id = client->client_id;
     memcpy(spawn.pos, client->pos, sizeof(spawn.pos));
     memcpy(spawn.rot, client->rot, sizeof(spawn.rot));
+    strncpy(spawn.nickname, client->nickname, MAX_NICKNAME_LEN);
     
     pthread_mutex_lock(&global_server.clients_mutex);
     for (int i = 0; i < MAX_CLIENTS; i++) {
@@ -128,6 +160,7 @@ void* handle_client(void* arg) {
             existing.client_id = global_server.clients[i].client_id;
             memcpy(existing.pos, global_server.clients[i].pos, sizeof(existing.pos));
             memcpy(existing.rot, global_server.clients[i].rot, sizeof(existing.rot));
+            strncpy(existing.nickname, global_server.clients[i].nickname, MAX_NICKNAME_LEN);
             send(client->socket, &existing, sizeof(existing), 0);
         }
     }
@@ -158,10 +191,9 @@ void* handle_client(void* arg) {
                     memcpy(client->rot, state->rot, sizeof(client->rot));
                     client->on_ground = state->on_ground;
                     
-                    printf("[got state from %u pos=(%f,%f,%f) rot=(%f,%f,%f)\n",
-                           client->client_id,
-                           state->pos[0], state->pos[1], state->pos[2],
-                           state->rot[0], state->rot[1], state->rot[2]);
+                    if (strlen(state->nickname) > 0) {
+                        strncpy(client->nickname, state->nickname, MAX_NICKNAME_LEN);
+                    }
 
                     pthread_mutex_lock(&global_server.clients_mutex);
                     for (int i = 0; i < MAX_CLIENTS; i++) {
@@ -216,6 +248,9 @@ void* handle_client(void* arg) {
     client->active = 0;
     close(client->socket);
     
+    char disconnect_nickname[MAX_NICKNAME_LEN];
+    strncpy(disconnect_nickname, client->nickname, MAX_NICKNAME_LEN);
+    
     PlayerDespawnPacket despawn;
     despawn.type = PKT_PLAYER_DESPAWN;
     despawn.client_id = client->client_id;
@@ -228,7 +263,7 @@ void* handle_client(void* arg) {
     }
     pthread_mutex_unlock(&global_server.clients_mutex);
     
-    printf("Client %u disconnected\n", client->client_id);
+    printf("%s disconnected.\n", disconnect_nickname);
     return NULL;
 }
 
@@ -301,11 +336,14 @@ void server_start(Server* server) {
             struct sockaddr_in client_addr;
             socklen_t client_len = sizeof(client_addr);
             int client_socket = accept(server->server_socket, (struct sockaddr*)&client_addr, &client_len);
-            
+
             if (client_socket < 0) {
                 perror("accept");
                 continue;
             }
+
+            char client_ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &(client_addr.sin_addr), client_ip, INET_ADDRSTRLEN);
             
             int flag = 1;
             setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
@@ -324,12 +362,14 @@ void server_start(Server* server) {
                 server->clients[slot].client_id = next_client_id++;
                 server->clients[slot].active = 1;
                 server->clients[slot].on_ground = 0;
+                memset(server->clients[slot].nickname, 0, MAX_NICKNAME_LEN);
                 memset(server->clients[slot].pos, 0, sizeof(server->clients[slot].pos));
                 memset(server->clients[slot].rot, 0, sizeof(server->clients[slot].rot));
                 pthread_create(&server->clients[slot].thread, NULL, handle_client, &server->clients[slot]);
-                printf("Client %u connected\n", server->clients[slot].client_id);
+                
+                //printf("%s connected\n", client_ip);
             } else {
-                printf("Server full, rejecting connection\n");
+                printf("Server full, rejecting connection from %s\n", client_ip);
                 close(client_socket);
             }
             pthread_mutex_unlock(&server->clients_mutex);

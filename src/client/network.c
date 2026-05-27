@@ -73,7 +73,7 @@ static RemotePlayer* alloc_remote(uint32_t client_id) {
     return NULL;
 }
 
-int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed) {
+int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed, const char*  nickname) {
     if (!host || !out_seed) return -1;
 
     g_sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -106,6 +106,22 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
         }
     }
 
+    HandshakePacket handshake_send;
+    memset(&handshake_send, 0, sizeof(handshake_send));
+    handshake_send.type = PKT_HANDSHAKE;
+    handshake_send.client_id = 0;
+    handshake_send.seed = 0;
+    strncpy(handshake_send.nickname, nickname, MAX_NICKNAME_LEN - 1);
+    handshake_send.nickname[MAX_NICKNAME_LEN - 1] = '\0';
+    
+    ssize_t sent = send(g_sock, &handshake_send, sizeof(handshake_send), 0);
+    if (sent != sizeof(handshake_send)) {
+        perror("send handshake");
+        close(g_sock);
+        g_sock = -1;
+        return -1;
+    }
+
     for (int i = 0; i < 2000; i++) {
         HandshakePacket hp;
         memset(&hp, 0, sizeof(hp));
@@ -134,7 +150,7 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
             *out_seed = hp.seed;
             g_local_client_id = hp.client_id;
             printf("Connected. client_id: %u, seed: %llu\n", g_local_client_id, (unsigned long long)hp.seed);
-            recv_buffer_len = 0; // Reset receive buffer
+            recv_buffer_len = 0;
             return 0;
         }
         usleep(1000);
@@ -149,12 +165,15 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
 void network_send_player_state(uint32_t client_id, const float pos[3], const float rot[3], uint8_t on_ground) {
     if (g_sock < 0) return;
 
+    extern char __nickname[32];
     PlayerStatePacket p;
     p.type = PKT_PLAYER_STATE;
     p.client_id = client_id;
     memcpy(p.pos, pos, sizeof(p.pos));
     memcpy(p.rot, rot, sizeof(p.rot));
     p.on_ground = on_ground;
+    strncpy(p.nickname, __nickname, MAX_NICKNAME_LEN - 1);
+    p.nickname[MAX_NICKNAME_LEN - 1] = '\0';
 
     send(g_sock, &p, sizeof(p), 0);
 }
@@ -188,7 +207,9 @@ static void process_packet(const uint8_t* data, size_t len) {
         memcpy(rp->pos, sp->pos, sizeof(rp->pos));
         memcpy(rp->rot, sp->rot, sizeof(rp->rot));
         rp->on_ground = 0;
-        printf("Remote connected: id=%u\n", sp->client_id);
+        strncpy(rp->nickname, sp->nickname, MAX_NICKNAME_LEN - 1);
+        rp->nickname[MAX_NICKNAME_LEN - 1] = '\0';
+        printf("Remote connected: id=%u, nickname='%s'\n", sp->client_id, rp->nickname);
         return;
     }
 
@@ -198,8 +219,8 @@ static void process_packet(const uint8_t* data, size_t len) {
 
         RemotePlayer* rp = find_remote(dp->client_id);
         if (rp) {
+            printf("Remote disconnected: id=%u, nickname='%s'\n", dp->client_id, rp->nickname);
             rp->active = 0;
-            printf("Remote disconnected: id=%u\n", dp->client_id);
         }
         return;
     }
@@ -214,12 +235,16 @@ static void process_packet(const uint8_t* data, size_t len) {
         if (!rp) {
             rp = alloc_remote(st->client_id);
             if (!rp) return;
-            printf("Remote state (implicit spawn): id=%u\n", st->client_id);
+            printf("Remote state (implicit spawn): id=%u, nickname='%s'\n", st->client_id, st->nickname);
         }
 
         memcpy(rp->pos, st->pos, sizeof(rp->pos));
         memcpy(rp->rot, st->rot, sizeof(rp->rot));
         rp->on_ground = st->on_ground;
+        if (strlen(st->nickname) > 0) {
+            strncpy(rp->nickname, st->nickname, MAX_NICKNAME_LEN - 1);
+            rp->nickname[MAX_NICKNAME_LEN - 1] = '\0';
+        }
         return;
     }
 

@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define MAX_NICKNAME_LEN 32
+
 enum {
     PKT_HANDSHAKE = 1,
     PKT_PLAYER_STATE,
@@ -20,6 +22,7 @@ typedef struct {
     uint8_t type;
     uint32_t client_id;
     uint64_t seed;
+    char nickname[MAX_NICKNAME_LEN];
 } HandshakePacket;
 
 typedef struct {
@@ -28,6 +31,7 @@ typedef struct {
     float pos[3];
     float rot[3];
     uint8_t on_ground;
+    char nickname[MAX_NICKNAME_LEN];
 } PlayerStatePacket;
 
 typedef struct {
@@ -35,6 +39,7 @@ typedef struct {
     uint32_t client_id;
     float pos[3];
     float rot[3];
+    char nickname[MAX_NICKNAME_LEN];
 } PlayerSpawnPacket;
 
 typedef struct {

@@ -317,11 +317,22 @@ void game_tick(float dt) {
         }
     }
 
+    if (input_manager.scroll_y != 0.0f) {
+        int dir = (input_manager.scroll_y > 0.0f) ? 1 : -1;
+        int next = (int)blockih + dir;
+        if (next < FIRST_TILE) next = LAST_TILE;
+        if (next > LAST_TILE) next = FIRST_TILE;
+        blockih = (uint16_t)next;
+        input_manager.scroll_y = 0.0f;
+        place_delay = 0.0f;
+    }
+
     if (hit.hit && place_delay <= 0.0f) {
         if (glfwGetMouseButton(input_manager.win, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             int px = hit.bx + (int)hit.normal[0];
             int py = hit.by + (int)hit.normal[1];
             int pz = hit.bz + (int)hit.normal[2];
+
 
             vec3 player_pos;
             player_get_pos(&player, player_pos);
@@ -532,6 +543,8 @@ void game_shadow_pass(void) {
     program_set_mat4(&bc, "view", (float*)view);
     program_set_mat4(&bc, "model", (float*)hand_model);
 
+    program_set_uint(&bc, "id", lookup_atlas[blockih*6]);
+
     glDisable(GL_CULL_FACE);
 
     vao_bind(&block.cache.vao);
@@ -651,6 +664,7 @@ void game_draw(float time) {
     program_set_mat4(&bc, "proj", (float*)projection);
     program_set_mat4(&bc, "view", (float*)view);
     program_set_mat4(&bc, "model", (float*)hand_model);
+    program_set_uint(&bc, "id", lookup_atlas[blockih*6]);
 
     glDisable(GL_CULL_FACE);
     

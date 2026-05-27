@@ -13,16 +13,26 @@ in vec3 out_view_pos;
 uniform sampler2D tex;
 uniform sampler2D roug;
 uniform sampler2D bright;
+uniform uint id;
 
 void main() {
-    vec4 data = texture(tex, out_uv);
+    const float tiles_per_row = 16.0;
+    const float tile_size = 1.0 / tiles_per_row;
+    
+    uint tile_x = id % 16u;
+    uint tile_y = id / 16u;
+    
+    vec2 tile_offset = vec2(float(tile_x) * tile_size, float(tile_y) * tile_size);
+    vec2 atlas_uv = tile_offset + out_uv;
+    
+    vec4 data = texture(tex, atlas_uv);
     if (data.a < 0.1) {
         discard;
     }
-
+    
     gAlbedo = data.rgb;
-    gNormal = out_normal;
-    gRoughness = texture(roug, out_uv).bb;
-    gBrightness = texture(bright, out_uv).rgb;
+    gNormal = normalize(out_normal);
+    gRoughness = texture(roug, atlas_uv).bb;
+    gBrightness = texture(bright, atlas_uv).rgb;
     gViewPosition = vec4(out_view_pos, 1.0);
 }

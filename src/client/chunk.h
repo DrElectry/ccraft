@@ -44,6 +44,7 @@ typedef struct {
 struct World;
 
 extern int lookup_ignorecollision[];
+extern int lookup_atlas[];
 
 void chunk_set_position(int cx, int cz);
 void chunk_generate(Chunk* chunk);

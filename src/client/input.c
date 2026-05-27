@@ -40,8 +40,6 @@ void input_init(Input* in, GLFWwindow* win) {
 }
 
 void input_update(Input* in) {
-    in->scroll_x = 0.0;
-    in->scroll_y = 0.0;
 
     for (int i = 0; i < 512; i++) {
         prev_keys[i] = curr_keys[i];

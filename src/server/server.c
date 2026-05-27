@@ -12,7 +12,7 @@
 
 #include "globals.h"
 
-Server global_server;
+Server global_server;   
 
 typedef struct {
     int32_t x;
@@ -93,7 +93,7 @@ static void send_world_snapshot(Client* client) {
     send(client->socket, buffer, data_size, 0);
     free(buffer);
     
-    printf("[srv] Sent world snapshot with %d block changes to client %u\n", 
+    printf("Sent world snapshot with %d block changes to client %u\n", 
            g_pending_block_count, client->client_id);
     
     pthread_mutex_unlock(&g_block_mutex);
@@ -158,7 +158,7 @@ void* handle_client(void* arg) {
                     memcpy(client->rot, state->rot, sizeof(client->rot));
                     client->on_ground = state->on_ground;
                     
-                    printf("[srv] got state from %u pos=(%f,%f,%f) rot=(%f,%f,%f)\n",
+                    printf("[got state from %u pos=(%f,%f,%f) rot=(%f,%f,%f)\n",
                            client->client_id,
                            state->pos[0], state->pos[1], state->pos[2],
                            state->rot[0], state->rot[1], state->rot[2]);
@@ -200,7 +200,7 @@ void* handle_client(void* arg) {
                     offset += sizeof(BlockUpdatePacket);
                 }
                 else {
-                    printf("[srv] Unknown packet type %d from client %u\n", type, client->client_id);
+                    printf("Unknown packet type %d from client %u\n", type, client->client_id);
                     offset++;
                 }
             }
@@ -270,6 +270,7 @@ void server_start(Server* server) {
         return;
     }
     
+    printf("CCRAFT server (version %s) \n", SERVER_VERSION);
     server->running = 1;
     printf("Server listening on port %d\n", SERVER_PORT);
     

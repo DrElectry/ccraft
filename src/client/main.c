@@ -13,14 +13,18 @@
 #include "main.h"
 #include <unistd.h>
 #include "network.h"
+#include "rand.h"
+#include <time.h>
 
 uint64_t __servseed;
 
 char __servip[256] = "127.0.0.1";
 int __onserv;
 int __servport;
+char __nickname[32];
 
 int main(int argc, char* argv[]) {
+    rng_seed((unsigned int)time(NULL));
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "-connect") == 0)
@@ -54,6 +58,16 @@ int main(int argc, char* argv[]) {
                 {
                     fprintf(stderr, "invalid format. use ip:port\n");
                     return 1;
+                }
+            }
+        }
+        if (strcmp(argv[i], "-nickname") == 0) {
+            if (i + 1 < argc) {
+                char* nickname = argv[i + 1];
+                if (strlen(nickname) > 32) {
+                    char new_nickname[50];
+                    snprintf(new_nickname, sizeof(new_nickname), "player%i", RAND(0, 9999));
+                    printf("Nickname too long! Using: %s\n", new_nickname);
                 }
             }
         }
@@ -187,14 +201,6 @@ int main(int argc, char* argv[]) {
         float delta_time = (float)(current_time - last_time);
         last_time = current_time;
 
-        fps_timer += delta_time;
-        fps_counter++;
-
-        if (fps_timer >= 1.0f) {
-            printf("FPS: %d\n", fps_counter);
-            fps_counter = 0;
-            fps_timer = 0.0f;
-        }
         time+=delta_time;
 
         game_tick(delta_time);

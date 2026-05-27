@@ -27,7 +27,7 @@
 #include <string.h>
 
 Player player;
-HText name;
+HText name, fps;
 World world;
 
 uint16_t blockih = IRON_BLOCK;
@@ -179,8 +179,11 @@ void game_init() {
 
     text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/text.png");
     text_create(&name, "0.30", 0x0F, 0, 0);
+    text_create(&fps, "FPS: 0", 0x0F, 0, 16);
+
 
     sound_t* ambient;
+
 
     ambient = sound_load("assets/sounds/ambient.wav");
     sound_set_looping(ambient, true);
@@ -210,7 +213,7 @@ void game_tick(float dt) {
     glm_mat4_mul(projection, view, prev_view_proj);
 
     packs_ensure_loaded();
-    
+
     glfwPollEvents();
     input_update(&input_manager);
 
@@ -218,9 +221,23 @@ void game_tick(float dt) {
         network_pump();
     }
 
-    float current_time = (float)glfwGetTime();
+    static double fps_accum_time = 0.0;
+    static int fps_frames = 0;
+    static float current_fps = 0.0f;
 
-    last_time = current_time;
+    fps_accum_time += (double)dt;
+    fps_frames++;
+    if (fps_accum_time >= 0.25) {
+        current_fps = (float)fps_frames / (float)fps_accum_time;
+        fps_accum_time = 0.0;
+        fps_frames = 0;
+    }
+
+    static char fps_text[32];
+    snprintf(fps_text, sizeof(fps_text), "FPS: %.0f", current_fps);
+    text_free(&fps);
+    text_create(&fps, fps_text, 0x0F, 0, 16);
+    text_create(&name, "0.30", 0x0F, 0, 0);
 
     glm_perspective(glm_rad(60.0f), ((float)WIDTH) / ((float)HEIGHT), 0.1f, 1000.0f, projection);
 
@@ -374,13 +391,31 @@ void game_shadow_pass(void) {
 
     vec3 light_offset = { 20.0f, 40.0f, -30.0f };
     
-    vec3 rounded_pos;
-    rounded_pos[0] = floorf(player.camera.pos[0]);
-    rounded_pos[1] = floorf(player.camera.pos[1]);
-    rounded_pos[2] = floorf(player.camera.pos[2]);
-    
-    glm_vec3_add(rounded_pos, light_offset, light_pos);
-    glm_lookat(light_pos, rounded_pos, up, light_view);
+    float orthoSize = 32.0f;
+    float texelSize = (orthoSize * 2.0f) / 2048.0f;
+
+    vec3 light_pos;
+    glm_vec3_add(player.camera.pos, light_offset, light_pos);
+
+    glm_lookat(light_pos, player.camera.pos, up, light_view);
+
+    mat4 light_view_tmp;
+    glm_mat4_copy(light_view, light_view_tmp);
+
+    vec4 centerLS;
+    glm_mat4_mulv(light_view_tmp, (vec4){ player.camera.pos[0], player.camera.pos[1], player.camera.pos[2], 1.0f }, centerLS);
+
+    centerLS[0] = floorf(centerLS[0] / texelSize) * texelSize;
+    centerLS[1] = floorf(centerLS[1] / texelSize) * texelSize;
+
+    vec4 snapped_world;
+    mat4 inv_light_view;
+    glm_mat4_inv(light_view_tmp, inv_light_view);
+    glm_mat4_mulv(inv_light_view, centerLS, snapped_world);
+
+    glm_vec3_add((vec3){ snapped_world[0], snapped_world[1], snapped_world[2] }, light_offset, light_pos);
+    glm_lookat(light_pos, player.camera.pos, up, light_view);
+
     glm_mat4_mul(light_proj, light_view, light_space_matrix);
 
     glm_vec3_copy(light_offset, light_dir);
@@ -627,6 +662,7 @@ void game_draw(float time) {
 
 void game_draw_hud() {
     text_draw(&name);
+    text_draw(&fps);
 }
 
 void game_destroy() {

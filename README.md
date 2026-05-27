@@ -2,6 +2,8 @@
 
 ![Demo](pictures/frame.gif)
 
+## WARNING: CURRENTLY BUILDS AND RUNS PROPERLY ONLY ON LINUX!!! ##
+
 ccraft is a W.I.P sandbox minecraft voxel like game. currently not much had been implemented, but it features
 
 - the core "minecraft" game (chunks management, placing and breaking blocks, player movement with physics, collisions, infinite world generation),

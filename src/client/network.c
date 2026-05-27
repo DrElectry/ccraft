@@ -73,7 +73,7 @@ static RemotePlayer* alloc_remote(uint32_t client_id) {
     return NULL;
 }
 
-int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed, const char*  nickname) {
+int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed, const char* nickname) {
     if (!host || !out_seed) return -1;
 
     g_sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -97,15 +97,40 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
     }
 
     int ret = connect(g_sock, (struct sockaddr*)&a, sizeof(a));
-    if (ret < 0) {
-        if (errno != EINPROGRESS) {
-            perror("connect");
-            close(g_sock);
-            g_sock = -1;
-            return -1;
-        }
+    if (ret < 0 && errno != EINPROGRESS) {
+        perror("connect");
+        close(g_sock);
+        g_sock = -1;
+        return -1;
     }
 
+    fd_set writefds;
+    FD_ZERO(&writefds);
+    FD_SET(g_sock, &writefds);
+    
+    struct timeval tv;
+    tv.tv_sec = 5; // 5 sec
+    tv.tv_usec = 0;
+    
+    ret = select(g_sock + 1, NULL, &writefds, NULL, &tv);
+    if (ret <= 0) {
+        fprintf(stderr, "Connection timeout\n");
+        close(g_sock);
+        g_sock = -1;
+        return -1;
+    }
+
+    int so_error;
+    socklen_t len = sizeof(so_error);
+    getsockopt(g_sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+    if (so_error != 0) {
+        fprintf(stderr, "Connection failed: %s\n", strerror(so_error));
+        close(g_sock);
+        g_sock = -1;
+        return -1;
+    }
+
+    // now sending (socket ready)
     HandshakePacket handshake_send;
     memset(&handshake_send, 0, sizeof(handshake_send));
     handshake_send.type = PKT_HANDSHAKE;
@@ -116,13 +141,16 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
     
     ssize_t sent = send(g_sock, &handshake_send, sizeof(handshake_send), 0);
     if (sent != sizeof(handshake_send)) {
-        perror("send handshake");
+        if (sent < 0) perror("send handshake");
+        else fprintf(stderr, "send handshake: incomplete\n");
         close(g_sock);
         g_sock = -1;
         return -1;
     }
 
-    for (int i = 0; i < 2000; i++) {
+    printf("Handshake sent, waiting for response...\n");
+
+    for (int i = 0; i < 10000; i++) {
         HandshakePacket hp;
         memset(&hp, 0, sizeof(hp));
 
@@ -139,9 +167,10 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
                 break;
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                usleep(1000);
-                continue;
+                usleep(5000);  // 5ms sleep
+                break;
             }
+            perror("recv");
             break;
         }
 
@@ -153,7 +182,7 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
             recv_buffer_len = 0;
             return 0;
         }
-        usleep(1000);
+        usleep(5000);
     }
 
     fprintf(stderr, "Handshake timed out\n");

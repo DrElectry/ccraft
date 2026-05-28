@@ -40,6 +40,7 @@ int lookup_atlas[] = {
     32,32,32,32,32,32,  // ROSE
     33,33,33,33,33,33,  // GRASS_CROSS
     14,14,14,14,14,14,  // BORDER
+    15,15,15,15,15,15,  // PLANKS
 };
 
 int lookup_transparent[] = {
@@ -61,6 +62,7 @@ int lookup_transparent[] = {
     1, // ROSE
     1, // GRASS_CROSS
     0, // BORDER
+    0, // PLANKS
 };
 
 int lookup_sounds[] = {
@@ -82,6 +84,7 @@ int lookup_sounds[] = {
     0, // ROSE
     0, // GRASS_CROSS
     1, // BORDER
+    3, // PLANKS
 };
 
 int lookup_cross[] = {
@@ -103,6 +106,7 @@ int lookup_cross[] = {
     1, // ROSE
     1, // GRASS_CROSS
     0, // BORDER
+    0, // PLANKS
 };
 
 int lookup_ignorecollision[] = {
@@ -124,6 +128,7 @@ int lookup_ignorecollision[] = {
     1, // ROSE
     1, // GRASS_CROSS
     0, // BORDER
+    0, // PLANKS
 };
 
 static inline int is_cross_block(uint16_t tile_id) {

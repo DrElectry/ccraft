@@ -309,8 +309,18 @@ void server_start(Server* server) {
         net_close(server->server_socket);
         return;
     }
+
+    printf(
+    " #####   #####  ######     #    ####### #######\n"
+    "#     # #     # #     #   # #   #          #   \n"
+    "#       #       #     #  #   #  #          #   \n"
+    "#       #       ######  #     # #####      #   \n"
+    "#       #       #   #   ####### #          #   \n"
+    "#     # #     # #    #  #     # #          #   \n"
+    " #####   #####  #     # #     # #          #   \n"
+    );
     
-    printf("CCRAFT server (version %s) \n", SERVER_VERSION);
+    printf("Server version is '%s' \n", SERVER_VERSION);
     server->running = 1;
     printf("Server listening on port %d\n", SERVER_PORT);
     

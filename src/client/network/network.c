@@ -71,6 +71,8 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
 
     net_set_nonblocking(g_sock);
 
+
+
     struct sockaddr_in a;
     memset(&a, 0, sizeof(a));
     a.sin_family = AF_INET;
@@ -86,6 +88,7 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
     int ret = connect(g_sock, (struct sockaddr*)&a, sizeof(a));
     if (ret < 0 && net_get_error() != NET_EINPROGRESS) {
         perror("connect");
+        fprintf(stderr, "connect ret=%d err=%d\n", ret, net_get_error());
         net_close(g_sock);
         g_sock = NET_INVALID_SOCKET;
         return -1;

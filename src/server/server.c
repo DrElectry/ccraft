@@ -2,15 +2,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <netinet/tcp.h>
 
 #include "globals.h"
+#include "net_platform.h"
+
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+#else
+    #include <arpa/inet.h>
+    #include <netinet/tcp.h>
+#endif
 
 Server global_server;   
 
@@ -20,8 +23,6 @@ typedef struct {
     int32_t z;
     uint16_t block_type;
 } ServerBlockChange;
-
-// just a little stinky tcp server
 
 static ServerBlockChange* g_pending_block_changes = NULL;
 static int g_pending_block_count = 0;
@@ -99,7 +100,6 @@ static void send_world_snapshot(Client* client) {
     pthread_mutex_unlock(&g_block_mutex);
 }
 
-
 void* handle_client(void* arg) {
     Client* client = (Client*)arg;
     uint8_t buffer[4096];
@@ -113,8 +113,8 @@ void* handle_client(void* arg) {
                         sizeof(HandshakePacket) - got, 0);
         if (bytes > 0) {
             got += bytes;
-        } else if (bytes == 0 || (bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
-            close(client->socket);
+        } else if (bytes == 0 || (bytes < 0 && net_get_error() != NET_EAGAIN && net_get_error() != NET_EWOULDBLOCK)) {
+            net_close(client->socket);
             return NULL;
         }
     }
@@ -140,7 +140,7 @@ void* handle_client(void* arg) {
     strncpy(handshake.nickname, client->nickname, MAX_NICKNAME_LEN);
     if (send(client->socket, &handshake, sizeof(handshake), 0) < 0) {
         perror("send handshake");
-        close(client->socket);
+        net_close(client->socket);
         return NULL;
     }
     
@@ -170,14 +170,13 @@ void* handle_client(void* arg) {
     
     int send_buf_size = 256 * 1024;
     int recv_buf_size = 256 * 1024;
-    setsockopt(client->socket, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
-    setsockopt(client->socket, SOL_SOCKET, SO_RCVBUF, &recv_buf_size, sizeof(recv_buf_size));
+    setsockopt(client->socket, SOL_SOCKET, SO_SNDBUF, (const char*)&send_buf_size, sizeof(send_buf_size));
+    setsockopt(client->socket, SOL_SOCKET, SO_RCVBUF, (const char*)&recv_buf_size, sizeof(recv_buf_size));
     
     while (client->active) {
         int bytes = recv(client->socket, buffer, sizeof(buffer), 0);
         
         if (bytes > 0) {
-            // now we are processing all of the packets
             int offset = 0;
             while (offset < bytes) {
                 uint8_t type = buffer[offset];
@@ -199,9 +198,10 @@ void* handle_client(void* arg) {
                     for (int i = 0; i < MAX_CLIENTS; i++) {
                         if (global_server.clients[i].active && global_server.clients[i].client_id != client->client_id) {
                             if (send(global_server.clients[i].socket, state, sizeof(PlayerStatePacket), 0) < 0) {
-                                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                                int err = net_get_error();
+                                if (err != NET_EAGAIN && err != NET_EWOULDBLOCK) {
                                     global_server.clients[i].active = 0;
-                                    close(global_server.clients[i].socket);
+                                    net_close(global_server.clients[i].socket);
                                 }
                             }
                         }
@@ -211,7 +211,7 @@ void* handle_client(void* arg) {
                 }
                 else if (type == PKT_BLOCK_UPDATE) {
                     if (offset + sizeof(BlockUpdatePacket) > bytes) {
-                        break; // incomplete packet, wait for next recv
+                        break;
                     }
                     BlockUpdatePacket* block = (BlockUpdatePacket*)(buffer + offset);
                     
@@ -221,9 +221,10 @@ void* handle_client(void* arg) {
                     for (int i = 0; i < MAX_CLIENTS; i++) {
                         if (global_server.clients[i].active) {
                             if (send(global_server.clients[i].socket, block, sizeof(BlockUpdatePacket), 0) < 0) {
-                                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                                int err = net_get_error();
+                                if (err != NET_EAGAIN && err != NET_EWOULDBLOCK) {
                                     global_server.clients[i].active = 0;
-                                    close(global_server.clients[i].socket);
+                                    net_close(global_server.clients[i].socket);
                                 }
                             }
                         }
@@ -240,13 +241,16 @@ void* handle_client(void* arg) {
         else if (bytes == 0) {
             break;
         }
-        else if (bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-            break;
+        else if (bytes < 0) {
+            int err = net_get_error();
+            if (err != NET_EAGAIN && err != NET_EWOULDBLOCK) {
+                break;
+            }
         }
     }
     
     client->active = 0;
-    close(client->socket);
+    net_close(client->socket);
     
     char disconnect_nickname[MAX_NICKNAME_LEN];
     strncpy(disconnect_nickname, client->nickname, MAX_NICKNAME_LEN);
@@ -279,13 +283,13 @@ void server_init(Server* server) {
 
 void server_start(Server* server) {
     server->server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server->server_socket < 0) {
+    if (server->server_socket == NET_INVALID_SOCKET) {
         perror("socket");
         return;
     }
     
     int opt = 1;
-    setsockopt(server->server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(server->server_socket, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
     
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
@@ -293,15 +297,15 @@ void server_start(Server* server) {
     server_addr.sin_port = htons(SERVER_PORT);
     server_addr.sin_addr.s_addr = INADDR_ANY;
     
-    if (bind(server->server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+    if (bind(server->server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == NET_SOCKET_ERROR) {
         perror("bind");
-        close(server->server_socket);
+        net_close(server->server_socket);
         return;
     }
     
-    if (listen(server->server_socket, MAX_CLIENTS) < 0) {
+    if (listen(server->server_socket, MAX_CLIENTS) == NET_SOCKET_ERROR) {
         perror("listen");
-        close(server->server_socket);
+        net_close(server->server_socket);
         return;
     }
     
@@ -315,29 +319,29 @@ void server_start(Server* server) {
     while (server->running) {
         FD_ZERO(&read_fds);
         FD_SET(server->server_socket, &read_fds);
-        int max_fd = server->server_socket;
+        int max_fd = (int)server->server_socket;
         
         pthread_mutex_lock(&server->clients_mutex);
         for (int i = 0; i < MAX_CLIENTS; i++) {
             if (server->clients[i].active) {
                 FD_SET(server->clients[i].socket, &read_fds);
-                if (server->clients[i].socket > max_fd) {
-                    max_fd = server->clients[i].socket;
+                if ((int)server->clients[i].socket > max_fd) {
+                    max_fd = (int)server->clients[i].socket;
                 }
             }
         }
         pthread_mutex_unlock(&server->clients_mutex);
         
-        if (select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0) {
+        if (net_select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0) {
             break;
         }
         
         if (FD_ISSET(server->server_socket, &read_fds)) {
             struct sockaddr_in client_addr;
             socklen_t client_len = sizeof(client_addr);
-            int client_socket = accept(server->server_socket, (struct sockaddr*)&client_addr, &client_len);
+            net_socket_t client_socket = accept(server->server_socket, (struct sockaddr*)&client_addr, &client_len);
 
-            if (client_socket < 0) {
+            if (client_socket == NET_INVALID_SOCKET) {
                 perror("accept");
                 continue;
             }
@@ -346,7 +350,11 @@ void server_start(Server* server) {
             inet_ntop(AF_INET, &(client_addr.sin_addr), client_ip, INET_ADDRSTRLEN);
             
             int flag = 1;
+#ifdef _WIN32
+            setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, (const char*)&flag, sizeof(int));
+#else
             setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
+#endif
             
             int slot = -1;
             pthread_mutex_lock(&server->clients_mutex);
@@ -366,11 +374,9 @@ void server_start(Server* server) {
                 memset(server->clients[slot].pos, 0, sizeof(server->clients[slot].pos));
                 memset(server->clients[slot].rot, 0, sizeof(server->clients[slot].rot));
                 pthread_create(&server->clients[slot].thread, NULL, handle_client, &server->clients[slot]);
-                
-                //printf("%s connected\n", client_ip);
             } else {
                 printf("Server full, rejecting connection from %s\n", client_ip);
-                close(client_socket);
+                net_close(client_socket);
             }
             pthread_mutex_unlock(&server->clients_mutex);
         }
@@ -381,10 +387,11 @@ void server_broadcast(Server* server, const void* data, size_t size, uint32_t ex
     pthread_mutex_lock(&server->clients_mutex);
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (server->clients[i].active && server->clients[i].client_id != exclude_id) {
-            if (send(server->clients[i].socket, data, size, 0) < 0) {
-                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+            if (send(server->clients[i].socket, (const char*)data, size, 0) < 0) {
+                int err = net_get_error();
+                if (err != NET_EAGAIN && err != NET_EWOULDBLOCK) {
                     server->clients[i].active = 0;
-                    close(server->clients[i].socket);
+                    net_close(server->clients[i].socket);
                 }
             }
         }
@@ -402,11 +409,11 @@ void server_stop(Server* server) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (server->clients[i].active) {
             server->clients[i].active = 0;
-            close(server->clients[i].socket);
+            net_close(server->clients[i].socket);
         }
     }
     pthread_mutex_unlock(&server->clients_mutex);
-    close(server->server_socket);
+    net_close(server->server_socket);
     pthread_mutex_destroy(&server->clients_mutex);
     
     pthread_mutex_lock(&g_block_mutex);

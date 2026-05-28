@@ -6,9 +6,10 @@
 #include "packets.h"
 
 #include "globals.h"
+#include "net_platform.h"
 
 typedef struct {
-    int socket;
+    net_socket_t socket;
     pthread_t thread;
     uint32_t client_id;
     char nickname[MAX_NICKNAME_LEN];

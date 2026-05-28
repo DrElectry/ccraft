@@ -1,4 +1,4 @@
-#include "input.h"
+#include "core/input.h"
 
 static int prev_keys[512];
 static int curr_keys[512];

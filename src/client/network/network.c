@@ -109,7 +109,7 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
 
     int so_error;
     socklen_t len = sizeof(so_error);
-    getsockopt(g_sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+    getsockopt(g_sock, SOL_SOCKET, SO_ERROR, (char*)&so_error, &len);
     if (so_error != 0) {
         fprintf(stderr, "Connection failed: %s\n", strerror(so_error));
         net_close(g_sock);

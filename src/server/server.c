@@ -91,7 +91,7 @@ static void send_world_snapshot(Client* client) {
         blocks[i].block_type = g_pending_block_changes[i].block_type;
     }
     
-    send(client->socket, buffer, data_size, 0);
+    send(client->socket, (const char*)buffer, (int)data_size, 0);
     free(buffer);
     
     printf("Sent world snapshot with %d block changes to client %u\n", 
@@ -138,7 +138,7 @@ void* handle_client(void* arg) {
     handshake.client_id = client->client_id;
     handshake.seed = WORLD_SEED;
     strncpy(handshake.nickname, client->nickname, MAX_NICKNAME_LEN);
-    if (send(client->socket, &handshake, sizeof(handshake), 0) < 0) {
+    if (send(client->socket, (const char*)&handshake, (int)sizeof(handshake), 0) < 0) {
         perror("send handshake");
         net_close(client->socket);
         return NULL;
@@ -154,19 +154,20 @@ void* handle_client(void* arg) {
     pthread_mutex_lock(&global_server.clients_mutex);
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (global_server.clients[i].active && global_server.clients[i].client_id != client->client_id) {
-            send(global_server.clients[i].socket, &spawn, sizeof(spawn), 0);
+            send(global_server.clients[i].socket, (const char*)&spawn, (int)sizeof(spawn), 0);
             PlayerSpawnPacket existing;
             existing.type = PKT_PLAYER_SPAWN;
             existing.client_id = global_server.clients[i].client_id;
             memcpy(existing.pos, global_server.clients[i].pos, sizeof(existing.pos));
             memcpy(existing.rot, global_server.clients[i].rot, sizeof(existing.rot));
             strncpy(existing.nickname, global_server.clients[i].nickname, MAX_NICKNAME_LEN);
-            send(client->socket, &existing, sizeof(existing), 0);
+            send(client->socket, (const char*)&existing, (int)sizeof(existing), 0);
         }
     }
     pthread_mutex_unlock(&global_server.clients_mutex);
     
     send_world_snapshot(client);
+    
     
     int send_buf_size = 256 * 1024;
     int recv_buf_size = 256 * 1024;
@@ -197,7 +198,7 @@ void* handle_client(void* arg) {
                     pthread_mutex_lock(&global_server.clients_mutex);
                     for (int i = 0; i < MAX_CLIENTS; i++) {
                         if (global_server.clients[i].active && global_server.clients[i].client_id != client->client_id) {
-                            if (send(global_server.clients[i].socket, state, sizeof(PlayerStatePacket), 0) < 0) {
+                            if (send(global_server.clients[i].socket, (const char*)state, (int)sizeof(PlayerStatePacket), 0) < 0) {
                                 int err = net_get_error();
                                 if (err != NET_EAGAIN && err != NET_EWOULDBLOCK) {
                                     global_server.clients[i].active = 0;
@@ -220,7 +221,7 @@ void* handle_client(void* arg) {
                     pthread_mutex_lock(&global_server.clients_mutex);
                     for (int i = 0; i < MAX_CLIENTS; i++) {
                         if (global_server.clients[i].active) {
-                            if (send(global_server.clients[i].socket, block, sizeof(BlockUpdatePacket), 0) < 0) {
+                            if (send(global_server.clients[i].socket, (const char*)block, (int)sizeof(BlockUpdatePacket), 0) < 0) {
                                 int err = net_get_error();
                                 if (err != NET_EAGAIN && err != NET_EWOULDBLOCK) {
                                     global_server.clients[i].active = 0;
@@ -262,7 +263,7 @@ void* handle_client(void* arg) {
     pthread_mutex_lock(&global_server.clients_mutex);
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (global_server.clients[i].active) {
-            send(global_server.clients[i].socket, &despawn, sizeof(despawn), 0);
+            send(global_server.clients[i].socket, (const char*)&despawn, (int)sizeof(despawn), 0);
         }
     }
     pthread_mutex_unlock(&global_server.clients_mutex);

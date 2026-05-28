@@ -13,11 +13,12 @@
     #define NET_SOCKET_ERROR   SOCKET_ERROR
 #else
     #include <sys/socket.h>
-    #include <arpa/inet.h>
     #include <unistd.h>
     #include <fcntl.h>
     #include <errno.h>
     #include <sys/select.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
 
     typedef int net_socket_t;
     #define NET_INVALID_SOCKET (-1)

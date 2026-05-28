@@ -92,7 +92,7 @@ static inline int net_get_error(void) {
 static inline int net_select(int nfds, fd_set *readfds, fd_set *writefds,
                              fd_set *exceptfds, struct timeval *timeout) {
 #ifdef _WIN32
-    return select(0, readfds, writefds, exceptfds, timeout);
+    return select(nfds, readfds, writefds, exceptfds, timeout);
 #else
     return select(nfds, readfds, writefds, exceptfds, timeout);
 #endif

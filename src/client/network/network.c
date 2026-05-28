@@ -136,13 +136,13 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
 
     printf("Handshake sent, waiting for response...\n");
 
-    for (int i = 0; i < 10000; i++) {
-        HandshakePacket hp;
-        memset(&hp, 0, sizeof(hp));
+    HandshakePacket hp;
+    memset(&hp, 0, sizeof(hp));
 
-        size_t got = 0;
-        uint8_t* dst = (uint8_t*)&hp;
+    size_t got = 0;
+    uint8_t* dst = (uint8_t*)&hp;
 
+    for (int i = 0; i < 10000 && got < sizeof(HandshakePacket); i++) {
         while (got < sizeof(HandshakePacket)) {
             ssize_t n = recv(g_sock, (char*)(dst + got), sizeof(HandshakePacket) - got, 0);
             if (n > 0) {

@@ -29,6 +29,10 @@ void main() {
     if (data.a < 0.1) {
         discard;
     }
+
+    if (id == 18u) {
+        data.rgb*=4.0;
+    }
     
     gAlbedo = data.rgb;
     gNormal = normalize(out_normal);

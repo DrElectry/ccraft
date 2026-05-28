@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include "network/network.h"
 #include "utils/rand.h"
+#include "network/net_platform.h"
 #include <time.h>
 
 uint64_t __servseed;

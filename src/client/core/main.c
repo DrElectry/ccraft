@@ -24,6 +24,10 @@ int __servport;
 char __nickname[32];
 
 int main(int argc, char* argv[]) {
+    if (net_init() != 0) {
+        fprintf(stderr, "Failed to initialize Winsock\n");
+        return 1;
+    }
     rng_seed((unsigned int)time(NULL));
     char nnickname[32];
     snprintf(nnickname, sizeof(nnickname), "player%i", RAND(0, 9999));

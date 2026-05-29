@@ -692,6 +692,13 @@ static void project_point_to_screen(vec3 world_pos, float* out_x, float* out_y) 
         return;
     }
 
+    // behind the screen
+    if (view_pos[2] > 0.0f || clip[3] < 0.0f) {
+        *out_x = -1.0f;
+        *out_y = -1.0f;
+        return;
+    }
+
     float ndc_x = clip[0] / clip[3];
     float ndc_y = clip[1] / clip[3];
 

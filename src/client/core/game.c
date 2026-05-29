@@ -678,6 +678,27 @@ void game_draw(float time) {
     glEnable(GL_CULL_FACE);
 }
 
+static void project_point_to_screen(vec3 world_pos, float* out_x, float* out_y) {
+    vec4 wp = { world_pos[0], world_pos[1], world_pos[2], 1.0f };
+    vec4 view_pos;
+    vec4 clip;
+
+    glm_mat4_mulv(view, wp, view_pos);
+    glm_mat4_mulv(projection, view_pos, clip);
+
+    if (clip[3] == 0.0f) {
+        *out_x = 0.0f;
+        *out_y = 0.0f;
+        return;
+    }
+
+    float ndc_x = clip[0] / clip[3];
+    float ndc_y = clip[1] / clip[3];
+
+    *out_x = (ndc_x * 0.5f + 0.5f) * (float)WIDTH;
+    *out_y = (0.5f - ndc_y * 0.5f) * (float)HEIGHT;
+}
+
 void game_draw_hud() {
     text_draw(&name);
     text_draw(&fps);

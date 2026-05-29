@@ -273,8 +273,8 @@ void text_draw(HText* text) {
         if (tmp_vertices) {
             memcpy(tmp_vertices, cache->vertices, cache->vertex_count * 4 * sizeof(float));
             for (int i = 0; i < cache->vertex_count; i++) {
-                tmp_vertices[i * 4 + 0] += 2.0f;
-                tmp_vertices[i * 4 + 1] += 2.0f;
+                tmp_vertices[i * 4 + 0] += 3.0f;
+                tmp_vertices[i * 4 + 1] += 3.0f;
             }
 
             size_t vertex_bytes = cache->vertex_count * 4 * sizeof(float);

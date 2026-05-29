@@ -5,6 +5,13 @@
 
 #include <stdint.h>
 
+#define CHAR_WIDTH 16
+#define CHAR_HEIGHT 16
+#define ATLAS_COLS 16
+#define ATLAS_ROWS 16
+#define MAX_GLYPHS_PER_TEXT 256
+#define MAX_TEXTS 256
+
 typedef struct {
     char* data;
     uint8_t color; // 4 bits color 4 bits foreground

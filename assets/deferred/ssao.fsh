@@ -105,7 +105,7 @@ void main()
         if (depthDiff <= bias)
             continue;
 
-        float ndot = dot(n0, normalize(tbn * ssaoKernel[i]));
+        float ndot = max(0.0, dot(n0, normalize(tbn * ssaoKernel[i])));
 
         float range = smoothstep(0.0, 1.0,
             ssaoRadius / (abs(depthDiff) + 0.0001));

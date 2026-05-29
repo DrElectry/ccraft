@@ -76,6 +76,10 @@ static float place_delay = 0.0f;
 
 static float g_footstep_delay = 0.0f;
 
+static uint8_t remote_names_active[CLIENT_MAX_REMOTES] = {0};
+static char remote_nick_buf[CLIENT_MAX_REMOTES][MAX_NICKNAME_LEN];
+static HText remote_names[CLIENT_MAX_REMOTES];
+
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
     glm_lookat(light_pos, target, up, light_view);
@@ -677,6 +681,40 @@ void game_draw(float time) {
 void game_draw_hud() {
     text_draw(&name);
     text_draw(&fps);
+
+    if (!__onserv) return;
+
+    RemotePlayer* remotes = network_get_remote_players();
+    for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
+        if (!remotes[i].active) continue;
+
+        if (!remote_names_active[i]) {
+            remote_nick_buf[i][0] = '\0';
+            memcpy(remote_nick_buf[i], remotes[i].nickname, MAX_NICKNAME_LEN);
+            for (int j = 0; remotes[i].nickname[j] && j < MAX_NICKNAME_LEN - 1; j++) {
+                char c = remotes[i].nickname[j];
+                remote_nick_buf[i][j] = (c >= 'a' && c <= 'z') ? (c - 'a' + 'A') : c;
+            }
+            remote_nick_buf[i][MAX_NICKNAME_LEN - 1] = '\0';
+            
+            text_create(&remote_names[i], remote_nick_buf[i], 0x0F, 0, 0);
+            remote_names_active[i] = 1;
+        }
+
+        float sx = 0.0f, sy = 0.0f;
+        vec3 wp = { remotes[i].pos[0], remotes[i].pos[1] + 1.8f, remotes[i].pos[2] };
+        project_point_to_screen(wp, &sx, &sy);
+
+        int text_length = strlen(remote_nick_buf[i]);
+        int text_width = text_length * CHAR_WIDTH;
+        int text_height = CHAR_HEIGHT;
+        
+        remote_names[i].x = (int)sx - (text_width / 2);
+        remote_names[i].y = (int)sy - text_height - 4;
+
+        text_create(&remote_names[i], remote_nick_buf[i], 0x0F, remote_names[i].x, remote_names[i].y);
+        text_draw(&remote_names[i]);
+    }
 }
 
 void game_destroy() {

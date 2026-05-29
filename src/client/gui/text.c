@@ -14,13 +14,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#define CHAR_WIDTH 16
-#define CHAR_HEIGHT 16
-#define ATLAS_COLS 16
-#define ATLAS_ROWS 16
-#define MAX_GLYPHS_PER_TEXT 256
-#define MAX_TEXTS 256
-
 static const char CHARSET[] =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ!/<>:+1234567890&=().? ";
 
@@ -272,11 +265,38 @@ void text_draw(HText* text) {
 
     texture_bind(&text_atlas, 0);
     program_set_int(&text_program, "tex_atlas", 0);
+
+    // shadow pass (0x08)
+
+    if (cache->vertex_count > 0) {
+        float* tmp_vertices = malloc(cache->vertex_count * 4 * sizeof(float));
+        if (tmp_vertices) {
+            memcpy(tmp_vertices, cache->vertices, cache->vertex_count * 4 * sizeof(float));
+            for (int i = 0; i < cache->vertex_count; i++) {
+                tmp_vertices[i * 4 + 0] += 2.0f;
+                tmp_vertices[i * 4 + 1] += 2.0f;
+            }
+
+            size_t vertex_bytes = cache->vertex_count * 4 * sizeof(float);
+            glBindBuffer(GL_ARRAY_BUFFER, global_vbo.id);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, vertex_bytes, tmp_vertices);
+
+            program_set_uint(&text_program, "color_data", (uint32_t)0x08u);
+            vao_bind(&global_vao);
+            glDrawElements(GL_TRIANGLES, text->index_count, GL_UNSIGNED_INT, NULL);
+
+            glBufferSubData(GL_ARRAY_BUFFER, 0, vertex_bytes, cache->vertices);
+            free(tmp_vertices);
+        }
+    }
+
     program_set_uint(&text_program, "color_data", (uint32_t)text->color);
+
 
     vao_bind(&global_vao);
     glDrawElements(GL_TRIANGLES, text->index_count, GL_UNSIGNED_INT, NULL);
 }
+
 
 void text_free(HText* text) {
     if (!text) return;

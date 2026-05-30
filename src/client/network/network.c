@@ -54,6 +54,8 @@ static RemotePlayer* alloc_remote(uint32_t client_id) {
             memset(&g_remotes[i], 0, sizeof(g_remotes[i]));
             g_remotes[i].active = 1;
             g_remotes[i].client_id = client_id;
+            g_remotes[i].pos_lerp = 1.0f;
+            g_remotes[i].rot_lerp = 1.0f;
             return &g_remotes[i];
         }
     }
@@ -228,6 +230,12 @@ static void process_packet(const uint8_t* data, size_t len) {
 
         memcpy(rp->pos, sp->pos, sizeof(rp->pos));
         memcpy(rp->rot, sp->rot, sizeof(rp->rot));
+        memcpy(rp->prev_pos, rp->pos, sizeof(rp->prev_pos));
+        memcpy(rp->prev_rot, rp->rot, sizeof(rp->prev_rot));
+        memcpy(rp->target_pos, rp->pos, sizeof(rp->target_pos));
+        memcpy(rp->target_rot, rp->rot, sizeof(rp->target_rot));
+        rp->pos_lerp = 1.0f;
+        rp->rot_lerp = 1.0f;
         rp->on_ground = 0;
         strncpy(rp->nickname, sp->nickname, MAX_NICKNAME_LEN - 1);
         rp->nickname[MAX_NICKNAME_LEN - 1] = '\0';
@@ -260,8 +268,15 @@ static void process_packet(const uint8_t* data, size_t len) {
             printf("Remote state (implicit spawn): id=%u, nickname='%s'\n", st->client_id, st->nickname);
         }
 
-        memcpy(rp->pos, st->pos, sizeof(rp->pos));
-        memcpy(rp->rot, st->rot, sizeof(rp->rot));
+        memcpy(rp->prev_pos, rp->pos, sizeof(rp->prev_pos));
+        memcpy(rp->prev_rot, rp->rot, sizeof(rp->prev_rot));
+
+        memcpy(rp->target_pos, st->pos, sizeof(rp->target_pos));
+        memcpy(rp->target_rot, st->rot, sizeof(rp->target_rot));
+
+        rp->pos_lerp = 0.0f;
+        rp->rot_lerp = 0.0f;
+
         rp->on_ground = st->on_ground;
         if (strlen(st->nickname) > 0) {
             strncpy(rp->nickname, st->nickname, MAX_NICKNAME_LEN - 1);
@@ -292,6 +307,32 @@ static void process_packet(const uint8_t* data, size_t len) {
             rebuild_chunks_for_block(&world, blocks[i].x, blocks[i].y, blocks[i].z);
         }
         return;
+    }
+}
+
+void network_update_remotes(float dt) {
+    float step = dt * UPDATE_RATE;
+    for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
+        RemotePlayer* rp = &g_remotes[i];
+        if (!rp->active) continue;
+
+        if (rp->pos_lerp < 1.0f) {
+            rp->pos_lerp += step;
+            if (rp->pos_lerp > 1.0f) rp->pos_lerp = 1.0f;
+            float t = rp->pos_lerp;
+            rp->pos[0] = rp->prev_pos[0] + t * (rp->target_pos[0] - rp->prev_pos[0]);
+            rp->pos[1] = rp->prev_pos[1] + t * (rp->target_pos[1] - rp->prev_pos[1]);
+            rp->pos[2] = rp->prev_pos[2] + t * (rp->target_pos[2] - rp->prev_pos[2]);
+        }
+
+        if (rp->rot_lerp < 1.0f) {
+            rp->rot_lerp += step;
+            if (rp->rot_lerp > 1.0f) rp->rot_lerp = 1.0f;
+            float t = rp->rot_lerp;
+            rp->rot[0] = rp->prev_rot[0] + t * (rp->target_rot[0] - rp->prev_rot[0]);
+            rp->rot[1] = rp->prev_rot[1] + t * (rp->target_rot[1] - rp->prev_rot[1]);
+            rp->rot[2] = rp->prev_rot[2] + t * (rp->target_rot[2] - rp->prev_rot[2]);
+        }
     }
 }
 

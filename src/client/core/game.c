@@ -395,6 +395,8 @@ void game_tick(float dt) {
 
         }
     }
+
+    network_update_remotes(dt);
 }
 
 void game_shadow_pass(void) {
@@ -484,20 +486,20 @@ void game_shadow_pass(void) {
 
             if (remote_players[i]) {
                 remote_players[i]->pos[0] = remotes[i].pos[0];
-                remote_players[i]->pos[1] = remotes[i].pos[1]+0.9f;
+                remote_players[i]->pos[1] = remotes[i].pos[1] + 0.9f;
                 remote_players[i]->pos[2] = remotes[i].pos[2];
-                
+
                 remote_players[i]->rot[0] = 0.0f;
                 remote_players[i]->rot[1] = remotes[i].rot[1];
                 remote_players[i]->rot[2] = 0.0f;
-                
+
                 remote_players[i]->scale[0] = 0.5f;
                 remote_players[i]->scale[1] = 0.5f;
                 remote_players[i]->scale[2] = 0.5f;
 
                 texture_bind(&player_tex, 0);
                 texture_bind(&player_shininess, 1);
-                
+
                 gfx_render(remote_players[i], &c);
             }
         }
@@ -602,20 +604,20 @@ void game_draw(float time) {
 
             if (remote_players[i]) {
                 remote_players[i]->pos[0] = remotes[i].pos[0];
-                remote_players[i]->pos[1] = remotes[i].pos[1]+0.9f; // hardcoded yuck yuck
+                remote_players[i]->pos[1] = remotes[i].pos[1] + 0.9f;
                 remote_players[i]->pos[2] = remotes[i].pos[2];
-                
+
                 remote_players[i]->rot[0] = 0.0f;
                 remote_players[i]->rot[1] = remotes[i].rot[1];
                 remote_players[i]->rot[2] = 0.0f;
-                
+
                 remote_players[i]->scale[0] = 0.5f;
                 remote_players[i]->scale[1] = 0.5f;
                 remote_players[i]->scale[2] = 0.5f;
 
                 texture_bind(&player_tex, 0);
                 texture_bind(&player_shininess, 1);
-                
+
                 gfx_render(remote_players[i], &c);
             }
         }

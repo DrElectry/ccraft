@@ -22,7 +22,7 @@ As i said, multiplayer is under construction, it is still very buggy, but if you
 - custom nickname can be setupped using the -nickname <NAME> flag, otherwise the nickname will be created automatically.
 - enjoy.
 
-The server runs on 64 TPS without any interpolation.
+The server runs on 32 TPS with interpolation.
 
 ## CREDITS
 

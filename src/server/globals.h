@@ -2,7 +2,7 @@
 #define GLOBALS_H
 
 #define MAX_CLIENTS 32
-#define UPDATE_RATE 5
+#define UPDATE_RATE 32
 
 #define SERVER_PORT 25565
 #define SERVER_VERSION "0.30"

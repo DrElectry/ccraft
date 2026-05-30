@@ -5,7 +5,7 @@
 
 #define CLIENT_MAX_REMOTES 32
 
-#define UPDATE_RATE 5 // same as in src/server/globals.h
+#define UPDATE_RATE 32 // same as in src/server/globals.h
 #define MAX_NICKNAME_LEN 32
 
 typedef struct {

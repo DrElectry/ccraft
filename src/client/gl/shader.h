@@ -20,6 +20,7 @@ void program_use(Program* program);
 
 // uniforms
 void program_set_mat4(Program* program, const char* name, const float* mat);
+void program_set_mat4_array(Program* program, const char* name, const float* mat, int count);
 void program_set_mat3(Program* program, const char* name, const float* mat);
 void program_set_int(Program* program, const char* name, const int num);
 void program_set_float(Program* program, const char* name, const float num);

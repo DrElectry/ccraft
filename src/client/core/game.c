@@ -409,16 +409,21 @@ void game_shadow_pass(void) {
     float orthoSize = 32.0f;
     float texelSize = (orthoSize * 2.0f) / 2048.0f;
 
-    vec3 light_pos;
-    glm_vec3_add(player.camera.pos, light_offset, light_pos);
+    vec3 snapped_player_pos;
+    snapped_player_pos[0] = floorf(player.camera.pos[0]);
+    snapped_player_pos[1] = floorf(player.camera.pos[1]+0.01f);
+    snapped_player_pos[2] = floorf(player.camera.pos[2]);
 
-    glm_lookat(light_pos, player.camera.pos, up, light_view);
+    vec3 light_pos;
+    glm_vec3_add(snapped_player_pos, light_offset, light_pos);
+
+    glm_lookat(light_pos, snapped_player_pos, up, light_view);
 
     mat4 light_view_tmp;
     glm_mat4_copy(light_view, light_view_tmp);
 
     vec4 centerLS;
-    glm_mat4_mulv(light_view_tmp, (vec4){ player.camera.pos[0], player.camera.pos[1], player.camera.pos[2], 1.0f }, centerLS);
+    glm_mat4_mulv(light_view_tmp, (vec4){ snapped_player_pos[0], snapped_player_pos[1], snapped_player_pos[2], 1.0f }, centerLS);
 
     centerLS[0] = floorf(centerLS[0] / texelSize) * texelSize;
     centerLS[1] = floorf(centerLS[1] / texelSize) * texelSize;
@@ -429,7 +434,7 @@ void game_shadow_pass(void) {
     glm_mat4_mulv(inv_light_view, centerLS, snapped_world);
 
     glm_vec3_add((vec3){ snapped_world[0], snapped_world[1], snapped_world[2] }, light_offset, light_pos);
-    glm_lookat(light_pos, player.camera.pos, up, light_view);
+    glm_lookat(light_pos, snapped_player_pos, up, light_view);
 
     glm_mat4_mul(light_proj, light_view, light_space_matrix);
 

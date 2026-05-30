@@ -137,43 +137,28 @@ vec3 SSRBlur(vec2 uv)
     
     float metallic = clamp(Metallic, 0.0, 1.0);
     
-    // metallic 0.0 = minimal blur (3 samples)
-    // metallic 0.5 = medium heavy blur (9 samples)
-    // metallic 1.0 = heavy blur (15 samples)
-    int maxSamples = int(mix(3, 15, metallic));
-    float weights[16] = float[](
-        0.0,    // unused
-        0.65,   // kernel size 1
-        0.55,   // kernel size 2
-        0.48,   // kernel size 3
-        0.42,   // kernel size 4
-        0.37,   // kernel size 5
-        0.33,   // kernel size 6
-        0.29,   // kernel size 7
-        0.26,   // kernel size 8
-        0.23,   // kernel size 9
-        0.20,   // kernel size 10
-        0.17,   // kernel size 11
-        0.14,   // kernel size 12
-        0.11,   // kernel size 13
-        0.08,   // kernel size 14
-        0.05    // kernel size 15
-    );
+    int maxSamples = int(mix(15, 31, metallic));
+    float radius = mix(1.5, 4.0, metallic);
+    
+    float weights[32];
+    for (int i = 1; i <= 31; i++) {
+        float t = float(i) / float(maxSamples);
+        weights[i] = exp(-t * t * 2.5) * (1.0 - t * 0.3);
+    }
     
     vec3 result = texture(gAlbedo, uv).rgb;
     
     if (maxSamples > 1)
     {
-        vec3 horiz = result * 0.5;
-        float totalWeight = 0.5;
+        vec3 horiz = result * 0.3;
+        float totalWeight = 0.3;
         
         for (int x = 1; x <= maxSamples; x++)
         {
-            float weight = weights[maxSamples] * (1.0 - pow(float(x) / float(maxSamples), 1.5));
-            weight *= (1.0 - (float(x) / float(maxSamples + 2)));
+            float weight = weights[x] * (1.0 - pow(float(x) / float(maxSamples + 1), 1.2));
             
-            vec2 offsetPos = vec2(float(x) * texel.x * 1.5, 0.0);
-            vec2 offsetNeg = vec2(-float(x) * texel.x * 1.5, 0.0);
+            vec2 offsetPos = vec2(float(x) * texel.x * radius, 0.0);
+            vec2 offsetNeg = vec2(-float(x) * texel.x * radius, 0.0);
             
             horiz += texture(gAlbedo, uv + offsetPos).rgb * weight;
             horiz += texture(gAlbedo, uv + offsetNeg).rgb * weight;
@@ -181,16 +166,16 @@ vec3 SSRBlur(vec2 uv)
         }
         
         horiz /= totalWeight;
-        vec3 vert = horiz * 0.5;
-        totalWeight = 0.5;
+        
+        vec3 vert = horiz * 0.3;
+        totalWeight = 0.3;
         
         for (int y = 1; y <= maxSamples; y++)
         {
-            float weight = weights[maxSamples] * (1.0 - pow(float(y) / float(maxSamples), 1.5));
-            weight *= (1.0 - (float(y) / float(maxSamples + 2)));
+            float weight = weights[y] * (1.0 - pow(float(y) / float(maxSamples + 1), 1.2));
             
-            vec2 offsetPos = vec2(0.0, float(y) * texel.y * 1.5);
-            vec2 offsetNeg = vec2(0.0, -float(y) * texel.y * 1.5);
+            vec2 offsetPos = vec2(0.0, float(y) * texel.y * radius);
+            vec2 offsetNeg = vec2(0.0, -float(y) * texel.y * radius);
             
             vert += texture(gAlbedo, uv + offsetPos).rgb * weight;
             vert += texture(gAlbedo, uv + offsetNeg).rgb * weight;

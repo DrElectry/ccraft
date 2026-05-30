@@ -10,9 +10,9 @@ uniform sampler2D bloomTexture;
 void main()
 {
     float aperture = 0.10;
-    float blurIntensity = 16.0;
+    float blurIntensity = 32.0;
 
-    float nearFocus = 0.95;
+    float nearFocus = 0.975;
     float farFocus  = 0.99;
 
     vec2 texel = 1.0 / vec2(textureSize(colorTexture, 0));
@@ -28,37 +28,47 @@ void main()
 
     vec3 col = texture(colorTexture, out_uv).rgb;
 
-    vec2 offsets[12];
-    offsets[0]  = vec2( 0.0,  0.0);
-    offsets[1]  = vec2( 0.326,  0.405);
-    offsets[2]  = vec2(-0.326,  0.405);
-    offsets[3]  = vec2( 0.841,  0.144);
-    offsets[4]  = vec2(-0.841,  0.144);
-    offsets[5]  = vec2( 0.290, -0.789);
-    offsets[6]  = vec2(-0.290, -0.789);
-    offsets[7]  = vec2( 0.935, -0.353);
-    offsets[8]  = vec2(-0.935, -0.353);
-    offsets[9]  = vec2( 0.150,  0.980);
-    offsets[10] = vec2(-0.150,  0.980);
-    offsets[11] = vec2( 0.000, -0.500);
+    vec2 offsets[17];
+    offsets[0]  = vec2( 0.0000,  0.0000);
+    offsets[1]  = vec2( 0.3260,  0.4050);
+    offsets[2]  = vec2(-0.3260,  0.4050);
+    offsets[3]  = vec2( 0.8410,  0.1440);
+    offsets[4]  = vec2(-0.8410,  0.1440);
+    offsets[5]  = vec2( 0.2900, -0.7890);
+    offsets[6]  = vec2(-0.2900, -0.7890);
+    offsets[7]  = vec2( 0.9350, -0.3530);
+    offsets[8]  = vec2(-0.9350, -0.3530);
+    offsets[9]  = vec2( 0.1500,  0.9800);
+    offsets[10] = vec2(-0.1500,  0.9800);
+    offsets[11] = vec2( 0.0000, -0.5000);
+    offsets[12] = vec2( 0.7000,  0.7000);
+    offsets[13] = vec2(-0.7000,  0.7000);
+    offsets[14] = vec2( 0.7000, -0.7000);
+    offsets[15] = vec2(-0.7000, -0.7000);
+    offsets[16] = vec2( 0.0000,  0.9800);
 
-    float weights[12];
-    weights[0]  = 0.18;
-    weights[1]  = 0.10;
-    weights[2]  = 0.10;
-    weights[3]  = 0.08;
-    weights[4]  = 0.08;
-    weights[5]  = 0.07;
-    weights[6]  = 0.07;
+    float weights[17];
+    weights[0]  = 0.12;
+    weights[1]  = 0.08;
+    weights[2]  = 0.08;
+    weights[3]  = 0.07;
+    weights[4]  = 0.07;
+    weights[5]  = 0.06;
+    weights[6]  = 0.06;
     weights[7]  = 0.05;
     weights[8]  = 0.05;
-    weights[9]  = 0.06;
-    weights[10] = 0.06;
-    weights[11] = 0.06;
+    weights[9]  = 0.05;
+    weights[10] = 0.05;
+    weights[11] = 0.05;
+    weights[12] = 0.04;
+    weights[13] = 0.04;
+    weights[14] = 0.04;
+    weights[15] = 0.04;
+    weights[16] = 0.05;
 
     vec3 sum = vec3(0.0);
 
-    for (int i = 0; i < 12; i++)
+    for (int i = 0; i < 17; i++)
     {
         vec2 offset = offsets[i] * radius * texel;
         sum += texture(colorTexture, out_uv + offset).rgb * weights[i];

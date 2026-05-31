@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <float.h>
 
 static int cmp_vec3_key(const void* a, const void* b) {
     float ta = ((const Vec3Key*)a)->time;
@@ -465,6 +466,33 @@ static Skinned* build_skinned_mesh(cgltf_data* data, cgltf_mesh* mesh, cgltf_ski
     return skinned;
 }
 
+static float gltf_compute_feet_align_y(Skinned* skinned) {
+    if (!skinned || !skinned->vertices || skinned->vertex_count <= 0) {
+        return 0.0f;
+    }
+
+    float min_y = FLT_MAX;
+    for (int i = 0; i < skinned->vertex_count; i++) {
+        vec4 local = {
+            skinned->vertices[i * 16 + 0],
+            skinned->vertices[i * 16 + 1],
+            skinned->vertices[i * 16 + 2],
+            1.0f
+        };
+        vec4 world;
+        glm_mat4_mulv(skinned->node_transform, local, world);
+        if (world[1] < min_y) {
+            min_y = world[1];
+        }
+    }
+
+    if (min_y == FLT_MAX) {
+        return 0.0f;
+    }
+
+    return -min_y;
+}
+
 int gltf_load(const char* path, GLTFModel* out) {
     if (!path || !out) {
         printf("gltf_load: Invalid parameters\n");
@@ -550,6 +578,9 @@ int gltf_load(const char* path, GLTFModel* out) {
         cgltf_node_transform_world(mesh_node, world_mat);
         mat4_from_cgltf(world_mat, out->skinned->node_transform);
     }
+
+    out->feet_align_y = gltf_compute_feet_align_y(out->skinned);
+    printf("gltf_load: feet_align_y = %.3f\n", out->feet_align_y);
     
     out->animation_count = (int)data->animations_count; // pls just work i am here suffering
     if (out->animation_count > 0) {

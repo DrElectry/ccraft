@@ -9,6 +9,7 @@ typedef struct {
     AnimationClip** animations;
     int animation_count;
     char** animation_names;
+    float feet_align_y;
 } GLTFModel;
 
 int gltf_load(const char* path, GLTFModel* out);

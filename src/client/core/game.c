@@ -38,13 +38,20 @@ File world_file;
 Shader a, b, water_vertex, water_fragment, ba, bbb;
 Program c, water_prog, bc;
 
-static GLTFModel player_model;
+static GLTFModel player_walk_model;
+static GLTFModel player_jump_model;
 static AnimState* walk_anim;
+static AnimState* jump_anim; // used for time stepping only; per-remote playback handled separately
 static Program skinned_prog;
 
-vec3 body_pos;
+typedef struct {
+    AnimState* walk_state;
+    Skinned* skinned;
+} RemoteAnim;
 
-static Render_request* remote_players[CLIENT_MAX_REMOTES] = {NULL};
+static RemoteAnim remote_anim[CLIENT_MAX_REMOTES];
+
+vec3 body_pos;
 
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix, hand_model;
 mat4 prev_view_proj;
@@ -87,6 +94,71 @@ static uint8_t remote_names_active[CLIENT_MAX_REMOTES] = {0};
 static char remote_nick_buf[CLIENT_MAX_REMOTES][MAX_NICKNAME_LEN];
 static HText remote_names[CLIENT_MAX_REMOTES];
 
+// PlayerStatePacket.on_ground is used as the walking flag (wasd held) over the network
+static void remote_anim_cleanup(int i) {
+    if (remote_anim[i].walk_state) {
+        anim_state_destroy(remote_anim[i].walk_state);
+        remote_anim[i].walk_state = NULL;
+    }
+    if (remote_anim[i].skinned) {
+        free(remote_anim[i].skinned);
+        remote_anim[i].skinned = NULL;
+    }
+}
+
+static void draw_remote_player(int i, const RemotePlayer* rp, float dt, const mat4 proj, const mat4 view_mat) {
+    if (!rp->active || !player_walk_model.skinned || !walk_anim) {
+        return;
+    }
+
+    int walking = rp->on_ground != 0;
+
+    if (!remote_anim[i].skinned) {
+        remote_anim[i].skinned = malloc(sizeof(Skinned));
+        *remote_anim[i].skinned = *player_walk_model.skinned;
+        remote_anim[i].skinned->gpu.anim = NULL;
+    }
+
+    Skinned* sk = remote_anim[i].skinned;
+    sk->gpu.skeleton = player_walk_model.skeleton;
+
+    if (!remote_anim[i].walk_state) {
+        remote_anim[i].walk_state = anim_state_create(walk_anim->clip);
+        remote_anim[i].walk_state->loop = 1;
+        remote_anim[i].walk_state->speed = 1.0f;
+    }
+
+    if (walking) {
+        anim_state_play(remote_anim[i].walk_state);
+        anim_state_update(remote_anim[i].walk_state, dt);
+    } else {
+        remote_anim[i].walk_state->current_time = 0.1f;
+        remote_anim[i].walk_state->is_playing = 0;
+    }
+    sk->gpu.anim = remote_anim[i].walk_state;
+
+    float foot_y = player_walk_model.feet_align_y * sk->scale[1]-0.5f;
+    sk->pos[0] = rp->pos[0];
+    sk->pos[1] = rp->pos[1] + foot_y;
+    sk->pos[2] = rp->pos[2];
+    sk->rot[0] = 0.0f;
+    sk->rot[1] = rp->rot[1];
+    sk->rot[2] = 0.0f;
+    sk->scale[0] = 0.5f;
+    sk->scale[1] = 0.5f;
+    sk->scale[2] = 0.5f;
+
+    program_use(&skinned_prog);
+    texture_bind(&player_tex, 0);
+    texture_bind(&player_shininess, 1);
+    program_set_int(&skinned_prog, "tex", 0);
+    program_set_int(&skinned_prog, "roug", 1);
+    program_set_mat4(&skinned_prog, "projection", (float*)proj);
+    program_set_mat4(&skinned_prog, "view", (float*)view_mat);
+
+    skinned_render(sk, &skinned_prog, 0.0f);
+}
+
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
     glm_lookat(light_pos, target, up, light_view);
@@ -98,7 +170,7 @@ void game_init() {
         rng_seed(__servseed);
     } else {
         if (file_exists("worlds/main.dat")) {
-        world_file = file_open("worlds/main.dat");
+            world_file = file_open("worlds/main.dat");
         } else {
             printf("worlds/main.dat does not exist, creating a new world...\n");
             new_world("worlds/main.dat");
@@ -109,7 +181,6 @@ void game_init() {
         memcpy(&seed, world_file.data + 6, 8);
 
         rng_seed(seed);
-
     }
     world_init(&world);
 
@@ -129,13 +200,6 @@ void game_init() {
 
     sound_init();
 
-    File vr = file_open("assets/tile/tile.vsh");
-    File fr = file_open("assets/tile/tile.fsh");
-    File vb = file_open("assets/things/hand.vsh");
-    File fb = file_open("assets/things/hand.fsh");
-    File water_vr = file_open("assets/tile/tile_water.vsh");
-    File water_fr = file_open("assets/tile/tile_water.fsh");
-
     texture_create(&texture_atlas, "assets/textures/terrain.png");
     texture_create(&roughness, "assets/textures/shiny.png");
     
@@ -147,34 +211,12 @@ void game_init() {
 
     player_init(&player);
 
-    Shader vert, frag;
-    vert.type = GL_VERTEX_SHADER;
-    frag.type = GL_FRAGMENT_SHADER;
-    
-    File vsh = file_open("assets/things/skin.vsh");
-    File fsh = file_open("assets/things/skin.fsh");
-    shader_create(&vert, vsh.data);
-    shader_create(&frag, fsh.data);
-    program_create(&skinned_prog, &vert, &frag);
+    gfx_program_create(&skinned_prog, "assets/things/skin.vsh", "assets/things/skin.fsh");
     skinned_program_init(&skinned_prog);
 
-    a.type = GL_VERTEX_SHADER;
-    b.type = GL_FRAGMENT_SHADER;
-    ba.type = GL_VERTEX_SHADER;
-    bbb.type = GL_FRAGMENT_SHADER;
-    water_vertex.type = GL_VERTEX_SHADER;
-    water_fragment.type = GL_FRAGMENT_SHADER;
-
-    shader_create(&a, vr.data);
-    shader_create(&b, fr.data);
-    shader_create(&water_vertex, water_vr.data);
-    shader_create(&water_fragment, water_fr.data);
-    shader_create(&ba, vb.data);
-    shader_create(&bbb, fb.data);
-
-    program_create(&c, &a, &b);
-    program_create(&bc, &ba, &bbb);
-    program_create(&water_prog, &water_vertex, &water_fragment);
+    gfx_program_create(&c, "assets/tile/tile.vsh", "assets/tile/tile.fsh");
+    gfx_program_create(&bc, "assets/things/hand.vsh", "assets/things/hand.fsh");
+    gfx_program_create(&water_prog, "assets/tile/tile_water.vsh", "assets/tile/tile_water.fsh");
 
     input_init(&input_manager, _win->glwin);
 
@@ -205,16 +247,12 @@ void game_init() {
 
     player_get_pos(&player, body_pos);
 
-    sound_t* ambient;
-
-    ambient = sound_load("assets/sounds/ambient.wav");
+    sound_t* ambient = sound_load("assets/sounds/ambient.wav");
     sound_set_looping(ambient, true);
     sound_set_volume(ambient, 0.2f);
     sound_play(ambient);
 
-    sound_t* music;
-
-    music = sound_load("assets/sounds/taswell.wav");
+    sound_t* music = sound_load("assets/sounds/taswell.wav");
     sound_set_looping(music, true);
     sound_set_volume(music, 0.5f);
     sound_play(music);
@@ -230,44 +268,30 @@ void game_init() {
     text->scale[1]=0.5f;
     text->scale[2]=0.5f;
 
-    if (!gltf_load("assets/models/walk.glb", &player_model)) {
+    if (!gltf_load("assets/models/player_walk.glb", &player_walk_model)) {
         printf("Failed to load walk.glb\n");
         return;
     }
     
-    printf("Loaded: bones=%d, animations=%d\n", 
-           player_model.skeleton->bone_count,
-           player_model.animation_count);
-    
-    for (int i = 0; i < player_model.animation_count; i++) {
-        printf("Anim %d: %s\n", i, player_model.animation_names[i]);
+    for (int i = 0; i < player_walk_model.animation_count; i++) {
+        printf("Anim %d: %s\n", i, player_walk_model.animation_names[i]);
     }
     
-    AnimationClip* walk = gltf_get_animation(&player_model, "mixamo.com");
-    if (!walk && player_model.animation_count > 0) {
-        walk = player_model.animations[0];
+    AnimationClip* walk = gltf_get_animation(&player_walk_model, "mixamo.com");
+    if (!walk && player_walk_model.animation_count > 0) {
+        walk = player_walk_model.animations[0];
     }
     
     if (walk) {
         walk_anim = anim_state_create(walk);
         walk_anim->loop = 1;
         walk_anim->speed = 1.0f;
-        anim_state_play(walk_anim);
-        player_model.skinned->gpu.skeleton = player_model.skeleton;
-        player_model.skinned->gpu.anim = walk_anim;
+        player_walk_model.skinned->gpu.skeleton = player_walk_model.skeleton;
     }
-    
-    player_model.skinned->scale[0] = 0.5f;
-    player_model.skinned->scale[1] = 0.5f;
-    player_model.skinned->scale[2] = 0.5f;
 }
 
 void game_tick(float dt) {
     glm_mat4_mul(projection, view, prev_view_proj);
-
-    if (walk_anim) {
-        anim_state_update(walk_anim, dt);
-    }
 
     packs_ensure_loaded();
 
@@ -307,11 +331,12 @@ void game_tick(float dt) {
         if (now - last_send >= 1.0f / UPDATE_RATE) {
             vec3 player_pos;
             player_get_pos(&player, player_pos);
+            uint8_t walking = (input_down(&input_manager, GLFW_KEY_W) || input_down(&input_manager, GLFW_KEY_A) || input_down(&input_manager, GLFW_KEY_S) || input_down(&input_manager, GLFW_KEY_D)) ? 1 : 0;
             network_send_player_state(
                 network_get_local_client_id(),
                 player_pos,
                 player.camera.rot,
-                0
+                walking
             );
             last_send = now;
         }
@@ -529,32 +554,7 @@ void game_shadow_pass(void) {
         RemotePlayer* remotes = network_get_remote_players();
         for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
             if (!remotes[i].active) continue;
-
-            if (!remote_players[i]) {
-                remote_players[i] = obj_load_render_request("assets/models/player.obj");
-                if (remote_players[i]) {
-                    gfx_packet_static_request(remote_players[i]);
-                }
-            }
-
-            if (remote_players[i]) {
-                remote_players[i]->pos[0] = remotes[i].pos[0];
-                remote_players[i]->pos[1] = remotes[i].pos[1] + 0.9f;
-                remote_players[i]->pos[2] = remotes[i].pos[2];
-
-                remote_players[i]->rot[0] = 0.0f;
-                remote_players[i]->rot[1] = remotes[i].rot[1];
-                remote_players[i]->rot[2] = 0.0f;
-
-                remote_players[i]->scale[0] = 0.5f;
-                remote_players[i]->scale[1] = 0.5f;
-                remote_players[i]->scale[2] = 0.5f;
-
-                texture_bind(&player_tex, 0);
-                texture_bind(&player_shininess, 1);
-
-                gfx_render(remote_players[i], &c);
-            }
+            draw_remote_player(i, &remotes[i], 0.0f, light_proj, light_view);
         }
     }
 
@@ -620,6 +620,10 @@ void game_shadow_pass(void) {
 }
 
 void game_draw(float time) {
+    float dt = time - last_time;
+    last_time = time;
+    if (dt <= 0.0f) dt = 0.016f;
+
     program_use(&c);
     texture_bind(&texture_atlas, 0);
     texture_bind(&roughness, 1);
@@ -646,33 +650,11 @@ void game_draw(float time) {
 
         RemotePlayer* remotes = network_get_remote_players();
         for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
-            if (!remotes[i].active) continue;
-
-            if (!remote_players[i]) {
-                remote_players[i] = obj_load_render_request("assets/models/player.obj");
-                if (remote_players[i]) {
-                    gfx_packet_static_request(remote_players[i]);
-                }
+            if (!remotes[i].active) {
+                remote_anim_cleanup(i);
+                continue;
             }
-
-            if (remote_players[i]) {
-                remote_players[i]->pos[0] = remotes[i].pos[0];
-                remote_players[i]->pos[1] = remotes[i].pos[1] + 0.9f;
-                remote_players[i]->pos[2] = remotes[i].pos[2];
-
-                remote_players[i]->rot[0] = 0.0f;
-                remote_players[i]->rot[1] = remotes[i].rot[1];
-                remote_players[i]->rot[2] = 0.0f;
-
-                remote_players[i]->scale[0] = 0.5f;
-                remote_players[i]->scale[1] = 0.5f;
-                remote_players[i]->scale[2] = 0.5f;
-
-                texture_bind(&player_tex, 0);
-                texture_bind(&player_shininess, 1);
-
-                gfx_render(remote_players[i], &c);
-            }
+            draw_remote_player(i, &remotes[i], dt, projection, view);
         }
     }
 
@@ -736,28 +718,6 @@ void game_draw(float time) {
     glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
 
     glEnable(GL_CULL_FACE);
-
-    if (player_model.skinned && player_model.skinned->gpu.skeleton) {
-        program_use(&skinned_prog);
-        texture_bind(&player_tex, 0);
-        texture_bind(&player_shininess, 1);
-        program_set_int(&skinned_prog, "tex", 0);
-        program_set_int(&skinned_prog, "roug", 1);
-        program_set_mat4(&skinned_prog, "projection", (float*)projection);
-        program_set_mat4(&skinned_prog, "view", (float*)view);
-
-        player_model.skinned->pos[0] = body_pos[0];
-        player_model.skinned->pos[1] = body_pos[1];
-        player_model.skinned->pos[2] = body_pos[2];
-        player_model.skinned->rot[0] = 0.0f;
-        player_model.skinned->rot[1] = 0.0f;
-        player_model.skinned->rot[2] = 0.0f;
-        player_model.skinned->scale[0] = 0.5f;
-        player_model.skinned->scale[1] = 0.5f;
-        player_model.skinned->scale[2] = 0.5f;
-
-        skinned_render(player_model.skinned, &skinned_prog, 0.0f);
-    }
 }
 
 static void project_point_to_screen(vec3 world_pos, float* out_x, float* out_y) {
@@ -833,10 +793,7 @@ void game_destroy() {
     }
     
     for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
-        if (remote_players[i]) {
-            free(remote_players[i]);
-            remote_players[i] = NULL;
-        }
+        remote_anim_cleanup(i);
     }
     
     sound_pack_destroy();
@@ -846,8 +803,9 @@ void game_destroy() {
         anim_state_destroy(walk_anim);
         walk_anim = NULL;
     }
-    if (player_model.skinned) {
-        player_model.skinned->gpu.anim = NULL;
+    if (player_walk_model.skinned) {
+        player_walk_model.skinned->gpu.anim = NULL;
     }
-    gltf_free(&player_model);
+    gltf_free(&player_walk_model);
+    gltf_free(&player_jump_model);
 }

@@ -3,6 +3,7 @@
 #include "gl/vbo.h"
 #include "gl/ebo.h"
 #include "gl/shader.h"
+#include "utils/fm.h"
 #include <cglm/cglm.h>
 
 void gfx_packet_static_request(Render_request* r) { // pos, rot and scale will be ignored, this is only cache setup
@@ -23,6 +24,23 @@ void gfx_packet_static_request(Render_request* r) { // pos, rot and scale will b
     r->cache.vbo = vbo;
     r->cache.vao = vao;
     r->cache.ebo = ebo;
+}
+
+void gfx_program_create(Program* a, char* vsrc, char* fsrc) {
+    Shader vertex, fragment;
+
+    vertex.type = GL_VERTEX_SHADER;
+    fragment.type = GL_FRAGMENT_SHADER;
+
+    File vsr, fsr;
+
+    vsr = file_open(vsrc);
+    fsr = file_open(fsrc);
+
+    shader_create(&vertex, vsr.data);
+    shader_create(&fragment, fsr.data);
+
+    program_create(a, &vertex, &fragment);
 }
 
 void gfx_render(Render_request *r, Program* active_program) {

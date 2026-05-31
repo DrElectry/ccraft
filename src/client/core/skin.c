@@ -134,6 +134,80 @@ void skeleton_calc_global_matrices(Skeleton* s, mat4* locals, mat4* globals) {
     free(resolved);
 }
 
+int skeleton_find_bone(Skeleton* s, const char* name) {
+    if (!s || !name) return -1;
+    for (int i = 0; i < s->bone_count; i++) {
+        if (s->bone_names[i] && strcmp(s->bone_names[i], name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+float skinned_angle_diff(float from, float to) {
+    float diff = to - from;
+    while (diff > (float)M_PI) diff -= 2.0f * (float)M_PI;
+    while (diff < -(float)M_PI) diff += 2.0f * (float)M_PI;
+    return diff;
+}
+
+float skinned_update_body_yaw(float body_yaw, float look_yaw, float dt) {
+    const float head_limit = (float)M_PI * 0.1f;
+    const float body_turn_speed = 8.0f;
+
+    float diff = skinned_angle_diff(body_yaw, look_yaw);
+    if (fabsf(diff) <= head_limit || dt <= 0.0f) {
+        return body_yaw;
+    }
+
+    float target = look_yaw - copysignf(head_limit, diff);
+    float step = body_turn_speed * dt;
+    float delta = skinned_angle_diff(body_yaw, target);
+
+    if (fabsf(delta) <= step) {
+        return target;
+    }
+
+    return body_yaw + copysignf(step, delta);
+}
+
+float skinned_head_yaw_offset(float body_yaw, float look_yaw) {
+    return skinned_angle_diff(body_yaw, look_yaw);
+}
+
+static void bone_apply_local_yaw_pitch(mat4 local, float pitch, float yaw) {
+    if (fabsf(pitch) < 0.0001f && fabsf(yaw) < 0.0001f) return;
+
+    mat4 rot_y, rot_x, delta, result;
+    glm_mat4_identity(rot_y);
+    glm_mat4_identity(rot_x);
+    glm_rotate(rot_y, yaw, (vec3){0.0f, 1.0f, 0.0f});
+    glm_rotate(rot_x, pitch, (vec3){-1.0f, 0.0f, 0.0f});
+    glm_mat4_mul(rot_y, rot_x, delta);
+    glm_mat4_mul(local, delta, result);
+    glm_mat4_copy(result, local);
+}
+
+static void skinned_apply_look(Skeleton* skeleton, mat4* local_mats, const SkinnedLook* look) {
+    if (!look || !look->enabled || look->head_bone < 0 || look->head_bone >= skeleton->bone_count) {
+        return;
+    }
+
+    if (look->neck_bone >= 0 && look->neck_bone < skeleton->bone_count) {
+        bone_apply_local_yaw_pitch(
+            local_mats[look->neck_bone],
+            look->head_pitch * 0.35f,
+            look->head_yaw * 0.35f
+        );
+    }
+
+    bone_apply_local_yaw_pitch(
+        local_mats[look->head_bone],
+        look->head_pitch * 0.65f,
+        look->head_yaw * 0.65f
+    );
+}
+
 void skeleton_set_bone_name(Skeleton* s, int index, const char* name) {
     if (index >= s->bone_count) return;
     if (s->bone_names[index]) free(s->bone_names[index]);
@@ -369,7 +443,7 @@ void skinned_cache(Skinned* s) {
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
-void skinned_render(Skinned* s, Program* active_program, float delta_time) {
+void skinned_render(Skinned* s, Program* active_program, float delta_time, const SkinnedLook* look) {
     if (!s || !s->gpu.skeleton) return;
 
 
@@ -411,6 +485,7 @@ void skinned_render(Skinned* s, Program* active_program, float delta_time) {
             glm_mat4_copy(s->gpu.skeleton->bone_offsets[i], local_mats[i]);
         }
     }
+    skinned_apply_look(s->gpu.skeleton, local_mats, look);
     skeleton_calc_global_matrices(s->gpu.skeleton, local_mats, global_mats);
     anim_get_final_matrices(s->gpu.skeleton, global_mats, final_mats);
 

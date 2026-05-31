@@ -47,9 +47,14 @@ static Program skinned_prog;
 typedef struct {
     AnimState* walk_state;
     Skinned* skinned;
+    float body_yaw;
+    int body_yaw_init;
 } RemoteAnim;
 
 static RemoteAnim remote_anim[CLIENT_MAX_REMOTES];
+
+static int bone_head = -1;
+static int bone_neck = -1;
 
 vec3 body_pos;
 
@@ -104,6 +109,8 @@ static void remote_anim_cleanup(int i) {
         free(remote_anim[i].skinned);
         remote_anim[i].skinned = NULL;
     }
+    remote_anim[i].body_yaw = 0.0f;
+    remote_anim[i].body_yaw_init = 0;
 }
 
 static void draw_remote_player(int i, const RemotePlayer* rp, float dt, const mat4 proj, const mat4 view_mat) {
@@ -137,16 +144,37 @@ static void draw_remote_player(int i, const RemotePlayer* rp, float dt, const ma
     }
     sk->gpu.anim = remote_anim[i].walk_state;
 
+    if (!remote_anim[i].body_yaw_init) {
+        remote_anim[i].body_yaw = rp->rot[1];
+        remote_anim[i].body_yaw_init = 1;
+    }
+
+    float look_yaw = rp->rot[1];
+    float look_pitch = rp->rot[0];
+    if (dt > 0.0f) {
+        remote_anim[i].body_yaw = skinned_update_body_yaw(remote_anim[i].body_yaw, look_yaw, dt);
+    }
+
+    float head_yaw = skinned_head_yaw_offset(remote_anim[i].body_yaw, look_yaw);
+
     float foot_y = player_walk_model.feet_align_y * sk->scale[1]-0.5f;
     sk->pos[0] = rp->pos[0];
     sk->pos[1] = rp->pos[1] + foot_y;
     sk->pos[2] = rp->pos[2];
     sk->rot[0] = 0.0f;
-    sk->rot[1] = rp->rot[1];
+    sk->rot[1] = remote_anim[i].body_yaw;
     sk->rot[2] = 0.0f;
     sk->scale[0] = 0.5f;
     sk->scale[1] = 0.5f;
     sk->scale[2] = 0.5f;
+
+    SkinnedLook look = {
+        .enabled = 1,
+        .head_yaw = head_yaw,
+        .head_pitch = look_pitch,
+        .head_bone = bone_head,
+        .neck_bone = bone_neck,
+    };
 
     program_use(&skinned_prog);
     texture_bind(&player_tex, 0);
@@ -156,7 +184,7 @@ static void draw_remote_player(int i, const RemotePlayer* rp, float dt, const ma
     program_set_mat4(&skinned_prog, "projection", (float*)proj);
     program_set_mat4(&skinned_prog, "view", (float*)view_mat);
 
-    skinned_render(sk, &skinned_prog, 0.0f);
+    skinned_render(sk, &skinned_prog, 0.0f, &look);
 }
 
 void game_init() {
@@ -287,6 +315,11 @@ void game_init() {
         walk_anim->loop = 1;
         walk_anim->speed = 1.0f;
         player_walk_model.skinned->gpu.skeleton = player_walk_model.skeleton;
+    }
+
+    if (player_walk_model.skeleton) {
+        bone_head = skeleton_find_bone(player_walk_model.skeleton, "mixamorig:Head");
+        bone_neck = skeleton_find_bone(player_walk_model.skeleton, "mixamorig:Neck");
     }
 }
 

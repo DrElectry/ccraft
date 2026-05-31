@@ -23,6 +23,7 @@
 #include "sound/sound_pack.h"
 #include "core/main.h"
 #include "network/network.h"
+#include "utils/gltf.h"
 #include <GLFW/glfw3.h>
 #include <string.h>
 
@@ -36,6 +37,10 @@ File world_file;
 
 Shader a, b, water_vertex, water_fragment, ba, bbb;
 Program c, water_prog, bc;
+
+static GLTFModel player_model;
+static AnimState* walk_anim;
+static Program skinned_prog;
 
 static Render_request* remote_players[CLIENT_MAX_REMOTES] = {NULL};
 
@@ -79,6 +84,55 @@ static float g_footstep_delay = 0.0f;
 static uint8_t remote_names_active[CLIENT_MAX_REMOTES] = {0};
 static char remote_nick_buf[CLIENT_MAX_REMOTES][MAX_NICKNAME_LEN];
 static HText remote_names[CLIENT_MAX_REMOTES];
+
+void init_skinned_shader() {
+    Shader vert, frag;
+    vert.type = GL_VERTEX_SHADER;
+    frag.type = GL_FRAGMENT_SHADER;
+    
+    File vsh = file_open("assets/things/skin.vsh");
+    File fsh = file_open("assets/things/skin.fsh");
+    shader_create(&vert, vsh.data);
+    shader_create(&frag, fsh.data);
+    program_create(&skinned_prog, &vert, &frag);
+}
+
+void load_player_model() {
+    if (!gltf_load("assets/models/walk.glb", &player_model)) {
+        printf("Failed to load walk.glb\n");
+        return;
+    }
+    
+    printf("Loaded: bones=%d, animations=%d\n", 
+           player_model.skeleton->bone_count,
+           player_model.animation_count);
+    
+    for (int i = 0; i < player_model.animation_count; i++) {
+        printf("Anim %d: %s\n", i, player_model.animation_names[i]);
+    }
+    
+    AnimationClip* walk = gltf_get_animation(&player_model, "mixamo.com");
+    if (!walk && player_model.animation_count > 0) {
+        walk = player_model.animations[0];
+    }
+    
+    if (walk) {
+        walk_anim = anim_state_create(walk);
+        walk_anim->loop = 1;
+        walk_anim->speed = 1.0f;
+        walk_anim->is_playing = 1;
+        player_model.skinned->gpu.anim = walk_anim;
+    }
+    
+    player_model.skinned->scale[0] = 0.5f;
+    player_model.skinned->scale[1] = 0.5f;
+    player_model.skinned->scale[2] = 0.5f;
+}
+
+void cleanup_player_model() {
+    if (walk_anim) anim_state_destroy(walk_anim);
+    gltf_free(&player_model);
+}
 
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
@@ -202,6 +256,9 @@ void game_init() {
     text = obj_load_render_request("assets/models/text.obj");
 
     player_get_pos(&player, text->pos);
+
+    init_skinned_shader();
+    load_player_model();
 
     text->pos[1]-=20.0f;
     text->pos[0]-=28.0f;

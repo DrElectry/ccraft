@@ -42,6 +42,8 @@ static GLTFModel player_model;
 static AnimState* walk_anim;
 static Program skinned_prog;
 
+vec3 body_pos;
+
 static Render_request* remote_players[CLIENT_MAX_REMOTES] = {NULL};
 
 mat4 projection, view, inv_projection, inv_view, light_proj, light_view, light_space_matrix, hand_model;
@@ -84,55 +86,6 @@ static float g_footstep_delay = 0.0f;
 static uint8_t remote_names_active[CLIENT_MAX_REMOTES] = {0};
 static char remote_nick_buf[CLIENT_MAX_REMOTES][MAX_NICKNAME_LEN];
 static HText remote_names[CLIENT_MAX_REMOTES];
-
-void init_skinned_shader() {
-    Shader vert, frag;
-    vert.type = GL_VERTEX_SHADER;
-    frag.type = GL_FRAGMENT_SHADER;
-    
-    File vsh = file_open("assets/things/skin.vsh");
-    File fsh = file_open("assets/things/skin.fsh");
-    shader_create(&vert, vsh.data);
-    shader_create(&frag, fsh.data);
-    program_create(&skinned_prog, &vert, &frag);
-}
-
-void load_player_model() {
-    if (!gltf_load("assets/models/walk.glb", &player_model)) {
-        printf("Failed to load walk.glb\n");
-        return;
-    }
-    
-    printf("Loaded: bones=%d, animations=%d\n", 
-           player_model.skeleton->bone_count,
-           player_model.animation_count);
-    
-    for (int i = 0; i < player_model.animation_count; i++) {
-        printf("Anim %d: %s\n", i, player_model.animation_names[i]);
-    }
-    
-    AnimationClip* walk = gltf_get_animation(&player_model, "mixamo.com");
-    if (!walk && player_model.animation_count > 0) {
-        walk = player_model.animations[0];
-    }
-    
-    if (walk) {
-        walk_anim = anim_state_create(walk);
-        walk_anim->loop = 1;
-        walk_anim->speed = 1.0f;
-        walk_anim->is_playing = 1;
-        player_model.skinned->gpu.anim = walk_anim;
-    }
-    
-    player_model.skinned->scale[0] = 0.5f;
-    player_model.skinned->scale[1] = 0.5f;
-    player_model.skinned->scale[2] = 0.5f;
-}
-
-void cleanup_player_model() {
-    if (walk_anim) anim_state_destroy(walk_anim);
-    gltf_free(&player_model);
-}
 
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
@@ -194,6 +147,17 @@ void game_init() {
 
     player_init(&player);
 
+    Shader vert, frag;
+    vert.type = GL_VERTEX_SHADER;
+    frag.type = GL_FRAGMENT_SHADER;
+    
+    File vsh = file_open("assets/things/skin.vsh");
+    File fsh = file_open("assets/things/skin.fsh");
+    shader_create(&vert, vsh.data);
+    shader_create(&frag, fsh.data);
+    program_create(&skinned_prog, &vert, &frag);
+    skinned_program_init(&skinned_prog);
+
     a.type = GL_VERTEX_SHADER;
     b.type = GL_FRAGMENT_SHADER;
     ba.type = GL_VERTEX_SHADER;
@@ -239,6 +203,8 @@ void game_init() {
     text_create(&name, "0.30", 0x0F, 0, 0);
     text_create(&fps, "FPS: 0", 0x0F, 0, 16);
 
+    player_get_pos(&player, body_pos);
+
     sound_t* ambient;
 
     ambient = sound_load("assets/sounds/ambient.wav");
@@ -257,19 +223,51 @@ void game_init() {
 
     player_get_pos(&player, text->pos);
 
-    init_skinned_shader();
-    load_player_model();
-
     text->pos[1]-=20.0f;
     text->pos[0]-=28.0f;
     text->pos[2]+=1.0f;
     text->scale[0]=0.5f;
     text->scale[1]=0.5f;
     text->scale[2]=0.5f;
+
+    if (!gltf_load("assets/models/walk.glb", &player_model)) {
+        printf("Failed to load walk.glb\n");
+        return;
+    }
+    
+    printf("Loaded: bones=%d, animations=%d\n", 
+           player_model.skeleton->bone_count,
+           player_model.animation_count);
+    
+    for (int i = 0; i < player_model.animation_count; i++) {
+        printf("Anim %d: %s\n", i, player_model.animation_names[i]);
+    }
+    
+    AnimationClip* walk = gltf_get_animation(&player_model, "mixamo.com");
+    if (!walk && player_model.animation_count > 0) {
+        walk = player_model.animations[0];
+    }
+    
+    if (walk) {
+        walk_anim = anim_state_create(walk);
+        walk_anim->loop = 1;
+        walk_anim->speed = 1.0f;
+        anim_state_play(walk_anim);
+        player_model.skinned->gpu.skeleton = player_model.skeleton;
+        player_model.skinned->gpu.anim = walk_anim;
+    }
+    
+    player_model.skinned->scale[0] = 0.5f;
+    player_model.skinned->scale[1] = 0.5f;
+    player_model.skinned->scale[2] = 0.5f;
 }
 
 void game_tick(float dt) {
     glm_mat4_mul(projection, view, prev_view_proj);
+
+    if (walk_anim) {
+        anim_state_update(walk_anim, dt);
+    }
 
     packs_ensure_loaded();
 
@@ -738,6 +736,28 @@ void game_draw(float time) {
     glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
 
     glEnable(GL_CULL_FACE);
+
+    if (player_model.skinned && player_model.skinned->gpu.skeleton) {
+        program_use(&skinned_prog);
+        texture_bind(&player_tex, 0);
+        texture_bind(&player_shininess, 1);
+        program_set_int(&skinned_prog, "tex", 0);
+        program_set_int(&skinned_prog, "roug", 1);
+        program_set_mat4(&skinned_prog, "projection", (float*)projection);
+        program_set_mat4(&skinned_prog, "view", (float*)view);
+
+        player_model.skinned->pos[0] = body_pos[0];
+        player_model.skinned->pos[1] = body_pos[1];
+        player_model.skinned->pos[2] = body_pos[2];
+        player_model.skinned->rot[0] = 0.0f;
+        player_model.skinned->rot[1] = 0.0f;
+        player_model.skinned->rot[2] = 0.0f;
+        player_model.skinned->scale[0] = 0.5f;
+        player_model.skinned->scale[1] = 0.5f;
+        player_model.skinned->scale[2] = 0.5f;
+
+        skinned_render(player_model.skinned, &skinned_prog, 0.0f);
+    }
 }
 
 static void project_point_to_screen(vec3 world_pos, float* out_x, float* out_y) {
@@ -821,4 +841,13 @@ void game_destroy() {
     
     sound_pack_destroy();
     world_destroy(&world);
+
+    if (walk_anim) {
+        anim_state_destroy(walk_anim);
+        walk_anim = NULL;
+    }
+    if (player_model.skinned) {
+        player_model.skinned->gpu.anim = NULL;
+    }
+    gltf_free(&player_model);
 }

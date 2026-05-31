@@ -1,7 +1,18 @@
 #include "skin.h"
+#include "glad.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+
+void skinned_program_init(Program* program) {
+    if (!program) return;
+    GLuint block = glGetUniformBlockIndex(program->id, "BoneData");
+    if (block == GL_INVALID_INDEX) {
+        printf("skinned_program_init: BoneData uniform block not found\n");
+        return;
+    }
+    glUniformBlockBinding(program->id, block, 0);
+}
 
 static void quat_norm(vec4 q) {
     float mag = sqrtf(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
@@ -68,10 +79,12 @@ Skeleton* skeleton_create(int bone_count) {
     s->bone_count = bone_count;
     s->inverse_bind_poses = malloc(sizeof(mat4) * bone_count);
     s->bone_offsets = malloc(sizeof(mat4) * bone_count);
+    s->parent_indices = malloc(sizeof(int) * bone_count);
     s->bone_names = malloc(sizeof(char*) * bone_count);
-    
+
     for (int i = 0; i < bone_count; i++) {
         s->bone_names[i] = NULL;
+        s->parent_indices[i] = -1;
         glm_mat4_identity(s->inverse_bind_poses[i]);
         glm_mat4_identity(s->bone_offsets[i]);
     }
@@ -84,9 +97,41 @@ void skeleton_destroy(Skeleton* s) {
         if (s->bone_names[i]) free(s->bone_names[i]);
     }
     free(s->bone_names);
+    free(s->parent_indices);
     free(s->inverse_bind_poses);
     free(s->bone_offsets);
     free(s);
+}
+
+void skeleton_set_parent(Skeleton* s, int index, int parent_index) {
+    if (index < s->bone_count) s->parent_indices[index] = parent_index;
+}
+
+void skeleton_calc_global_matrices(Skeleton* s, mat4* locals, mat4* globals) {
+    int* resolved = (int*)calloc((size_t)s->bone_count, sizeof(int));
+    if (!resolved) return;
+
+    for (int i = 0; i < s->bone_count; i++) {
+        glm_mat4_copy(locals[i], globals[i]);
+    }
+
+    for (int pass = 0; pass < s->bone_count; pass++) {
+        for (int i = 0; i < s->bone_count; i++) {
+            if (resolved[i]) continue;
+
+            int parent = s->parent_indices[i];
+            if (parent >= 0 && !resolved[parent]) continue;
+
+            if (parent < 0) {
+                glm_mat4_copy(locals[i], globals[i]);
+            } else {
+                glm_mat4_mul(globals[parent], locals[i], globals[i]);
+            }
+            resolved[i] = 1;
+        }
+    }
+
+    free(resolved);
 }
 
 void skeleton_set_bone_name(Skeleton* s, int index, const char* name) {
@@ -115,10 +160,28 @@ AnimationClip* animation_clip_create(const char* name) {
     return clip;
 }
 
+static void vec3_keys_push(Vec3Key** keys, int* count, float time, vec3 value) {
+    int n = *count;
+    *keys = realloc(*keys, sizeof(Vec3Key) * (size_t)(n + 1));
+    (*keys)[n].time = time;
+    glm_vec3_copy(value, (*keys)[n].value);
+    *count = n + 1;
+}
+
+static void quat_keys_push(QuatKey** keys, int* count, float time, vec4 value) {
+    int n = *count;
+    *keys = realloc(*keys, sizeof(QuatKey) * (size_t)(n + 1));
+    (*keys)[n].time = time;
+    glm_vec4_copy(value, (*keys)[n].value);
+    *count = n + 1;
+}
+
 void animation_clip_destroy(AnimationClip* clip) {
     if (!clip) return;
     for (int i = 0; i < clip->track_count; i++) {
-        if (clip->tracks[i].keyframes) free(clip->tracks[i].keyframes);
+        free(clip->tracks[i].pos_keys);
+        free(clip->tracks[i].rot_keys);
+        free(clip->tracks[i].scl_keys);
     }
     if (clip->tracks) free(clip->tracks);
     free(clip);
@@ -130,33 +193,17 @@ void animation_clip_add_track(AnimationClip* clip, BoneTrack track) {
     clip->track_count++;
 }
 
-void animation_clip_add_keyframe(AnimationClip* clip, int track_index, float time, TransformKey transform) {
-    if (track_index >= clip->track_count) return;
-    
-    BoneTrack* track = &clip->tracks[track_index];
-    track->keyframes = realloc(track->keyframes, sizeof(Keyframe) * (track->keyframe_count + 1));
-    
-    int insert = track->keyframe_count;
-    for (int i = 0; i < track->keyframe_count; i++) {
-        if (track->keyframes[i].time > time) {
-            insert = i;
-            break;
-        }
-    }
-    
-    if (insert != track->keyframe_count) {
-        for (int i = track->keyframe_count; i > insert; i--) {
-            track->keyframes[i] = track->keyframes[i - 1];
-        }
-    }
-    
-    track->keyframes[insert].time = time;
-    glm_vec3_copy(transform.position, track->keyframes[insert].transform.position);
-    glm_vec4_copy(transform.rotation, track->keyframes[insert].transform.rotation);
-    glm_vec3_copy(transform.scale, track->keyframes[insert].transform.scale);
-    track->keyframe_count++;
-    
-    if (time > clip->duration) clip->duration = time;
+void animation_track_add_pos_key(BoneTrack* track, float time, vec3 value) {
+    vec3_keys_push(&track->pos_keys, &track->pos_count, time, value);
+}
+
+void animation_track_add_rot_key(BoneTrack* track, float time, vec4 value) {
+    quat_norm(value);
+    quat_keys_push(&track->rot_keys, &track->rot_count, time, value);
+}
+
+void animation_track_add_scl_key(BoneTrack* track, float time, vec3 value) {
+    vec3_keys_push(&track->scl_keys, &track->scl_count, time, value);
 }
 
 AnimState* anim_state_create(AnimationClip* clip) {
@@ -201,37 +248,68 @@ void anim_state_update(AnimState* state, float delta_time) {
     }
 }
 
-static void get_interpolated(BoneTrack* track, float time, TransformKey* out) {
-    if (track->keyframe_count == 0) {
-        glm_vec3_zero(out->position);
-        glm_quat_identity(out->rotation);
-        glm_vec3_one(out->scale);
+static void sample_vec3_keys(Vec3Key* keys, int count, float time, const vec3 bind, vec3 out) {
+    if (count == 0) {
+        glm_vec3_copy(bind, out);
         return;
     }
-    
-    if (track->keyframe_count == 1 || time <= track->keyframes[0].time) {
-        glm_vec3_copy(track->keyframes[0].transform.position, out->position);
-        glm_vec4_copy(track->keyframes[0].transform.rotation, out->rotation);
-        glm_vec3_copy(track->keyframes[0].transform.scale, out->scale);
+    if (time <= keys[0].time) {
+        glm_vec3_copy(keys[0].value, out);
         return;
     }
-    
-    if (time >= track->keyframes[track->keyframe_count - 1].time) {
-        int last = track->keyframe_count - 1;
-        glm_vec3_copy(track->keyframes[last].transform.position, out->position);
-        glm_vec4_copy(track->keyframes[last].transform.rotation, out->rotation);
-        glm_vec3_copy(track->keyframes[last].transform.scale, out->scale);
+    if (time >= keys[count - 1].time) {
+        glm_vec3_copy(keys[count - 1].value, out);
         return;
     }
-    
-    int next = 1;
-    while (next < track->keyframe_count && track->keyframes[next].time < time) next++;
-    int prev = next - 1;
-    float t = (time - track->keyframes[prev].time) / (track->keyframes[next].time - track->keyframes[prev].time);
-    
-    vec3_lerp(track->keyframes[prev].transform.position, track->keyframes[next].transform.position, t, out->position);
-    vec3_lerp(track->keyframes[prev].transform.scale, track->keyframes[next].transform.scale, t, out->scale);
-    quat_slerp(track->keyframes[prev].transform.rotation, track->keyframes[next].transform.rotation, t, out->rotation);
+    for (int i = 1; i < count; i++) {
+        if (keys[i].time >= time) {
+            float t = (time - keys[i - 1].time) / (keys[i].time - keys[i - 1].time);
+            vec3_lerp(keys[i - 1].value, keys[i].value, t, out);
+            return;
+        }
+    }
+    glm_vec3_copy(bind, out);
+}
+
+static void sample_quat_keys(QuatKey* keys, int count, float time, const vec4 bind, vec4 out) {
+    if (count == 0) {
+        glm_vec4_copy(bind, out);
+        return;
+    }
+    if (time <= keys[0].time) {
+        glm_vec4_copy(keys[0].value, out);
+        return;
+    }
+    if (time >= keys[count - 1].time) {
+        glm_vec4_copy(keys[count - 1].value, out);
+        return;
+    }
+    for (int i = 1; i < count; i++) {
+        if (keys[i].time >= time) {
+            float t = (time - keys[i - 1].time) / (keys[i].time - keys[i - 1].time);
+            quat_slerp(keys[i - 1].value, keys[i].value, t, out);
+            return;
+        }
+    }
+    glm_vec4_copy(bind, out);
+}
+
+static void bind_pose_trs(const mat4 bind, vec3 pos, vec4 rot, vec3 scl) {
+    pos[0] = bind[3][0];
+    pos[1] = bind[3][1];
+    pos[2] = bind[3][2];
+    glm_mat4_quat(bind, rot);
+    glm_vec3_one(scl);
+}
+
+static void sample_bone_track(BoneTrack* track, float time, const mat4 bind_offset, TransformKey* out) {
+    vec3 bind_pos, bind_scl;
+    vec4 bind_rot;
+    bind_pose_trs(bind_offset, bind_pos, bind_rot, bind_scl);
+
+    sample_vec3_keys(track->pos_keys, track->pos_count, time, bind_pos, out->position);
+    sample_quat_keys(track->rot_keys, track->rot_count, time, bind_rot, out->rotation);
+    sample_vec3_keys(track->scl_keys, track->scl_count, time, bind_scl, out->scale);
 }
 
 void anim_calc_bone_matrices(AnimState* state, Skeleton* skeleton, mat4* out_matrices) {
@@ -244,10 +322,11 @@ void anim_calc_bone_matrices(AnimState* state, Skeleton* skeleton, mat4* out_mat
     for (int i = 0; i < state->clip->track_count; i++) {
         BoneTrack* track = &state->clip->tracks[i];
         if (track->bone_index >= skeleton->bone_count) continue;
-        
+        if (track->pos_count == 0 && track->rot_count == 0 && track->scl_count == 0) continue;
+
         TransformKey interp;
-        get_interpolated(track, state->current_time, &interp);
-        
+        sample_bone_track(track, state->current_time, skeleton->bone_offsets[track->bone_index], &interp);
+
         mat4 local;
         transform_to_mat(&interp, local);
         glm_mat4_copy(local, out_matrices[track->bone_index]);
@@ -263,50 +342,105 @@ void anim_get_final_matrices(Skeleton* skeleton, mat4* bone_transforms, mat4* ou
 void skinned_cache(Skinned* s) {
     vao_create(&s->gpu.vao);
     vao_bind(&s->gpu.vao);
-    
-    vbo_create(&s->gpu.vbo, s->vertices, s->vertex_count * sizeof(float));
-    ebo_create(&s->gpu.ebo, s->indices, s->index_count * sizeof(int));
-    
+
+    // 16 floats per vertex: pos3, uv2, normal3, boneIDs4, weights4
+    vbo_create(&s->gpu.vbo, s->vertices, s->vertex_count * 16 * sizeof(float));
+    glBindBuffer(GL_ARRAY_BUFFER, s->gpu.vbo.id);
     vbo_attr(0, 3, 16 * sizeof(float), 0);
     vbo_attr(1, 2, 16 * sizeof(float), 3);
     vbo_attr(2, 3, 16 * sizeof(float), 5);
+
     vbo_attr(3, 4, 16 * sizeof(float), 8);
     vbo_attr(4, 4, 16 * sizeof(float), 12);
-    
-    s->gpu.skeleton = NULL;
-    s->gpu.anim = NULL;
-    s->anim_name[0] = '\0';
+
+    if (s->indices && s->index_count > 0) {
+        ebo_create(&s->gpu.ebo, s->indices, (size_t)s->index_count * sizeof(int));
+    } else {
+        s->gpu.ebo.id = 0;
+    }
+
+    if (!s->gpu.index_type) {
+        s->gpu.index_type = GL_UNSIGNED_INT;
+    }
+
+    glGenBuffers(1, &s->gpu.bone_ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, s->gpu.bone_ubo);
+    glBufferData(GL_UNIFORM_BUFFER, SKIN_MAX_BONES * sizeof(mat4), NULL, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
 void skinned_render(Skinned* s, Program* active_program, float delta_time) {
-    if (!s->gpu.anim) return;
-    
+    if (!s || !s->gpu.skeleton) return;
+
+
+    int bone_count = s->gpu.skeleton->bone_count;
+    if (bone_count <= 0) return;
+    if (bone_count > SKIN_MAX_BONES) bone_count = SKIN_MAX_BONES;
+    if (s->index_count < 3 || s->gpu.ebo.id == 0) return;
+
     mat4 model;
+
     glm_mat4_identity(model);
+
     glm_translate(model, s->pos);
     glm_rotate(model, s->rot[0], (vec3){1.0f, 0.0f, 0.0f});
     glm_rotate(model, s->rot[1], (vec3){0.0f, 1.0f, 0.0f});
     glm_rotate(model, s->rot[2], (vec3){0.0f, 0.0f, 1.0f});
     glm_scale(model, s->scale);
-    
-    anim_state_update(s->gpu.anim, delta_time);
-    
-    int bone_count = s->gpu.skeleton->bone_count;
-    mat4* bone_mats = malloc(sizeof(mat4) * bone_count);
+
+    mat4 model_world;
+    glm_mat4_mul(model, s->node_transform, model_world);
+
+    mat4* local_mats = malloc(sizeof(mat4) * bone_count);
+    mat4* global_mats = malloc(sizeof(mat4) * bone_count);
     mat4* final_mats = malloc(sizeof(mat4) * bone_count);
-    
-    anim_calc_bone_matrices(s->gpu.anim, s->gpu.skeleton, bone_mats);
-    anim_get_final_matrices(s->gpu.skeleton, bone_mats, final_mats);
-    
+    if (!local_mats || !global_mats || !final_mats) {
+        free(local_mats);
+        free(global_mats);
+        free(final_mats);
+        return;
+    }
+
+    if (s->gpu.anim && delta_time > 0.0f) {
+        anim_state_update(s->gpu.anim, delta_time);
+    }
+    if (s->gpu.anim) {
+        anim_calc_bone_matrices(s->gpu.anim, s->gpu.skeleton, local_mats);
+    } else {
+        for (int i = 0; i < bone_count; i++) {
+            glm_mat4_copy(s->gpu.skeleton->bone_offsets[i], local_mats[i]);
+        }
+    }
+    skeleton_calc_global_matrices(s->gpu.skeleton, local_mats, global_mats);
+    anim_get_final_matrices(s->gpu.skeleton, global_mats, final_mats);
+
+    mat4 bone_ubo_data[SKIN_MAX_BONES];
+    for (int i = 0; i < SKIN_MAX_BONES; i++) {
+        glm_mat4_identity(bone_ubo_data[i]);
+    }
+    for (int i = 0; i < bone_count; i++) {
+        glm_mat4_copy(final_mats[i], bone_ubo_data[i]);
+    }
+
     program_use(active_program);
-    program_set_mat4(active_program, "model", (float*)model);
-    program_set_mat4_array(active_program, "bones", (float*)final_mats, bone_count);
-    
+    program_set_mat4(active_program, "model", (float*)model_world);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, s->gpu.bone_ubo);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, SKIN_MAX_BONES * sizeof(mat4), bone_ubo_data);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, s->gpu.bone_ubo);
+
+    GLint cull_enabled = glIsEnabled(GL_CULL_FACE);
+    glDisable(GL_CULL_FACE);
+
     vao_bind(&s->gpu.vao);
-    glDrawElements(GL_TRIANGLES, s->index_count, GL_UNSIGNED_INT, NULL);
-    
-    free(bone_mats);
+    glDrawElements(GL_TRIANGLES, s->index_count, s->gpu.index_type, NULL);
+
+    if (cull_enabled) glEnable(GL_CULL_FACE);
+
+    free(local_mats);
+    free(global_mats);
     free(final_mats);
+
 }
 
 void skinned_set_animation(Skinned* s, const char* name) {
@@ -326,10 +460,15 @@ void skinned_stop(Skinned* s) {
 }
 
 void skinned_destroy(Skinned* s) {
-    if (s->gpu.anim) {
-        anim_state_destroy(s->gpu.anim);
+    if (!s) return;
+    vbo_free(&s->gpu.vbo);
+    ebo_free(&s->gpu.ebo);
+    vao_free(&s->gpu.vao);
+    if (s->gpu.bone_ubo != 0) {
+        glDeleteBuffers(1, &s->gpu.bone_ubo);
+        s->gpu.bone_ubo = 0;
     }
-    if (s->gpu.skeleton) {
-        skeleton_destroy(s->gpu.skeleton);
-    }
+    free(s->vertices);
+    free(s->indices);
+    // gpu.skeleton / gpu.anim are non owning; freed by GLTFModel / game code.
 }

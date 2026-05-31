@@ -294,6 +294,17 @@ void player_get_pos(Player* p, vec3 out) {
     glm_vec3_copy(p->camera.pos, out);
 }
 
+void player_get_body_draw_pos(Player* p, vec3 out, float behind_distance) {
+    glm_vec3_copy(p->camera.pos, out);
+
+    vec3 flat_fwd = {p->camera.forward[0], 0.0f, p->camera.forward[2]};
+    float len = glm_vec3_norm(flat_fwd);
+    if (len < 0.0001f) return;
+
+    glm_vec3_scale(flat_fwd, 1.0f / len, flat_fwd);
+    glm_vec3_muladds(flat_fwd, -behind_distance, out);
+}
+
 void player_get_eye(Player* p, vec3 out) {
     glm_vec3_copy(p->camera.pos, out);
     out[1] += PLAYER_EYE_HEIGHT;

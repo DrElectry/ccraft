@@ -21,9 +21,21 @@ void vbo_attr(int layout, int size, int stride, int offset) {
     glEnableVertexAttribArray(layout);
 }
 
+void vbo_attr_i(int layout, int size, int stride, int offset) {
+    glVertexAttribIPointer(
+        layout,
+        size,
+        GL_INT,
+        stride,
+        (void*)(offset * sizeof(float))
+    );
+    glEnableVertexAttribArray(layout);
+}
+
 void vbo_free(VBO* vbo) {
     if (vbo && vbo->id != 0) {
         glDeleteBuffers(1, &vbo->id);
         vbo->id = 0;
     }
 }
+

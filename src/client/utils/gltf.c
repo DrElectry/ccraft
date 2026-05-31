@@ -1,16 +1,40 @@
 #include "utils/gltf.h"
-#define CGLTF_IMPLEMENTATION
+#define CGLTF_IMPLEMENTATION // even with this helper library, the parser is still huge
 #include "cgltf.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+static int cmp_vec3_key(const void* a, const void* b) {
+    float ta = ((const Vec3Key*)a)->time;
+    float tb = ((const Vec3Key*)b)->time;
+    return (ta > tb) - (ta < tb);
+}
+
+static int cmp_quat_key(const void* a, const void* b) {
+    float ta = ((const QuatKey*)a)->time;
+    float tb = ((const QuatKey*)b)->time;
+    return (ta > tb) - (ta < tb);
+}
+
+static void sort_bone_track_keys(BoneTrack* track) {
+    if (track->pos_count > 1) {
+        qsort(track->pos_keys, (size_t)track->pos_count, sizeof(Vec3Key), cmp_vec3_key);
+    }
+    if (track->rot_count > 1) {
+        qsort(track->rot_keys, (size_t)track->rot_count, sizeof(QuatKey), cmp_quat_key);
+    }
+    if (track->scl_count > 1) {
+        qsort(track->scl_keys, (size_t)track->scl_count, sizeof(Vec3Key), cmp_vec3_key);
+    }
+}
 
 static void mat4_from_cgltf(const cgltf_float* src, mat4 dst) {
     dst[0][0] = src[0]; dst[0][1] = src[1]; dst[0][2] = src[2]; dst[0][3] = src[3];
     dst[1][0] = src[4]; dst[1][1] = src[5]; dst[1][2] = src[6]; dst[1][3] = src[7];
     dst[2][0] = src[8]; dst[2][1] = src[9]; dst[2][2] = src[10]; dst[2][3] = src[11];
     dst[3][0] = src[12]; dst[3][1] = src[13]; dst[3][2] = src[14]; dst[3][3] = src[15];
-}
+} // gyattgpt did this mat4
 
 static void vec3_from_cgltf(const cgltf_float* src, vec3 dst) {
     dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2];
@@ -129,6 +153,17 @@ static int build_skeleton(cgltf_data* data, cgltf_skin* skin, Skeleton** out_ske
             }
         }
         skeleton_set_bone_offset(sk, i, local);
+
+        int parent_index = -1;
+        cgltf_node* parent = joint->parent;
+        while (parent) {
+            if (parent->name) {
+                parent_index = find_bone_index(sk, parent->name);
+                if (parent_index >= 0) break;
+            }
+            parent = parent->parent;
+        }
+        skeleton_set_parent(sk, i, parent_index);
     }
     
     *out_skeleton = sk;
@@ -234,60 +269,31 @@ static AnimationClip* build_animation(cgltf_data* data, cgltf_animation* anim, S
         }
         
         for (cgltf_size k = 0; k < time_acc->count; k++) {
-            TransformKey tf = {0};
-            
-            int existing_idx = -1;
-            for (int kf = 0; kf < track->keyframe_count; kf++) {
-                if (fabsf(track->keyframes[kf].time - times[k]) < 0.0001f) {
-                    existing_idx = kf;
-                    break;
-                }
-            }
-            
-            if (existing_idx >= 0) {
-                tf = track->keyframes[existing_idx].transform;
-            } else {
-                glm_vec3_zero(tf.position);
-                glm_quat_identity(tf.rotation);
-                glm_vec3_one(tf.scale);
-            }
-            
+            float t = times[k];
             if (channel->target_path == cgltf_animation_path_type_translation) {
-                if ((int)(k * value_components) + 3 <= (int)(value_acc->count * value_components)) {
-                    vec3_from_cgltf(values + k * value_components, tf.position);
-                }
+                vec3 v;
+                vec3_from_cgltf(values + k * value_components, v);
+                animation_track_add_pos_key(track, t, v);
             } else if (channel->target_path == cgltf_animation_path_type_rotation) {
-                if ((int)(k * value_components) + 4 <= (int)(value_acc->count * value_components)) {
-                    quat_from_cgltf(values + k * value_components, tf.rotation);
-                }
+                vec4 q;
+                quat_from_cgltf(values + k * value_components, q);
+                animation_track_add_rot_key(track, t, q);
             } else if (channel->target_path == cgltf_animation_path_type_scale) {
-                if ((int)(k * value_components) + 3 <= (int)(value_acc->count * value_components)) {
-                    vec3_from_cgltf(values + k * value_components, tf.scale);
-                }
-            } else {
-                continue;
+                vec3 s;
+                vec3_from_cgltf(values + k * value_components, s);
+                animation_track_add_scl_key(track, t, s);
             }
-            
-            if (existing_idx >= 0) {
-                track->keyframes[existing_idx].transform = tf;
-            } else {
-                animation_clip_add_keyframe(clip, clip->track_count - 1, times[k], tf);
-            }
+            if (t > clip->duration) clip->duration = t;
         }
         
         free(times);
         free(values);
     }
     
-    clip->duration = 0.0f;
     for (int t = 0; t < clip->track_count; t++) {
-        for (int kf = 0; kf < clip->tracks[t].keyframe_count; kf++) {
-            if (clip->tracks[t].keyframes[kf].time > clip->duration) {
-                clip->duration = clip->tracks[t].keyframes[kf].time;
-            }
-        }
+        sort_bone_track_keys(&clip->tracks[t]);
     }
-    
+
     printf("  Animation duration: %.2f seconds\n", clip->duration);
     
     return clip;
@@ -391,7 +397,7 @@ static Skinned* build_skinned_mesh(cgltf_data* data, cgltf_mesh* mesh, cgltf_ski
                 float uv[2];
                 cgltf_accessor_read_float(acc, i, uv, 2);
                 vertices[i * 16 + 3] = uv[0];
-                vertices[i * 16 + 4] = 1.0f - uv[1];
+                vertices[i * 16 + 4] = uv[1];
             }
         } else if (attr_type == cgltf_attribute_type_joints) {
             has_joints = 1;
@@ -449,7 +455,8 @@ static Skinned* build_skinned_mesh(cgltf_data* data, cgltf_mesh* mesh, cgltf_ski
     glm_vec3_zero(skinned->pos);
     glm_vec3_zero(skinned->rot);
     glm_vec3_one(skinned->scale);
-    
+    glm_mat4_identity(skinned->node_transform);
+
     skinned->gpu.skeleton = sk;
     skinned_cache(skinned);
     
@@ -530,8 +537,21 @@ int gltf_load(const char* path, GLTFModel* out) {
         cgltf_free(data);
         return 0;
     }
+
+    cgltf_node* mesh_node = NULL;
+    for (cgltf_size n = 0; n < data->nodes_count; n++) {
+        if (data->nodes[n].mesh == target_mesh) {
+            mesh_node = &data->nodes[n];
+            break;
+        }
+    }
+    if (mesh_node) {
+        cgltf_float world_mat[16];
+        cgltf_node_transform_world(mesh_node, world_mat);
+        mat4_from_cgltf(world_mat, out->skinned->node_transform);
+    }
     
-    out->animation_count = (int)data->animations_count;
+    out->animation_count = (int)data->animations_count; // pls just work i am here suffering
     if (out->animation_count > 0) {
         out->animations = (AnimationClip**)calloc((size_t)out->animation_count, sizeof(AnimationClip*));
         out->animation_names = (char**)calloc((size_t)out->animation_count, sizeof(char*));

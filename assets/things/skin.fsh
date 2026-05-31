@@ -17,9 +17,11 @@ void main() {
     if (data.a < 0.1) {
         discard;
     }
+    vec3 albedo = data.rgb;
 
-    gAlbedo = data.rgb;
-    gNormal = out_normal;
+    gAlbedo = albedo;
+    gNormal = normalize(out_normal);
     gRoughness = texture(roug, out_uv).bb;
     gViewPosition = vec4(out_view_pos, 1.0);
 }
+

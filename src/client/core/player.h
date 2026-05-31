@@ -27,6 +27,7 @@ void player_tick(World* world, Player* p, Input* in, float dt);
 void player_get_view(Player* p, mat4 view);
 void player_get_pos(Player* p, vec3 out);
 void player_get_eye(Player* p, vec3 out);
+void player_get_body_draw_pos(Player* p, vec3 out, float behind_distance);
 void player_set_noclip(Player* p, int enabled);
 
 #endif

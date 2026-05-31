@@ -6,6 +6,8 @@
 #define MAX_IP_LEN 64
 #define MAX_NAME_LEN 128
 #define MAX_DESC_LEN 512
+// NOTE: max safe string length sent over network is limited by MAX_SERVER_DESC_LEN (128) in packets.
+
 #define PROPERTIES_FILE "server.properties"
 
 typedef struct {

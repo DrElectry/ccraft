@@ -5,7 +5,9 @@
 
 #define MAX_NICKNAME_LEN 32
 #define MAX_SERVER_NAME_LEN 64
-#define MAX_SERVER_DESC_LEN 128
+#define MAX_SERVER_DESC_LEN 512
+
+
 
 enum {
     PKT_HANDSHAKE = 1,

@@ -22,9 +22,10 @@ const float FOG_START = 100.0;
 const float FOG_END = 110.0;
 
 const vec3 SUN_COLOR = vec3(1.0, 0.95, 0.85);
-const float SUN_INTENSITY = 20.0;
-const float SUN_SIZE = 0.015;
-const float SUN_GLOW = 0.05;
+const float SUN_INTENSITY = 4.0;
+const float SUN_SIZE = 0.005;
+const float SUN_GLOW = 0.005;
+const float SUN_GLOW_RADIUS = 0.25;
 
 vec2 poissonDisk[64] = vec2[](
     vec2(-0.942, -0.399), vec2(0.945, -0.768), vec2(-0.094, -0.929), vec2(0.344, 0.293),
@@ -74,6 +75,33 @@ vec3 reconstructWorldPosition(float depth)
 vec3 getCameraPos()
 {
     return (inv_view * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+}
+
+vec3 getRd(vec3 worldPos, vec3 cameraPos)
+{
+    return normalize(worldPos - cameraPos);
+}
+
+vec3 getSun(vec3 rd)
+{
+    vec3 sunDirection = normalize(lightDir);
+    float cosTheta = dot(rd, sunDirection);
+    float angle = acos(cosTheta);
+    
+    float sunDisk = 1.0 - smoothstep(0.0, 0.02, angle);
+    
+    float innerGlow = 0.0;
+    if (angle < 0.08) {
+        float t = angle / 0.08;
+        innerGlow = pow(1.0 - t, 1.5) * 0.2;
+    }
+    
+    float total = sunDisk + innerGlow;
+    
+    vec3 diskColor = SUN_COLOR;
+    vec3 innerColor = SUN_COLOR * 1.2;
+    
+    return (diskColor * sunDisk + innerColor * innerGlow) * SUN_INTENSITY;
 }
 
 float pcf(vec4 fragPosLightSpace)
@@ -151,7 +179,14 @@ void main()
     float dist = length(worldPos - cameraPos);
     float fogFactor = clamp((FOG_END - dist) / (FOG_END - FOG_START), 0.0, 1.0);
 
+    vec3 rd = getRd(worldPos, cameraPos);
+    vec3 sunColor = getSun(rd);
+
     finalColor = mix(FOG_COLOR, finalColor, fogFactor);
+
+    if (isSky) {
+        finalColor+=+sunColor;
+    }
 
     fragColor = vec4(finalColor, 1.0);
 }

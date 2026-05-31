@@ -16,7 +16,7 @@ ccraft is a W.I.P sandbox minecraft voxel like game. currently not much had been
 
 As i said, multiplayer is under construction, it is still very buggy, but if you want to try it:
 
-- run the "server" binary, port and the world seed can be configured inside server/globals.h.
+- run the "server" binary, everything configurable is avaliable inside file "server.properties".
 - connect to the server using the -connect <IP:PORT> flag.
 - you can also use 'localhost' as the ip.
 - custom nickname can be setupped using the -nickname <NAME> flag, otherwise the nickname will be created automatically.

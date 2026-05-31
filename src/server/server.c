@@ -6,6 +6,7 @@
 
 #include "globals.h"
 #include "net_platform.h"
+#include "properties.h"
 
 #ifdef _WIN32
     #include <winsock2.h>
@@ -93,10 +94,6 @@ static void send_world_snapshot(Client* client) {
     
     send(client->socket, (const char*)buffer, (int)data_size, 0);
     free(buffer);
-    
-    printf("Sent world snapshot with %d block changes to client %u\n", 
-           g_pending_block_count, client->client_id);
-    
     pthread_mutex_unlock(&g_block_mutex);
 }
 
@@ -134,10 +131,27 @@ void* handle_client(void* arg) {
     printf("%s joined as <%s>\n", client_ip, client->nickname);
     
     HandshakePacket handshake;
+    memset(&handshake, 0, sizeof(handshake));
     handshake.type = PKT_HANDSHAKE;
     handshake.client_id = client->client_id;
     handshake.seed = WORLD_SEED;
-    strncpy(handshake.nickname, client->nickname, MAX_NICKNAME_LEN);
+
+    // Return server metadata explicitly.
+    ServerConfig config;
+    server_config_load(&config);
+
+    strncpy(handshake.nickname, "", MAX_NICKNAME_LEN - 1);
+
+    strncpy(handshake.server_name, config.name, MAX_SERVER_NAME_LEN - 1);
+    handshake.server_name[MAX_SERVER_NAME_LEN - 1] = '\0';
+
+    if (config.description) {
+        strncpy(handshake.server_description, config.description, MAX_SERVER_DESC_LEN - 1);
+        handshake.server_description[MAX_SERVER_DESC_LEN - 1] = '\0';
+    } else {
+        handshake.server_description[0] = '\0';
+    }
+
     if (send(client->socket, (const char*)&handshake, (int)sizeof(handshake), 0) < 0) {
         perror("send handshake");
         net_close(client->socket);
@@ -167,7 +181,6 @@ void* handle_client(void* arg) {
     pthread_mutex_unlock(&global_server.clients_mutex);
     
     send_world_snapshot(client);
-    
     
     int send_buf_size = 256 * 1024;
     int recv_buf_size = 256 * 1024;
@@ -283,6 +296,9 @@ void server_init(Server* server) {
 }
 
 void server_start(Server* server) {
+    ServerConfig config;
+    server_config_load(&config);
+    
     server->server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server->server_socket == NET_INVALID_SOCKET) {
         perror("socket");
@@ -295,8 +311,13 @@ void server_start(Server* server) {
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(SERVER_PORT);
-    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(config.port);
+    
+    if (strcmp(config.ip, "0.0.0.0") == 0) {
+        server_addr.sin_addr.s_addr = INADDR_ANY;
+    } else {
+        inet_pton(AF_INET, config.ip, &server_addr.sin_addr);
+    }
     
     if (bind(server->server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == NET_SOCKET_ERROR) {
         perror("bind");
@@ -320,9 +341,11 @@ void server_start(Server* server) {
     " #####   #####  #     # #     # #          #   \n"
     );
     
-    printf("Server version is '%s' \n", SERVER_VERSION);
+    printf("%s\n\n", config.name);
+    printf("Server version '%s'\n", SERVER_VERSION);
+    printf("Running on %s:%u\n", config.ip, config.port);
+    
     server->running = 1;
-    printf("Server listening on port %d\n", SERVER_PORT);
     
     fd_set read_fds;
     uint32_t next_client_id = 1;
@@ -361,11 +384,11 @@ void server_start(Server* server) {
             inet_ntop(AF_INET, &(client_addr.sin_addr), client_ip, INET_ADDRSTRLEN);
             
             int flag = 1;
-#ifdef _WIN32
-            setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, (const char*)&flag, sizeof(int));
-#else
-            setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
-#endif
+            #ifdef _WIN32
+                setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, (const char*)&flag, sizeof(int));
+            #else
+                setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
+            #endif
             
             int slot = -1;
             pthread_mutex_lock(&server->clients_mutex);

@@ -10,4 +10,6 @@
 #define WORLD_SEED 0x123456789ABCDEF0ULL
 // amazing seed
 
+// actual values now come from server.properties
+
 #endif

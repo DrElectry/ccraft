@@ -10,10 +10,15 @@
 
 #include "core/world.h"
 
+// thin slice between raw ass sockets and my prestige client
+
 static net_socket_t g_sock = NET_INVALID_SOCKET;
 static uint64_t g_seed = 0;
 static uint32_t g_local_client_id = 0;
 static RemotePlayer g_remotes[CLIENT_MAX_REMOTES];
+
+static char g_server_name[MAX_SERVER_NAME_LEN] = {0};
+static char g_server_description[MAX_SERVER_DESC_LEN] = {0};
 
 static uint8_t recv_buffer[65536];
 static size_t recv_buffer_len = 0;
@@ -37,6 +42,14 @@ uint64_t network_get_seed(void) {
 
 uint32_t network_get_local_client_id(void) {
     return g_local_client_id;
+}
+
+const char* network_get_server_name(void) {
+    return g_server_name;
+}
+
+const char* network_get_server_description(void) {
+    return g_server_description;
 }
 
 static RemotePlayer* find_remote(uint32_t client_id) {
@@ -73,8 +86,6 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
 
     net_set_nonblocking(g_sock);
 
-
-
     struct sockaddr_in a;
     memset(&a, 0, sizeof(a));
     a.sin_family = AF_INET;
@@ -92,7 +103,6 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
         int err = net_get_error();
         if (err != NET_EINPROGRESS && err != NET_EWOULDBLOCK) {
             perror("connect");
-            fprintf(stderr, "connect ret=%d err=%d\n", ret, net_get_error());
             net_close(g_sock);
             g_sock = NET_INVALID_SOCKET;
             return -1;
@@ -142,8 +152,6 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
         return -1;
     }
 
-    printf("Handshake sent, waiting for response...\n");
-
     HandshakePacket hp;
     memset(&hp, 0, sizeof(hp));
 
@@ -173,7 +181,13 @@ int network_connect_and_handshake(const char* host, int port, uint64_t* out_seed
             g_seed = hp.seed;
             *out_seed = hp.seed;
             g_local_client_id = hp.client_id;
-            printf("Connected. client_id: %u, seed: %llu\n", g_local_client_id, (unsigned long long)hp.seed);
+
+            strncpy(g_server_name, hp.server_name, MAX_SERVER_NAME_LEN - 1);
+            g_server_name[MAX_SERVER_NAME_LEN - 1] = '\0';
+
+            strncpy(g_server_description, hp.server_description, MAX_SERVER_DESC_LEN - 1);
+            g_server_description[MAX_SERVER_DESC_LEN - 1] = '\0';
+
             recv_buffer_len = 0;
             return 0;
         }
@@ -239,7 +253,6 @@ static void process_packet(const uint8_t* data, size_t len) {
         rp->on_ground = 0;
         strncpy(rp->nickname, sp->nickname, MAX_NICKNAME_LEN - 1);
         rp->nickname[MAX_NICKNAME_LEN - 1] = '\0';
-        printf("Remote connected: id=%u, nickname='%s'\n", sp->client_id, rp->nickname);
         return;
     }
 
@@ -249,7 +262,6 @@ static void process_packet(const uint8_t* data, size_t len) {
 
         RemotePlayer* rp = find_remote(dp->client_id);
         if (rp) {
-            printf("Remote disconnected: id=%u, nickname='%s'\n", dp->client_id, rp->nickname);
             rp->active = 0;
         }
         return;
@@ -265,7 +277,6 @@ static void process_packet(const uint8_t* data, size_t len) {
         if (!rp) {
             rp = alloc_remote(st->client_id);
             if (!rp) return;
-            printf("Remote state (implicit spawn): id=%u, nickname='%s'\n", st->client_id, st->nickname);
         }
 
         memcpy(rp->prev_pos, rp->pos, sizeof(rp->prev_pos));
@@ -298,8 +309,6 @@ static void process_packet(const uint8_t* data, size_t len) {
         if (len < sizeof(WorldSnapshotPacket)) return;
         WorldSnapshotPacket* snap = (WorldSnapshotPacket*)data;
         BlockChangeData* blocks = (BlockChangeData*)(data + sizeof(WorldSnapshotPacket));
-        
-        printf("[client] Received world snapshot with %u block changes\n", snap->count);
         
         extern World world;
         for (uint32_t i = 0; i < snap->count; i++) {
@@ -344,7 +353,6 @@ void network_pump(void) {
     
     if (n > 0) {
         if (recv_buffer_len + n > sizeof(recv_buffer)) {
-            fprintf(stderr, "Network: receive buffer overflow, resetting\n");
             recv_buffer_len = 0;
             return;
         }
@@ -380,7 +388,6 @@ void network_pump(void) {
                     }
                     break;
                 default:
-                    fprintf(stderr, "Network: unknown packet type %d, skipping\n", type);
                     pkt_size = 1;
                     break;
             }

@@ -4,6 +4,8 @@
 #include <stdint.h>
 
 #define MAX_NICKNAME_LEN 32
+#define MAX_SERVER_NAME_LEN 64
+#define MAX_SERVER_DESC_LEN 128
 
 enum {
     PKT_HANDSHAKE = 1,
@@ -22,7 +24,12 @@ typedef struct {
     uint8_t type;
     uint32_t client_id;
     uint64_t seed;
+
     char nickname[MAX_NICKNAME_LEN];
+
+    // Server metadata returned by the server after handshake.
+    char server_name[MAX_SERVER_NAME_LEN];
+    char server_description[MAX_SERVER_DESC_LEN];
 } HandshakePacket;
 
 typedef struct {

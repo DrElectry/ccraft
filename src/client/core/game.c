@@ -129,14 +129,14 @@ void game_init() {
     File water_vr = file_open("assets/tile/tile_water.vsh");
     File water_fr = file_open("assets/tile/tile_water.fsh");
 
-    texture_create(&texture_atlas, "assets/terrain.png");
-    texture_create(&roughness, "assets/shiny.png");
+    texture_create(&texture_atlas, "assets/textures/terrain.png");
+    texture_create(&roughness, "assets/textures/shiny.png");
     
-    texture_create(&player_tex, "assets/player.png");
-    texture_create(&player_shininess, "assets/player.png");
+    texture_create(&player_tex, "assets/textures/player.png");
+    texture_create(&player_shininess, "assets/textures/player.png");
 
-    texture_create(&brightt, "assets/brightxt.png");
-    texture_create(&textt, "assets/txt.png");
+    texture_create(&brightt, "assets/textures/txt_shininess.png");
+    texture_create(&textt, "assets/textures/txt.png");
 
     player_init(&player);
 
@@ -181,13 +181,11 @@ void game_init() {
     glm_mat4_identity(hand_model);
     glm_translate(hand_model, (vec3){50.0f, 50.0f, 50.0f});
 
-    text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/text.png");
+    text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/textures/text.png");
     text_create(&name, "0.30", 0x0F, 0, 0);
     text_create(&fps, "FPS: 0", 0x0F, 0, 16);
 
-
     sound_t* ambient;
-
 
     ambient = sound_load("assets/sounds/ambient.wav");
     sound_set_looping(ambient, true);
@@ -201,7 +199,7 @@ void game_init() {
     sound_set_volume(music, 0.5f);
     sound_play(music);
 
-    text = obj_load_render_request("assets/text.obj");
+    text = obj_load_render_request("assets/models/text.obj");
 
     player_get_pos(&player, text->pos);
 
@@ -478,7 +476,7 @@ void game_shadow_pass(void) {
             if (!remotes[i].active) continue;
 
             if (!remote_players[i]) {
-                remote_players[i] = obj_load_render_request("assets/player.obj");
+                remote_players[i] = obj_load_render_request("assets/models/player.obj");
                 if (remote_players[i]) {
                     gfx_packet_static_request(remote_players[i]);
                 }
@@ -596,7 +594,7 @@ void game_draw(float time) {
             if (!remotes[i].active) continue;
 
             if (!remote_players[i]) {
-                remote_players[i] = obj_load_render_request("assets/player.obj");
+                remote_players[i] = obj_load_render_request("assets/models/player.obj");
                 if (remote_players[i]) {
                     gfx_packet_static_request(remote_players[i]);
                 }

@@ -14,8 +14,6 @@ uint64_t rng_get_world_seed(void) {
 void rng_seed(uint64_t seed) {
     world_seed = seed;
 
-    printf("seed: %llu\n", seed);
-
     if (seed == 0)
         seed = 0x9e3779b97f4a7c15ULL;
     global_rng.state = seed;

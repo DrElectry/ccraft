@@ -83,14 +83,26 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    printf("Playing as '%s'\n", __nickname);
+    printf("Playing as <%s>\n", __nickname);
 
     if (__onserv)
     {
+        char connect_ip[256];
+        strcpy(connect_ip, __servip);
+        printf("Connecting to %s:%d\n", connect_ip, __servport);
+        
         if (network_connect_and_handshake(__servip, __servport, &__servseed, __nickname) != 0)
         {
             fprintf(stderr, "network handshake failed\n");
             return 1;
+        }
+        
+        printf("Connected.\n");
+        printf("\n%s\n", network_get_server_name());
+        
+        const char* desc = network_get_server_description();
+        if (desc && desc[0] != '\0') {
+            printf("%s\n", desc);
         }
     }
 
@@ -142,7 +154,7 @@ int main(int argc, char* argv[]) {
     crosshair.wrap_s = GL_REPEAT;
     crosshair.wrap_t = GL_REPEAT;
 
-    texture_create(&crosshair, "assets/crosshair.png");
+    texture_create(&crosshair, "assets/textures/crosshair.png");
 
     mainv.type = GL_VERTEX_SHADER;
     mainf.type = GL_FRAGMENT_SHADER;

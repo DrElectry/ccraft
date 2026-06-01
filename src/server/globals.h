@@ -8,6 +8,8 @@
 #define SERVER_VERSION "0.30"
 
 #define WORLD_SEED 0x123456789ABCDEF0ULL
+
+#define MAX_MESSAGE_LEN 128
 // amazing seed
 
 // actual values now come from server.properties

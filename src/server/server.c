@@ -129,6 +129,8 @@ void* handle_client(void* arg) {
     }
     
     printf("%s joined as <%s>\n", client_ip, client->nickname);
+
+
     
     HandshakePacket handshake;
     memset(&handshake, 0, sizeof(handshake));
@@ -136,7 +138,6 @@ void* handle_client(void* arg) {
     handshake.client_id = client->client_id;
     handshake.seed = WORLD_SEED;
 
-    // Return server metadata explicitly.
     ServerConfig config;
     server_config_load(&config);
 
@@ -156,6 +157,17 @@ void* handle_client(void* arg) {
         perror("send handshake");
         net_close(client->socket);
         return NULL;
+    }
+
+    {
+        ChatMessagePacket chat;
+        memset(&chat, 0, sizeof(chat));
+        chat.type = PKT_CHAT_MESSAGE;
+        chat.client_id = 0;
+        strncpy(chat.nickname, "server", MAX_NICKNAME_LEN - 1);
+        chat.nickname[MAX_NICKNAME_LEN - 1] = '\0';
+        snprintf(chat.message, sizeof(chat.message), "%s joined the server", client->nickname);
+        server_broadcast(&global_server, &chat, sizeof(chat), 0);
     }
     
     PlayerSpawnPacket spawn;
@@ -280,7 +292,21 @@ void* handle_client(void* arg) {
     net_close(client->socket);
     
     char disconnect_nickname[MAX_NICKNAME_LEN];
+    
+    // handshake completed
+    
     strncpy(disconnect_nickname, client->nickname, MAX_NICKNAME_LEN);
+    
+    {
+        ChatMessagePacket chat;
+        memset(&chat, 0, sizeof(chat));
+        chat.type = PKT_CHAT_MESSAGE;
+        chat.client_id = 0; // 0 is the sys messages
+        strncpy(chat.nickname, "server", MAX_NICKNAME_LEN - 1);
+        chat.nickname[MAX_NICKNAME_LEN - 1] = '\0';
+        snprintf(chat.message, sizeof(chat.message), "%s left the server", disconnect_nickname);
+        server_broadcast(&global_server, &chat, sizeof(chat), 0);
+    }
     
     PlayerDespawnPacket despawn;
     despawn.type = PKT_PLAYER_DESPAWN;
@@ -348,9 +374,9 @@ void server_start(Server* server) {
     " #####   #####  ######     #    ####### #######\n"
     "#     # #     # #     #   # #   #          #   \n"
     "#       #       #     #  #   #  #          #   \n"
-    "#       #       ######  #     # #####      #   \n"
-    "#       #       #   #   ####### #          #   \n"
-    "#     # #     # #    #  #     # #          #   \n"
+    "#       #       ######  #     # # #####      #   \n"
+    "#       #       #     # ####### #   ####### #   \n"
+    "#     # #     # #     # #     # #          #   \n"
     " #####   #####  #     # #     # #          #   \n"
     );
     
@@ -471,3 +497,4 @@ void server_stop(Server* server) {
     pthread_mutex_unlock(&g_block_mutex);
     pthread_mutex_destroy(&g_block_mutex);
 }
+

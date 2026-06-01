@@ -341,7 +341,11 @@ static void process_packet(const uint8_t* data, size_t len) {
     if (type == PKT_CHAT_MESSAGE) {
         if (len < sizeof(ChatMessagePacket)) return;
         ChatMessagePacket* chat_pkt = (ChatMessagePacket*)data;
-        chat_push(chat_pkt->nickname, chat_pkt->message);
+        if (chat_pkt->client_id == 0) {
+            chat_push("server", chat_pkt->message);
+        } else {
+            chat_push(chat_pkt->nickname, chat_pkt->message);
+        }
         return;
     }
 }

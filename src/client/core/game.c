@@ -23,6 +23,7 @@
 #include "sound/sound_pack.h"
 #include "core/main.h"
 #include "network/network.h"
+#include "gui/chat.h"
 #include "utils/gltf.h"
 #include <GLFW/glfw3.h>
 #include <string.h>
@@ -270,6 +271,7 @@ void game_init() {
     glm_translate(hand_model, (vec3){50.0f, 50.0f, 50.0f});
 
     text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/textures/text.png");
+    chat_init();
     text_create(&name, "0.30", 0x0F, 0, 0);
     text_create(&fps, "FPS: 0", 0x0F, 0, 16);
 
@@ -331,6 +333,8 @@ void game_tick(float dt) {
     glfwPollEvents();
     input_update(&input_manager);
 
+    chat_handle_input(&input_manager);
+
     if (__onserv) {
         network_pump();
     }
@@ -353,10 +357,15 @@ void game_tick(float dt) {
     text_create(&fps, fps_text, 0x0F, 0, 16);
     text_create(&name, "0.30", 0x0F, 0, 0);
 
+    if (__onserv) {
+        chat_update(dt);
+    }
+
     glm_perspective(glm_rad(60.0f), ((float)WIDTH) / ((float)HEIGHT), 0.1f, 1000.0f, projection);
 
     player_tick(&world, &player, &input_manager, dt);
     player_get_view(&player, view);
+
 
     if (__onserv) {
         static float last_send = 0.0f;
@@ -364,7 +373,9 @@ void game_tick(float dt) {
         if (now - last_send >= 1.0f / UPDATE_RATE) {
             vec3 player_pos;
             player_get_pos(&player, player_pos);
-            uint8_t walking = (input_down(&input_manager, GLFW_KEY_W) || input_down(&input_manager, GLFW_KEY_A) || input_down(&input_manager, GLFW_KEY_S) || input_down(&input_manager, GLFW_KEY_D)) ? 1 : 0;
+            uint8_t walking = chat_is_typing() ? 0 :
+                ((input_down(&input_manager, GLFW_KEY_W) || input_down(&input_manager, GLFW_KEY_A) ||
+                  input_down(&input_manager, GLFW_KEY_S) || input_down(&input_manager, GLFW_KEY_D)) ? 1 : 0);
             network_send_player_state(
                 network_get_local_client_id(),
                 player_pos,
@@ -377,6 +388,22 @@ void game_tick(float dt) {
 
     glm_mat4_inv(projection, inv_projection);
     glm_mat4_inv(view, inv_view);
+
+    wdelay -= dt;
+    pdelay -= dt;
+    ndelay -= dt;
+
+    vec3 eye;
+    player_get_eye(&player, eye);
+
+    world_tick(&world, eye);
+
+    text->rot[1]+=dt;
+
+    if (chat_is_typing()) {
+        network_update_remotes(dt);
+        return;
+    }
 
     if (input_down(&input_manager, GLFW_KEY_M) && wdelay < 0) {
         wireframe = !wireframe;
@@ -393,23 +420,12 @@ void game_tick(float dt) {
         ndelay = 0.25f;
     }
 
-    wdelay -= dt;
-    pdelay -= dt;
-    ndelay -= dt;
-
-    vec3 eye;
-    player_get_eye(&player, eye);
-
-    world_tick(&world, eye);
-
     RaycastHit hit;
     raycast_dda(&world, eye, player.camera.forward, 5.0f, &hit);
 
     break_delay -= dt;
     place_delay -= dt;
     g_footstep_delay -= dt;
-
-    text->rot[1]+=dt;
 
     if (hit.hit && break_delay <= 0.0f) {
         if (glfwGetMouseButton(input_manager.win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
@@ -785,6 +801,10 @@ void game_draw_hud() {
     text_draw(&name);
     text_draw(&fps);
 
+    if (__onserv || chat_is_typing()) {
+        chat_draw();
+    }
+
     if (!__onserv) return;
 
     RemotePlayer* remotes = network_get_remote_players();
@@ -821,6 +841,8 @@ void game_draw_hud() {
 }
 
 void game_destroy() {
+    chat_destroy();
+
     if (!__onserv) {
         world_save(&world, "worlds/main.dat");
     }

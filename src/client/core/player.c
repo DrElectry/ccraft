@@ -139,6 +139,31 @@ void player_init(Player* p) {
 }
 
 void player_tick(World* world, Player* p, Input* in, float dt) {
+    if (input_chat_active(in)) {
+        if (!p->noclip) {
+            p->camera.vel[1] -= GRAVITY * dt;
+        }
+
+        float damping = 10.0f;
+        float factor = 1.0f - damping * dt;
+        if (factor < 0.0f) {
+            factor = 0.0f;
+        }
+
+        p->camera.vel[0] *= factor;
+        if (!p->noclip) {
+            p->camera.vel[2] *= factor;
+        } else {
+            p->camera.vel[1] *= factor;
+            p->camera.vel[2] *= factor;
+        }
+
+        player_move_vel(world, p, dt);
+        camera_calculate(&p->camera);
+        sync_aabb(p);
+        return;
+    }
+
     p->camera.rot[1] -= in->mouse_dx * p->sensitivity;
     p->camera.rot[0] -= in->mouse_dy * p->sensitivity;
 

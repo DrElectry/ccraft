@@ -2,6 +2,8 @@
 #include "gui/text.h"
 #include "core/main.h"
 
+#include "network/network.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -128,10 +130,15 @@ static void chat_cancel(Input* in) {
 
 static void chat_submit(Input* in) {
     if (chat_compose[0] != '\0') {
-        chat_push(__nickname, chat_compose);
+        if (__onserv) {
+            network_send_chat_message(network_get_local_client_id(), __nickname, chat_compose);
+        } else {
+            chat_push(__nickname, chat_compose);
+        }
     }
     chat_cancel(in);
 }
+
 
 static void chat_append_char(char c, void* user) {
     (void)user;

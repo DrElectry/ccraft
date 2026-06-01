@@ -32,6 +32,8 @@ void network_update_remotes(float dt);
 
 void network_send_player_state(uint32_t client_id, const float pos[3], const float rot[3], uint8_t on_ground);
 void network_send_block_change(uint32_t client_id, int32_t x, int32_t y, int32_t z, uint16_t type);
+void network_send_chat_message(uint32_t client_id, const char* nickname, const char* message);
+
 
 uint64_t network_get_seed(void);
 

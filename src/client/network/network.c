@@ -9,8 +9,10 @@
 #include <stdint.h>
 
 #include "core/world.h"
+#include "gui/chat.h"
 
 // thin slice between raw ass sockets and my prestige client
+
 
 static net_socket_t g_sock = NET_INVALID_SOCKET;
 static uint64_t g_seed = 0;
@@ -229,6 +231,24 @@ void network_send_block_change(uint32_t client_id, int32_t x, int32_t y, int32_t
     send(g_sock, (const char*)&b, sizeof(b), 0);
 }
 
+void network_send_chat_message(uint32_t client_id, const char* nickname, const char* message) {
+    if (g_sock == NET_INVALID_SOCKET) return;
+
+    if (!nickname) nickname = "";
+    if (!message) message = "";
+
+    ChatMessagePacket p;
+    p.type = PKT_CHAT_MESSAGE;
+    p.client_id = client_id;
+    strncpy(p.nickname, nickname, MAX_NICKNAME_LEN - 1);
+    p.nickname[MAX_NICKNAME_LEN - 1] = '\0';
+    strncpy(p.message, message, MAX_CHAT_MESSAGE_LEN - 1);
+    p.message[MAX_CHAT_MESSAGE_LEN - 1] = '\0';
+
+    send(g_sock, (const char*)&p, sizeof(p), 0);
+}
+
+
 static void process_packet(const uint8_t* data, size_t len) {
     if (len < 1) return;
     
@@ -317,7 +337,15 @@ static void process_packet(const uint8_t* data, size_t len) {
         }
         return;
     }
+
+    if (type == PKT_CHAT_MESSAGE) {
+        if (len < sizeof(ChatMessagePacket)) return;
+        ChatMessagePacket* chat_pkt = (ChatMessagePacket*)data;
+        chat_push(chat_pkt->nickname, chat_pkt->message);
+        return;
+    }
 }
+
 
 void network_update_remotes(float dt) {
     float step = dt * UPDATE_RATE;
@@ -387,9 +415,13 @@ void network_pump(void) {
                         pkt_size = 0;
                     }
                     break;
+                case PKT_CHAT_MESSAGE:
+                    pkt_size = sizeof(ChatMessagePacket);
+                    break;
                 default:
                     pkt_size = 1;
                     break;
+
             }
             
             if (pkt_size > 0 && recv_buffer_len - offset >= pkt_size) {

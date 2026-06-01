@@ -6,8 +6,7 @@
 #define MAX_NICKNAME_LEN 32
 #define MAX_SERVER_NAME_LEN 64
 #define MAX_SERVER_DESC_LEN 512
-
-
+#define MAX_CHAT_MESSAGE_LEN 256
 
 enum {
     PKT_HANDSHAKE = 1,
@@ -17,7 +16,8 @@ enum {
     PKT_CHUNK_DATA,
     PKT_BLOCK_UPDATE,
     PKT_PING,
-    PKT_WORLD_SNAPSHOT
+    PKT_WORLD_SNAPSHOT,
+    PKT_CHAT_MESSAGE
 };
 
 #pragma pack(push, 1)
@@ -29,7 +29,7 @@ typedef struct {
 
     char nickname[MAX_NICKNAME_LEN];
 
-    // Server metadata returned by the server after handshake.
+    // metadata
     char server_name[MAX_SERVER_NAME_LEN];
     char server_description[MAX_SERVER_DESC_LEN];
 } HandshakePacket;
@@ -75,6 +75,13 @@ typedef struct {
     int32_t z;
     uint16_t block_type;
 } BlockChangeData;
+
+typedef struct {
+    uint8_t type;
+    uint32_t client_id;
+    char nickname[MAX_NICKNAME_LEN];
+    char message[MAX_CHAT_MESSAGE_LEN];
+} ChatMessagePacket;
 
 #pragma pack(pop)
 

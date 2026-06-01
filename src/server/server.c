@@ -246,6 +246,19 @@ void* handle_client(void* arg) {
                     pthread_mutex_unlock(&global_server.clients_mutex);
                     offset += sizeof(BlockUpdatePacket);
                 }
+                else if (type == PKT_CHAT_MESSAGE) {
+                    if (offset + sizeof(ChatMessagePacket) > bytes) {
+                        break;
+                    }
+                    ChatMessagePacket* chat_pkt = (ChatMessagePacket*)(buffer + offset);
+                    ChatMessagePacket forward_pkt;
+                    memcpy(&forward_pkt, chat_pkt, sizeof(ChatMessagePacket));
+                    forward_pkt.client_id = client->client_id;
+                    strncpy(forward_pkt.nickname, client->nickname, MAX_NICKNAME_LEN - 1);
+                    forward_pkt.nickname[MAX_NICKNAME_LEN - 1] = '\0';
+                    server_broadcast(&global_server, &forward_pkt, sizeof(forward_pkt), 0);
+                    offset += sizeof(ChatMessagePacket);
+                }
                 else {
                     printf("Unknown packet type %d from client %u\n", type, client->client_id);
                     offset++;

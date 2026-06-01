@@ -20,6 +20,7 @@ As i said, multiplayer is under construction, it is still very buggy, but if you
 - connect to the server using the -connect <IP:PORT> flag.
 - you can also use 'localhost' as the ip.
 - custom nickname can be setupped using the -nickname <NAME> flag, otherwise the nickname will be created automatically.
+- chat is avaliable on the server by using the T key, pressing ENTER will send your message to the server from your name.
 - enjoy.
 
 The server runs on 32 TPS with interpolation.

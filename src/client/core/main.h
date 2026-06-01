@@ -5,8 +5,8 @@
 
 extern uint64_t __servseed;
 
-#define WIDTH 1280
-#define HEIGHT 720
+#define WIDTH 800
+#define HEIGHT 600
 
 extern int __onserv;
 extern int __servport;

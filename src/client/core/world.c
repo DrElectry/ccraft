@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 #include "core/world.h"
+#include "core/world_gen.h"
 #include "utils/rand.h"
 #include "utils/log.h"
 #include "utils/noise.h"
@@ -24,6 +25,8 @@ void world_init(World* world) {
     }
 
     world->pending_count = 0;
+
+    world_gen_start();
 }
 
 void world_load(World* world, File* file) {
@@ -305,6 +308,8 @@ void world_render(World* world, void* active_program, void* water_program) {
 }
 
 void world_destroy(World* world) {
+    world_gen_stop();
+
     for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
         if (world->index_map[i] != -1) {
             Chunk* chunk = &world->chunks_map[i];
@@ -343,6 +348,69 @@ void world_destroy(World* world) {
     world->positions_map = NULL;
     world->index_map = NULL;
     world->pending_block_changes = NULL;
+}
+
+static void world_install_chunk(World* world, int cx, int cz, uint16_t* data) {
+    if (world_get_chunk(world, cx, cz)) {
+        free(data);
+        return;
+    }
+
+    for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
+        if (world->index_map[i] != -1)
+            continue;
+
+        Chunk* chunk = &world->chunks_map[i];
+        chunk->data = data;
+        chunk->model = (Render_request){0};
+        chunk->water_model = (Render_request){0};
+
+        for (int k = 0; k < world->pending_block_count; k++) {
+            int bx = world->pending_block_changes[k].x;
+            int by = world->pending_block_changes[k].y;
+            int bz = world->pending_block_changes[k].z;
+
+            int chunk_min_x = cx * CHUNK_WIDTH;
+            int chunk_max_x = chunk_min_x + CHUNK_WIDTH;
+            int chunk_min_z = cz * CHUNK_DEPTH;
+            int chunk_max_z = chunk_min_z + CHUNK_DEPTH;
+
+            if (bx >= chunk_min_x && bx < chunk_max_x &&
+                bz >= chunk_min_z && bz < chunk_max_z &&
+                by >= 0 && by < CHUNK_HEIGHT) {
+                int lx = bx - chunk_min_x;
+                int lz = bz - chunk_min_z;
+                int index = lx + CHUNK_WIDTH * (by + CHUNK_HEIGHT * lz);
+                chunk->data[index] = world->pending_block_changes[k].block;
+            }
+        }
+
+        world->positions_map[i][0] = (float)cx;
+        world->positions_map[i][1] = (float)cz;
+        world->index_map[i] = 1;
+
+        chunk->model.pos[0] = (float)cx * CHUNK_WIDTH;
+        chunk->model.pos[1] = 0.0f;
+        chunk->model.pos[2] = (float)cz * CHUNK_DEPTH;
+
+        chunk->water_model.pos[0] = (float)cx * CHUNK_WIDTH;
+        chunk->water_model.pos[1] = 0.0f;
+        chunk->water_model.pos[2] = (float)cz * CHUNK_DEPTH;
+
+        world_queue_rebuild(world, cx, cz);
+
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0)
+                    continue;
+                world_queue_rebuild(world, cx + dx, cz + dz);
+            }
+        }
+        return;
+    }
+
+    free(data);
+    printf("Cant add new chunks, world overflow.\n");
 }
 
 void world_tick(World* world, vec3 ppos) {
@@ -413,63 +481,24 @@ void world_tick(World* world, vec3 ppos) {
         }
     }
 
+    int gen_cx, gen_cz;
+    uint16_t* gen_data;
+    while (world_gen_poll(&gen_cx, &gen_cz, &gen_data)) {
+        int dx = gen_cx - pcx;
+        int dz = gen_cz - pcz;
+        if (dx * dx + dz * dz > render_dist * render_dist) {
+            free(gen_data);
+            continue;
+        }
+        world_install_chunk(world, gen_cx, gen_cz, gen_data);
+    }
+
     for (int j = 0; j < should_load_count; j++) {
         int cx = (int)should_load[j][0];
         int cz = (int)should_load[j][1];
 
-        if (!world_get_chunk(world, cx, cz)) {
-            for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
-                if (world->index_map[i] == -1) {
-                    chunk_set_position(cx, cz);
-                    
-                    Chunk chunk;
-                    chunk_generate(&chunk);
-
-                    for (int k = 0; k < world->pending_block_count; k++) {
-                        int bx = world->pending_block_changes[k].x;
-                        int by = world->pending_block_changes[k].y;
-                        int bz = world->pending_block_changes[k].z;
-                        
-                        int chunk_min_x = cx * CHUNK_WIDTH;
-                        int chunk_max_x = chunk_min_x + CHUNK_WIDTH;
-                        int chunk_min_z = cz * CHUNK_DEPTH;
-                        int chunk_max_z = chunk_min_z + CHUNK_DEPTH;
-                        
-                        if (bx >= chunk_min_x && bx < chunk_max_x &&
-                            bz >= chunk_min_z && bz < chunk_max_z &&
-                            by >= 0 && by < CHUNK_HEIGHT) {
-                            int lx = bx - chunk_min_x;
-                            int lz = bz - chunk_min_z;
-                            int index = lx + CHUNK_WIDTH * (by + CHUNK_HEIGHT * lz);
-                            chunk.data[index] = world->pending_block_changes[k].block;
-                        }
-                    }
-
-                    world->chunks_map[i] = chunk;
-                    world->positions_map[i][0] = (float)cx;
-                    world->positions_map[i][1] = (float)cz;
-                    world->index_map[i] = 1;
-
-                    world->chunks_map[i].model.pos[0] = (float)cx * CHUNK_WIDTH;
-                    world->chunks_map[i].model.pos[1] = 0.0f;
-                    world->chunks_map[i].model.pos[2] = (float)cz * CHUNK_DEPTH;
-
-                    world->chunks_map[i].water_model.pos[0] = (float)cx * CHUNK_WIDTH;
-                    world->chunks_map[i].water_model.pos[1] = 0.0f;
-                    world->chunks_map[i].water_model.pos[2] = (float)cz * CHUNK_DEPTH;
-
-                    world_queue_rebuild(world, cx, cz);
-
-                    for (int dx = -1; dx <= 1; dx++) {
-                        for (int dz = -1; dz <= 1; dz++) {
-                            if (dx == 0 && dz == 0) continue;
-                            world_queue_rebuild(world, cx + dx, cz + dz);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
+        if (!world_get_chunk(world, cx, cz) && !world_gen_in_flight(cx, cz))
+            world_gen_submit(cx, cz);
     }
 
     world_process_rebuild_queue(world);

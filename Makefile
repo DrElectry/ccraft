@@ -8,7 +8,7 @@ CLIENT = blocks
 SERVER = server
 
 CFLAGS = -O2 -I$(SRC_DIR) -I$(SRC_DIR)/client -I$(LIB_DIR)
-LDFLAGS = -lglfw -lGL -lcglm -lm
+LDFLAGS = -lglfw -lGL -lcglm -lm -lpthread
 
 CSRCS = $(shell find $(SRC_DIR)/client -name '*.c')
 SSRCS = $(shell find $(SRC_DIR)/server -name '*.c')
@@ -48,7 +48,7 @@ else
 CLIENT := blocks
 SERVER := server
 CFLAGS := -O2 -I$(SRC_DIR) -I$(SRC_DIR)/client -I$(LIB_DIR)
-LDFLAGS := -lglfw -lGL -lcglm -lm
+LDFLAGS := -lglfw -lGL -lcglm -lm -lpthread
 CC := gcc
 endif
 

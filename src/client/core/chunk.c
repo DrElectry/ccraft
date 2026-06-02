@@ -12,15 +12,6 @@
 #define SEA_LEVEL 24
 #define BEACH_HEIGHT 4
 
-static int gen_chunk_x = 0;
-static int gen_chunk_z = 0;
-
-
-void chunk_set_position(int cx, int cz) {
-    gen_chunk_x = cx;
-    gen_chunk_z = cz;
-}
-
 int lookup_atlas[] = {
     0,0,0,0,0,0,        // AIR
     1,1,1,1,0,2,        // GRASS
@@ -225,19 +216,22 @@ static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, 
     }
 }
 
-void chunk_generate(Chunk* chunk) {
-    RNG saved_rng = global_rng;
+void chunk_generate(Chunk* chunk, int cx, int cz) {
+    RNG rng;
+    rng_seed_chunk_r(&rng, cx, cz);
 
-    rng_seed_chunk(gen_chunk_x, gen_chunk_z);
+#undef RAND
+#undef RANDF
+#define RAND(min, max) rng_int_r(&rng, (min), (max))
+#define RANDF() rng_float_r(&rng)
 
-    
     chunk->data = (uint16_t*)malloc(CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t));
 
     for (int x = 0; x < CHUNK_WIDTH; x++) {
         for (int z = 0; z < CHUNK_DEPTH; z++) {
 
-            int wx = gen_chunk_x * CHUNK_WIDTH + x;
-            int wz = gen_chunk_z * CHUNK_DEPTH + z;
+            int wx = cx * CHUNK_WIDTH + x;
+            int wz = cz * CHUNK_DEPTH + z;
 
             int terrain_height = get_terrain_height(wx, wz);
 
@@ -252,8 +246,8 @@ void chunk_generate(Chunk* chunk) {
 
     for (int x = 0; x < CHUNK_WIDTH; x++) {
         for (int z = 0; z < CHUNK_DEPTH; z++) {
-            int wx = gen_chunk_x * CHUNK_WIDTH + x;
-            int wz = gen_chunk_z * CHUNK_DEPTH + z;
+            int wx = cx * CHUNK_WIDTH + x;
+            int wz = cz * CHUNK_DEPTH + z;
             int terrain_height = get_terrain_height(wx, wz);
             
             if (terrain_height <= SEA_LEVEL + BEACH_HEIGHT + 1) continue;
@@ -277,8 +271,8 @@ void chunk_generate(Chunk* chunk) {
     for (int x = 2; x < CHUNK_WIDTH - 2; x += 5) {
         for (int z = 2; z < CHUNK_DEPTH - 2; z += 5) {
 
-            int wx = gen_chunk_x * CHUNK_WIDTH + x;
-            int wz = gen_chunk_z * CHUNK_DEPTH + z;
+            int wx = cx * CHUNK_WIDTH + x;
+            int wz = cz * CHUNK_DEPTH + z;
 
             float density = fbm2d(wx * 0.08f, wz * 0.08f, 2, 0.5f, 2.0f);
             if (density < 0.25f) continue;
@@ -477,8 +471,8 @@ void chunk_generate(Chunk* chunk) {
     chunk->model = (Render_request){0};
     chunk->water_model = (Render_request){0};
 
-    // restoring rng state
-    global_rng = saved_rng;
+#undef RAND
+#undef RANDF
 }
 
 

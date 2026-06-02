@@ -28,6 +28,7 @@
 #include <GLFW/glfw3.h>
 #include <string.h>
 
+
 Player player;
 HText name, fps;
 World world;

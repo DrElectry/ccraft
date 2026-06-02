@@ -43,7 +43,6 @@ Program c, water_prog, bc;
 static GLTFModel player_walk_model;
 static GLTFModel player_jump_model;
 static AnimState* walk_anim;
-static AnimState* jump_anim; // used for time stepping only; per-remote playback handled separately
 static Program skinned_prog;
 
 typedef struct {
@@ -250,19 +249,19 @@ void game_init() {
 
     input_init(&input_manager, _win->glwin);
 
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, FRONT, 0);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, BACK, 0);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, LEFT, 0);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, RIGHT, 0);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, UP, 0);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, DOWN, 0);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, FRONT, 0, 12);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, BACK, 0, 6);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, LEFT, 0, 6);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, RIGHT, 0, 6);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, UP, 0, 15);
+    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, DOWN, 0, 4);
 
     block.data = aa;
     block.data_size = cc*sizeof(float);
     block.triangles = bb;
     block.tri_count = dd;
 
-    gfx_packet_static_request(&block);
+    gfx_chunk_packet_static_request(&block);
 
     block.pos[0] = block.pos[1] = block.pos[2] = 0.0f;
     block.rot[0] = block.rot[1] = block.rot[2] = 0.0f;

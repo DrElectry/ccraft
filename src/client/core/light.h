@@ -1,5 +1,5 @@
-#ifndef CHUNK_LIGHT_H
-#define CHUNK_LIGHT_H
+#ifndef LIGHT_H
+#define LIGHT_H
 
 #include "core/chunk.h"
 

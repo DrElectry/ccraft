@@ -30,6 +30,7 @@ typedef struct {
 void gfx_packet_static_request(Render_request* r); // call this whenever you want, it will just cache models ready to render
 void gfx_render(Render_request *r, Program* active_program); // render pre cached model
 void gfx_program_create(Program* a, char* vsrc, char* fsc);
+void gfx_chunk_packet_static_request(Render_request* r); // for chunks (they have lightmaps)
 
 void gfx_draw_fullscreen_quad();
 

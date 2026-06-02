@@ -4,10 +4,9 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
-#include "core/chunk_light.h"
+#include "core/light.h"
 
-
-#define GEN_WORKERS 4
+#define GEN_WORKERS 8
 #define WORK_QUEUE_CAP 64
 
 typedef enum {

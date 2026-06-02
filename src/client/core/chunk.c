@@ -1,5 +1,5 @@
 #include "core/chunk.h"
-#include "core/chunk_light.h"
+#include "core/light.h"
 #include <cglm/cglm.h>
 #include "core/tile.h"
 #include "core/gfx.h"
@@ -151,7 +151,6 @@ static int get_terrain_height(int wx, int wz) {
     return h3+h+32.0f;
 }
 
-
 static uint16_t get_block_at_height(int wy, int wx, int wz, int terrain_height, int water_level) {
     int distance_to_water = terrain_height - water_level;
 
@@ -222,10 +221,10 @@ void chunk_generate(Chunk* chunk, int cx, int cz) {
     RNG rng;
     rng_seed_chunk_r(&rng, cx, cz);
 
-#undef RAND
-#undef RANDF
-#define RAND(min, max) rng_int_r(&rng, (min), (max))
-#define RANDF() rng_float_r(&rng)
+    #undef RAND
+    #undef RANDF
+    #define RAND(min, max) rng_int_r(&rng, (min), (max))
+    #define RANDF() rng_float_r(&rng) // as our chunks start to generate in parallel, we have to do this undef
 
     chunk->data = (uint16_t*)malloc(CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t));
     chunk->sky_light = NULL;
@@ -242,6 +241,7 @@ void chunk_generate(Chunk* chunk, int cx, int cz) {
             for (int y = 0; y < CHUNK_HEIGHT; y++) {
                 int index = x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z);
                 uint16_t block = get_block_at_height(y, wx, wz, terrain_height, SEA_LEVEL);
+
                 chunk->data[index] = block;
 
             }
@@ -475,8 +475,12 @@ void chunk_generate(Chunk* chunk, int cx, int cz) {
     chunk->model = (Render_request){0};
     chunk->water_model = (Render_request){0};
 
-#undef RAND
-#undef RANDF
+    // restore their original forms
+
+    #undef RAND
+    #undef RANDF
+    #define RAND(min, max) rng_int((min), (max))
+    #define RANDF() rng_float()
 }
 
 
@@ -604,9 +608,9 @@ void chunk_apply_mesh(Chunk* chunk, ChunkMeshResult* mesh) {
                           mesh->water_v, mesh->water_i);
 
     if (chunk->model.data)
-        gfx_packet_static_request(&chunk->model);
+        gfx_chunk_packet_static_request(&chunk->model);
     if (chunk->water_model.data)
-        gfx_packet_static_request(&chunk->water_model);
+        gfx_chunk_packet_static_request(&chunk->water_model);
 
     free(mesh);
 }

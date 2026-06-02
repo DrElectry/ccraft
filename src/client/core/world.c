@@ -4,7 +4,7 @@
 #include <string.h>
 #include "core/world.h"
 #include "core/world_gen.h"
-#include "core/chunk_light.h"
+#include "core/light.h"
 #include "utils/rand.h"
 #include "utils/log.h"
 #include "utils/noise.h"

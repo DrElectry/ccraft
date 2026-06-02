@@ -1,4 +1,4 @@
-#include "core/chunk_light.h"
+#include "core/light.h"
 #include "core/tile.h"
 #include <stdlib.h>
 #include <string.h>

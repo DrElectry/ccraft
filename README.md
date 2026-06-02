@@ -4,7 +4,7 @@
 
 ccraft is a W.I.P sandbox minecraft voxel like game. currently not much had been implemented, but it features
 
-- the core "minecraft" game (chunks management, placing and breaking blocks, player movement with physics, collisions, infinite world generation),
+- the core "minecraft" game (chunks management, placing and breaking blocks, player movement with physics, collisions, infinite world generation, lightmaps),
 - deferred rendering (effects like shadows, SSAO, SSR, bloom, DOF, vignette),
 - gui (text renderer, crosshair),
 - world saving and loading (currently only worlds/main.dat is supported),

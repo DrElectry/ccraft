@@ -3,6 +3,7 @@
 layout(location = 0) in vec3 in_vert;
 layout(location = 1) in vec2 in_uv;
 layout(location = 2) in vec3 in_normal;
+layout(location = 3) in float in_light;
 
 uniform mat4 proj;
 uniform mat4 view;
@@ -13,6 +14,7 @@ out vec2 out_uv;
 out vec3 out_normal;
 out vec3 out_view_pos;
 out vec3 out_pos;
+out float out_light;
 
 float hash(vec2 p)
 {
@@ -69,6 +71,7 @@ float wave(vec3 p)
 void main()
 {
     out_uv = in_uv;
+    out_light = in_light;
 
     vec3 world_pos = (model * vec4(in_vert, 1.0)).xyz;
 

@@ -1,4 +1,5 @@
 #include "core/tile.h"
+#include "core/chunk.h"
 
 const float face_vertices[] = {
     0,0,1, 1,0,1, 1,1,1, 0,1,1,
@@ -52,7 +53,9 @@ void tile_push_face(float* vertices,
                     int* v_cursor,
                     int* i_cursor,
                     int face,
-                    int atlas_id)
+                    int atlas_id,
+                    float light)
+
 {
     float uv[8];
     tile_atlas_getuv(atlas_id, uv);
@@ -61,7 +64,7 @@ void tile_push_face(float* vertices,
     float ny = face_normals[face * 3 + 1];
     float nz = face_normals[face * 3 + 2];
 
-    int v_start = *v_cursor / 8;
+    int v_start = *v_cursor / CHUNK_VERT_FLOATS;
     int offset = face * 12;
 
     for (int i = 0; i < 4; i++)
@@ -78,8 +81,9 @@ void tile_push_face(float* vertices,
         vertices[base + 5] = nx;
         vertices[base + 6] = ny;
         vertices[base + 7] = nz;
+        vertices[base + 8] = light;
 
-        *v_cursor += 8;
+        *v_cursor += CHUNK_VERT_FLOATS;
     }
 
     indices[*i_cursor + 0] = v_start + 0;

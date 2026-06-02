@@ -8,6 +8,7 @@ in vec2 out_uv;
 in vec3 out_normal;
 in vec3 out_view_pos;
 in vec3 out_pos;
+in float out_light;
 
 uniform sampler2D tex;
 uniform sampler2D roug;
@@ -36,10 +37,11 @@ void main() {
     vec4 data = mix(frame1, frame2, t);
 
     if (data.a < 0.1) discard;
+    float lit = 0.12 + 0.88 * clamp(out_light, 0.0, 1.0);
     if (out_uv.x < tile_size) {
-        gAlbedo = data.rgb;
+        gAlbedo = data.rgb * lit;
     } else {
-        gAlbedo = data.rgb*4.0f; // very VERY bad, but works for now
+        gAlbedo = data.rgb * 4.0 * lit;
     }
 
 

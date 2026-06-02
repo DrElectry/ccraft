@@ -4,6 +4,7 @@
 #include <string.h>
 #include "core/world.h"
 #include "core/world_gen.h"
+#include "core/chunk_light.h"
 #include "utils/rand.h"
 #include "utils/log.h"
 #include "utils/noise.h"
@@ -122,6 +123,8 @@ static inline int floor_mod(int a, int b) {
     return r;
 }
 
+static void world_queue_rebuild_3x3(World* world, int cx, int cz);
+
 Chunk* world_get_chunk(World* world, int cx, int cz) {
     for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
         if (world->index_map[i] != -1) {
@@ -210,30 +213,16 @@ int world_set_block(World* world, int wx, int wy, int wz, uint16_t block) {
     world_queue_block_change(world, wx, wy, wz, block);
     chunk->data[index] = block;
 
-    
-    world_queue_rebuild(world, cx, cz);
-    
-    if (lx == 0) world_queue_rebuild(world, cx - 1, cz);
-    if (lx == CHUNK_WIDTH - 1) world_queue_rebuild(world, cx + 1, cz);
-    if (lz == 0) world_queue_rebuild(world, cx, cz - 1);
-    if (lz == CHUNK_DEPTH - 1) world_queue_rebuild(world, cx, cz + 1);
-    
+    world_queue_rebuild_3x3(world, cx, cz);
+
     return 1;
 }
 
 void rebuild_chunks_for_block(World* world, int wx, int wy, int wz) {
-    int cx = (wx >= 0) ? wx / CHUNK_WIDTH : (wx - CHUNK_WIDTH + 1) / CHUNK_WIDTH;
-    int cz = (wz >= 0) ? wz / CHUNK_DEPTH : (wz - CHUNK_DEPTH + 1) / CHUNK_DEPTH;
-
-    world_rebuild_chunk(world, cx, cz);
-
-    int lx = wx - cx * CHUNK_WIDTH;
-    int lz = wz - cz * CHUNK_DEPTH;
-
-    if (lx == 0) world_rebuild_chunk(world, cx - 1, cz);
-    if (lx == CHUNK_WIDTH - 1) world_rebuild_chunk(world, cx + 1, cz);
-    if (lz == 0) world_rebuild_chunk(world, cx, cz - 1);
-    if (lz == CHUNK_DEPTH - 1) world_rebuild_chunk(world, cx, cz + 1);
+    (void)wy;
+    int cx = floor_div(wx, CHUNK_WIDTH);
+    int cz = floor_div(wz, CHUNK_DEPTH);
+    world_queue_rebuild_3x3(world, cx, cz);
 }
 
 void new_world(const char* filename) {
@@ -259,6 +248,11 @@ void world_set_block_at(World* world, vec3 p, uint16_t block) {
     world_set_block(world, wx, wy, wz, block);
 }
 
+static void world_invalidate_chunk_mesh(Chunk* chunk) {
+    if (chunk)
+        chunk->mesh_generation++;
+}
+
 void world_queue_rebuild(World* world, int cx, int cz) {
     if (world->pending_count >= MAX_PENDING_REBUILDS)
         return;
@@ -270,32 +264,57 @@ void world_queue_rebuild(World* world, int cx, int cz) {
         }
     }
 
+    world_invalidate_chunk_mesh(world_get_chunk(world, cx, cz));
+
     world->pending_rebuilds[world->pending_count][0] = (float)cx;
     world->pending_rebuilds[world->pending_count][1] = (float)cz;
     world->pending_count++;
 }
 
-void world_process_rebuild_queue(World* world) {
-    if (world->pending_count <= 0)
-        return;
-
-    int cx = (int)world->pending_rebuilds[0][0];
-    int cz = (int)world->pending_rebuilds[0][1];
-
-    world_rebuild_chunk(world, cx, cz);
-
-    for (int i = 0; i < world->pending_count - 1; i++) {
-        world->pending_rebuilds[i][0] = world->pending_rebuilds[i + 1][0];
-        world->pending_rebuilds[i][1] = world->pending_rebuilds[i + 1][1];
+static void world_queue_rebuild_3x3(World* world, int cx, int cz) {
+    for (int dx = -1; dx <= 1; dx++) {
+        for (int dz = -1; dz <= 1; dz++)
+            world_queue_rebuild(world, cx + dx, cz + dz);
     }
-    world->pending_count--;
+}
+
+void world_process_rebuild_queue(World* world) {
+    int submitted = 0;
+
+    for (int i = 0; i < world->pending_count && submitted < 8; ) {
+        int cx = (int)world->pending_rebuilds[i][0];
+        int cz = (int)world->pending_rebuilds[i][1];
+
+        if (!world_get_chunk(world, cx, cz)) {
+            for (int j = i; j < world->pending_count - 1; j++) {
+                world->pending_rebuilds[j][0] = world->pending_rebuilds[j + 1][0];
+                world->pending_rebuilds[j][1] = world->pending_rebuilds[j + 1][1];
+            }
+            world->pending_count--;
+            continue;
+        }
+
+        if (world_mesh_in_flight(cx, cz)) {
+            i++;
+            continue;
+        }
+
+        if (!world_mesh_submit(world, cx, cz)) {
+            i++;
+            continue;
+        }
+
+        for (int j = i; j < world->pending_count - 1; j++) {
+            world->pending_rebuilds[j][0] = world->pending_rebuilds[j + 1][0];
+            world->pending_rebuilds[j][1] = world->pending_rebuilds[j + 1][1];
+        }
+        world->pending_count--;
+        submitted++;
+    }
 }
 
 void world_rebuild_chunk(World* world, int cx, int cz) {
-    Chunk* chunk = world_get_chunk(world, cx, cz);
-    if (chunk) {
-        chunk_rebuild(chunk, world, cx, cz);
-    }
+    world_mesh_submit(world, cx, cz);
 }
 
 void world_render(World* world, void* active_program, void* water_program) {
@@ -362,6 +381,9 @@ static void world_install_chunk(World* world, int cx, int cz, uint16_t* data) {
 
         Chunk* chunk = &world->chunks_map[i];
         chunk->data = data;
+        chunk->sky_light = NULL;
+        chunk->block_light = NULL;
+        chunk->mesh_generation = 0;
         chunk->model = (Render_request){0};
         chunk->water_model = (Render_request){0};
 
@@ -397,15 +419,7 @@ static void world_install_chunk(World* world, int cx, int cz, uint16_t* data) {
         chunk->water_model.pos[1] = 0.0f;
         chunk->water_model.pos[2] = (float)cz * CHUNK_DEPTH;
 
-        world_queue_rebuild(world, cx, cz);
-
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                if (dx == 0 && dz == 0)
-                    continue;
-                world_queue_rebuild(world, cx + dx, cz + dz);
-            }
-        }
+        world_queue_rebuild_3x3(world, cx, cz);
         return;
     }
 
@@ -452,6 +466,7 @@ void world_tick(World* world, vec3 ppos) {
                     free(chunk->data);
                     chunk->data = NULL;
                 }
+                chunk_light_free(chunk);
                 if (chunk->model.data) {
                     free(chunk->model.data);
                     chunk->model.data = NULL;
@@ -491,6 +506,18 @@ void world_tick(World* world, vec3 ppos) {
             continue;
         }
         world_install_chunk(world, gen_cx, gen_cz, gen_data);
+    }
+
+    int mesh_cx, mesh_cz;
+    ChunkMeshResult* mesh;
+    uint32_t mesh_gen;
+    while (world_mesh_poll(&mesh_cx, &mesh_cz, &mesh, &mesh_gen)) {
+        Chunk* chunk = world_get_chunk(world, mesh_cx, mesh_cz);
+        if (!chunk || chunk->mesh_generation != mesh_gen) {
+            chunk_mesh_result_free(mesh);
+            continue;
+        }
+        chunk_apply_mesh(chunk, mesh);
     }
 
     for (int j = 0; j < should_load_count; j++) {

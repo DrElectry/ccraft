@@ -1,4 +1,5 @@
 #include "core/chunk.h"
+#include "core/chunk_light.h"
 #include <cglm/cglm.h>
 #include "core/tile.h"
 #include "core/gfx.h"
@@ -7,6 +8,7 @@
 #include "utils/noise.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 
 #define SEA_LEVEL 24
@@ -226,6 +228,8 @@ void chunk_generate(Chunk* chunk, int cx, int cz) {
 #define RANDF() rng_float_r(&rng)
 
     chunk->data = (uint16_t*)malloc(CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t));
+    chunk->sky_light = NULL;
+    chunk->block_light = NULL;
 
     for (int x = 0; x < CHUNK_WIDTH; x++) {
         for (int z = 0; z < CHUNK_DEPTH; z++) {
@@ -498,7 +502,7 @@ static void free_render_request(Render_request* r) {
     ebo_free(&r->cache.ebo);
 }
 
-static void finalize_render_request(Render_request* r, float* vertices, int* indices, int v_cursor, int i_cursor) {
+static void assign_render_request(Render_request* r, float* vertices, int* indices, int v_cursor, int i_cursor) {
     if (v_cursor > 0) {
         vertices = (float*)realloc(vertices, v_cursor * sizeof(float));
         indices = (int*)realloc(indices, i_cursor * sizeof(int));
@@ -510,8 +514,6 @@ static void finalize_render_request(Render_request* r, float* vertices, int* ind
 
         glm_vec3_copy((vec3){0.0f,0.0f,0.0f}, r->rot);
         glm_vec3_copy((vec3){1.0f,1.0f,1.0f}, r->scale);
-
-        gfx_packet_static_request(r);
     } else {
         free(vertices);
         free(indices);
@@ -523,15 +525,104 @@ static void finalize_render_request(Render_request* r, float* vertices, int* ind
     }
 }
 
-static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int wx, int wy, int wz,
+static inline int mesh_floor_div(int a, int b) {
+    if (a >= 0) return a / b;
+    return - ((-a + b - 1) / b);
+}
+
+static inline int mesh_floor_mod(int a, int b) {
+    int r = a % b;
+    if (r < 0) r += b;
+    return r;
+}
+
+void chunk_neighbors_capture(ChunkNeighbors* n, struct World* world, int cx, int cz) {
+    n->cx = cx;
+    n->cz = cz;
+
+    for (int dx = -1; dx <= 1; dx++) {
+        for (int dz = -1; dz <= 1; dz++) {
+            int gx = dx + 1;
+            int gz = dz + 1;
+            Chunk* ch = world_get_chunk(world, cx + dx, cz + dz);
+            if (ch && ch->data) {
+                memcpy(n->chunks[gx][gz], ch->data, CHUNK_BLOCK_COUNT * sizeof(uint16_t));
+                n->loaded[gx][gz] = 1;
+            } else {
+                memset(n->chunks[gx][gz], 0, CHUNK_BLOCK_COUNT * sizeof(uint16_t));
+                n->loaded[gx][gz] = 0;
+            }
+        }
+    }
+}
+
+uint16_t chunk_neighbors_get(const ChunkNeighbors* n, int wx, int wy, int wz) {
+    if (wy < 0 || wy >= CHUNK_HEIGHT)
+        return AIR;
+
+    int cx = mesh_floor_div(wx, CHUNK_WIDTH);
+    int cz = mesh_floor_div(wz, CHUNK_DEPTH);
+    int gx = cx - (n->cx - 1);
+    int gz = cz - (n->cz - 1);
+
+    if (gx < 0 || gx > 2 || gz < 0 || gz > 2 || !n->loaded[gx][gz])
+        return AIR;
+
+    int lx = mesh_floor_mod(wx, CHUNK_WIDTH);
+    int lz = mesh_floor_mod(wz, CHUNK_DEPTH);
+    int index = lx + CHUNK_WIDTH * (wy + CHUNK_HEIGHT * lz);
+    return n->chunks[gx][gz][index];
+}
+
+void chunk_mesh_result_free(ChunkMeshResult* mesh) {
+    if (!mesh)
+        return;
+    free(mesh->model_verts);
+    free(mesh->model_inds);
+    free(mesh->water_verts);
+    free(mesh->water_inds);
+    free(mesh->sky_light);
+    free(mesh->block_light);
+    free(mesh);
+}
+
+void chunk_apply_mesh(Chunk* chunk, ChunkMeshResult* mesh) {
+    if (mesh->sky_light && mesh->block_light) {
+        chunk_light_alloc(chunk);
+        if (chunk->sky_light && chunk->block_light) {
+            memcpy(chunk->sky_light, mesh->sky_light, CHUNK_BLOCK_COUNT);
+            memcpy(chunk->block_light, mesh->block_light, CHUNK_BLOCK_COUNT);
+        }
+    }
+
+    free_render_request(&chunk->model);
+    free_render_request(&chunk->water_model);
+
+    assign_render_request(&chunk->model, mesh->model_verts, mesh->model_inds,
+                          mesh->model_v, mesh->model_i);
+    assign_render_request(&chunk->water_model, mesh->water_verts, mesh->water_inds,
+                          mesh->water_v, mesh->water_i);
+
+    if (chunk->model.data)
+        gfx_packet_static_request(&chunk->model);
+    if (chunk->water_model.data)
+        gfx_packet_static_request(&chunk->water_model);
+
+    free(mesh);
+}
+
+static void push_face_to_buffer(uint16_t tile_id, float* pos,
+                                  const uint8_t* sky_light, const uint8_t* block_light,
+                                  int lx, int ly, int lz,
+                                  const ChunkNeighbors* n, int wx, int wy, int wz,
                                   float* model_verts, int* model_inds, int* v_cur, int* i_cur,
                                   float* water_verts, int* water_inds, int* w_v_cur, int* w_i_cur) {
-    uint16_t front = world_get_block(world, wx, wy, wz + 1);
-    uint16_t back  = world_get_block(world, wx, wy, wz - 1);
-    uint16_t left  = world_get_block(world, wx - 1, wy, wz);
-    uint16_t right = world_get_block(world, wx + 1, wy, wz);
-    uint16_t up    = world_get_block(world, wx, wy + 1, wz);
-    uint16_t down  = world_get_block(world, wx, wy - 1, wz);
+    uint16_t front = chunk_neighbors_get(n, wx, wy, wz + 1);
+    uint16_t back  = chunk_neighbors_get(n, wx, wy, wz - 1);
+    uint16_t left  = chunk_neighbors_get(n, wx - 1, wy, wz);
+    uint16_t right = chunk_neighbors_get(n, wx + 1, wy, wz);
+    uint16_t up    = chunk_neighbors_get(n, wx, wy + 1, wz);
+    uint16_t down  = chunk_neighbors_get(n, wx, wy - 1, wz);
 
 
     int render_front;
@@ -543,10 +634,11 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         render_front = lookup_transparent[front] || (is_liquid_block(front) ? 1 : 0);
     }
     if (render_front) {
+        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, FRONT);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, FRONT, atlas_lookup(tile_id, FRONT));
+            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, FRONT, atlas_lookup(tile_id, FRONT), lf);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, FRONT, atlas_lookup(tile_id, FRONT));
+            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, FRONT, atlas_lookup(tile_id, FRONT), lf);
         }
     }
 
@@ -557,10 +649,11 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         render_back = lookup_transparent[back] || (is_liquid_block(back) ? 1 : 0);
     }
     if (render_back) {
+        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, BACK);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, BACK, atlas_lookup(tile_id, BACK));
+            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, BACK, atlas_lookup(tile_id, BACK), lf);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, BACK, atlas_lookup(tile_id, BACK));
+            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, BACK, atlas_lookup(tile_id, BACK), lf);
         }
     }
 
@@ -571,10 +664,11 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         render_left = lookup_transparent[left] || (is_liquid_block(left) ? 1 : 0);
     }
     if (render_left) {
+        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, LEFT);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, LEFT, atlas_lookup(tile_id, LEFT));
+            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, LEFT, atlas_lookup(tile_id, LEFT), lf);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, LEFT, atlas_lookup(tile_id, LEFT));
+            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, LEFT, atlas_lookup(tile_id, LEFT), lf);
         }
     }
 
@@ -585,10 +679,11 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         render_right = lookup_transparent[right] || (is_liquid_block(right) ? 1 : 0);
     }
     if (render_right) {
+        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, RIGHT);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, RIGHT, atlas_lookup(tile_id, RIGHT));
+            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, RIGHT, atlas_lookup(tile_id, RIGHT), lf);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, RIGHT, atlas_lookup(tile_id, RIGHT));
+            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, RIGHT, atlas_lookup(tile_id, RIGHT), lf);
         }
     }
 
@@ -599,10 +694,11 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         render_up = lookup_transparent[up] || (is_liquid_block(up) ? 1 : 0);
     }
     if (render_up) {
+        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, UP);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, UP, atlas_lookup(tile_id, UP));
+            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, UP, atlas_lookup(tile_id, UP), lf);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, UP, atlas_lookup(tile_id, UP));
+            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, UP, atlas_lookup(tile_id, UP), lf);
         }
     }
 
@@ -613,26 +709,26 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos, World* world, int 
         render_down = lookup_transparent[down] || (is_liquid_block(down) ? 1 : 0);
     }
     if (render_down) {
+        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, DOWN);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, DOWN, atlas_lookup(tile_id, DOWN));
+            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, DOWN, atlas_lookup(tile_id, DOWN), lf);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, DOWN, atlas_lookup(tile_id, DOWN));
+            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, DOWN, atlas_lookup(tile_id, DOWN), lf);
         }
     }
 }
 
-void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
-    free_render_request(&chunk->model);
-    free_render_request(&chunk->water_model);
-
-    int max_blocks = CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH;
+void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
+                      const uint8_t* sky_light, const uint8_t* block_light,
+                      const ChunkNeighbors* n, int cx, int cz) {
+    int max_blocks = CHUNK_BLOCK_COUNT;
     int max_faces = max_blocks * 6;
     int max_vertices = max_faces * 4;
     int max_indices = max_faces * 6;
 
-    float* model_vertices = (float*)malloc(max_vertices * 8 * sizeof(float)); // 8 attributes per vertex (xyz, uv, normal)
+    float* model_vertices = (float*)malloc(max_vertices * CHUNK_VERT_FLOATS * sizeof(float));
     int* model_indices = (int*)malloc(max_indices * sizeof(int));
-    float* water_vertices = (float*)malloc(max_vertices * 8 * sizeof(float));
+    float* water_vertices = (float*)malloc(max_vertices * CHUNK_VERT_FLOATS * sizeof(float));
     int* water_indices = (int*)malloc(max_indices * sizeof(int));
 
     int v_cursor = 0, i_cursor = 0;
@@ -645,7 +741,7 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
         for (int y = 0; y < CHUNK_HEIGHT; y++) {
             for (int z = 0; z < CHUNK_DEPTH; z++) {
                 int index = x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z);
-                uint16_t tile_id = chunk->data[index];
+                uint16_t tile_id = data[index];
 
                 if (tile_id == AIR)
                     continue;
@@ -657,10 +753,11 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                 float pos[3] = {(float)x, (float)y, (float)z};
 
                 if (is_cross_block(tile_id)) {
-                    uint16_t front = world_get_block(world, wx, wy, wz + 1);
-                    uint16_t back  = world_get_block(world, wx, wy, wz - 1);
-                    uint16_t left  = world_get_block(world, wx - 1, wy, wz);
-                    uint16_t right = world_get_block(world, wx + 1, wy, wz);
+                    float light = chunk_light_vertex(sky_light, block_light, x, y, z);
+                    uint16_t front = chunk_neighbors_get(n, wx, wy, wz + 1);
+                    uint16_t back  = chunk_neighbors_get(n, wx, wy, wz - 1);
+                    uint16_t left  = chunk_neighbors_get(n, wx - 1, wy, wz);
+                    uint16_t right = chunk_neighbors_get(n, wx + 1, wy, wz);
                     
                     if (lookup_transparent[front] || lookup_transparent[back] || 
                         lookup_transparent[left] || lookup_transparent[right]) {
@@ -677,7 +774,7 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                             {0.0f, 1.0f, 0.0f}
                         };
                         
-                        int v_start = v_cursor / 8;
+                        int v_start = v_cursor / CHUNK_VERT_FLOATS;
                         for (int i2 = 0; i2 < 4; i2++) {
                             int base = v_cursor;
                             model_vertices[base + 0] = verts1[i2][0] + pos[0];
@@ -688,7 +785,8 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                             model_vertices[base + 5] = 0.707f;
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = 0.707f;
-                            v_cursor += 8;
+                            model_vertices[base + 8] = light;
+                            v_cursor += CHUNK_VERT_FLOATS;
                         }
                         
                         model_indices[i_cursor + 0] = v_start + 0;
@@ -699,7 +797,7 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                         model_indices[i_cursor + 5] = v_start + 0;
                         i_cursor += 6;
                         
-                        v_start = v_cursor / 8;
+                        v_start = v_cursor / CHUNK_VERT_FLOATS;
                         for (int i2 = 0; i2 < 4; i2++) {
                             int base = v_cursor;
                             model_vertices[base + 0] = verts1[i2][0] + pos[0];
@@ -710,7 +808,8 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                             model_vertices[base + 5] = -0.707f;
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = -0.707f;
-                            v_cursor += 8;
+                            model_vertices[base + 8] = light;
+                            v_cursor += CHUNK_VERT_FLOATS;
                         }
                         
                         model_indices[i_cursor + 0] = v_start + 0;
@@ -731,7 +830,7 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                             {1.0f, 1.0f, 0.0f}
                         };
                         
-                        v_start = v_cursor / 8;
+                        v_start = v_cursor / CHUNK_VERT_FLOATS;
                         for (int i2 = 0; i2 < 4; i2++) {
                             int base = v_cursor;
                             model_vertices[base + 0] = verts2[i2][0] + pos[0];
@@ -742,7 +841,8 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                             model_vertices[base + 5] = -0.707f;
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = 0.707f;
-                            v_cursor += 8;
+                            model_vertices[base + 8] = light;
+                            v_cursor += CHUNK_VERT_FLOATS;
                         }
                         
                         model_indices[i_cursor + 0] = v_start + 0;
@@ -753,7 +853,7 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                         model_indices[i_cursor + 5] = v_start + 0;
                         i_cursor += 6;
                         
-                        v_start = v_cursor / 8;
+                        v_start = v_cursor / CHUNK_VERT_FLOATS;
                         for (int i2 = 0; i2 < 4; i2++) {
                             int base = v_cursor;
                             model_vertices[base + 0] = verts2[i2][0] + pos[0];
@@ -764,7 +864,8 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                             model_vertices[base + 5] = 0.707f;
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = -0.707f;
-                            v_cursor += 8;
+                            model_vertices[base + 8] = light;
+                            v_cursor += CHUNK_VERT_FLOATS;
                         }
                         
                         model_indices[i_cursor + 0] = v_start + 0;
@@ -776,7 +877,7 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
                         i_cursor += 6;
                     }
                 } else {
-                    push_face_to_buffer(tile_id, pos, world, wx, wy, wz,
+                    push_face_to_buffer(tile_id, pos, sky_light, block_light, x, y, z, n, wx, wy, wz,
                                       model_vertices, model_indices, &v_cursor, &i_cursor,
                                       water_vertices, water_indices, &w_v_cursor, &w_i_cursor);
                 }
@@ -784,6 +885,12 @@ void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz) {
         }
     }
 
-    finalize_render_request(&chunk->model, model_vertices, model_indices, v_cursor, i_cursor);
-    finalize_render_request(&chunk->water_model, water_vertices, water_indices, w_v_cursor, w_i_cursor);
+    out->model_verts = model_vertices;
+    out->model_inds = model_indices;
+    out->model_v = v_cursor;
+    out->model_i = i_cursor;
+    out->water_verts = water_vertices;
+    out->water_inds = water_indices;
+    out->water_v = w_v_cursor;
+    out->water_i = w_i_cursor;
 }

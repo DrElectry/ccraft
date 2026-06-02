@@ -17,9 +17,13 @@ void gfx_packet_static_request(Render_request* r) { // pos, rot and scale will b
     vbo_create(&vbo, r->data, r->data_size);
     ebo_create(&ebo, r->triangles, r->tri_count * 3 * sizeof(int));
 
-    vbo_attr(0, 3, 8 * sizeof(float), 0);
-    vbo_attr(1, 2, 8 * sizeof(float), 3);
-    vbo_attr(2, 3, 8 * sizeof(float), 5);
+    // Vertex format (see CHUNK_VERT_FLOATS=9 in chunk.h / tile.c):
+    // [pos.xyz (3) | uv (2) | normal.xyz (3) | light (1)]
+    vbo_attr(0, 3, 9 * sizeof(float), 0);
+    vbo_attr(1, 2, 9 * sizeof(float), 3);
+    vbo_attr(2, 3, 9 * sizeof(float), 5);
+    vbo_attr(3, 1, 9 * sizeof(float), 8);
+
 
     r->cache.vbo = vbo;
     r->cache.vao = vao;

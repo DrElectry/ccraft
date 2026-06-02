@@ -20,6 +20,8 @@ void tile_push_face(float* vertices,
                     int* v_cursor,
                     int* i_cursor,
                     int face,
-                    int atlas_id);
+                    int atlas_id,
+                    float light);
+
 
 #endif

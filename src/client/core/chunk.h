@@ -37,10 +37,37 @@ typedef enum : uint16_t {
 
 typedef struct {
     uint16_t* data; // 2 bytes for block id meaning that we have 65535 possible unique blocks
+    uint8_t* sky_light;
+    uint8_t* block_light;
+    uint32_t mesh_generation;
 
     Render_request model; // has a pos, rot, scale, and GPU buffers inside, gfx.h does everything else
     Render_request water_model;
 } Chunk;
+
+#define CHUNK_BLOCK_COUNT (CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH)
+#define CHUNK_VERT_FLOATS 9
+
+typedef struct {
+    int cx;
+    int cz;
+    uint16_t chunks[3][3][CHUNK_BLOCK_COUNT];
+    int loaded[3][3];
+} ChunkNeighbors;
+
+typedef struct {
+    float* model_verts;
+    int* model_inds;
+    int model_v;
+    int model_i;
+    float* water_verts;
+    int* water_inds;
+    int water_v;
+    int water_i;
+    uint8_t* sky_light;
+    uint8_t* block_light;
+    uint32_t generation;
+} ChunkMeshResult;
 
 struct World;
 
@@ -48,7 +75,13 @@ extern int lookup_ignorecollision[];
 extern int lookup_atlas[];
 
 void chunk_generate(Chunk* chunk, int cx, int cz);
-void chunk_rebuild(Chunk* chunk, struct World* world, int cx, int cz);
+void chunk_neighbors_capture(ChunkNeighbors* n, struct World* world, int cx, int cz);
+uint16_t chunk_neighbors_get(const ChunkNeighbors* n, int wx, int wy, int wz);
+void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
+                      const uint8_t* sky_light, const uint8_t* block_light,
+                      const ChunkNeighbors* n, int cx, int cz);
+void chunk_apply_mesh(Chunk* chunk, ChunkMeshResult* mesh);
+void chunk_mesh_result_free(ChunkMeshResult* mesh);
 uint16_t chunk_sound_pack(uint16_t tile_id);
 
 #endif

@@ -427,9 +427,31 @@ static void world_install_chunk(World* world, int cx, int cz, uint16_t* data) {
     printf("Cant add new chunks, world overflow.\n");
 }
 
+void world_reload_render_distance(World* world, vec3 ppos) {
+    int pcx = floor_div((int)ppos[0], CHUNK_WIDTH);
+    int pcz = floor_div((int)ppos[2], CHUNK_DEPTH);
+
+    int render_dist = WORLD_RENDER_DISTANCE;
+
+    for (int cx = pcx - render_dist; cx <= pcx + render_dist; cx++) {
+        for (int cz = pcz - render_dist; cz <= pcz + render_dist; cz++) {
+            int dx = cx - pcx;
+            int dz = cz - pcz;
+            if (dx * dx + dz * dz > render_dist * render_dist)
+                continue;
+            if (!world_get_chunk(world, cx, cz))
+                continue;
+            world_queue_rebuild_3x3(world, cx, cz);
+        }
+    }
+
+    world_process_rebuild_queue(world);
+}
+
 void world_tick(World* world, vec3 ppos) {
     int pcx = floor_div((int)ppos[0], CHUNK_WIDTH);
     int pcz = floor_div((int)ppos[2], CHUNK_DEPTH);
+
 
     int render_dist = WORLD_RENDER_DISTANCE;
 

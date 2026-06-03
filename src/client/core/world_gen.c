@@ -6,7 +6,7 @@
 #include <string.h>
 #include "core/light.h"
 
-#define GEN_WORKERS 8
+#define GEN_WORKERS 16
 #define WORK_QUEUE_CAP 64
 
 typedef enum {

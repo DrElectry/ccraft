@@ -28,7 +28,6 @@
 #include <GLFW/glfw3.h>
 #include <string.h>
 
-
 Player player;
 HText name, fps;
 World world;
@@ -412,6 +411,7 @@ void game_tick(float dt) {
     }
     if (input_down(&input_manager, GLFW_KEY_N) && pdelay < 0) {
         potato_mode = !potato_mode;
+        world_reload_render_distance(&world, eye);
         pdelay = 0.25f;
     }
     if (input_down(&input_manager, GLFW_KEY_B) && ndelay < 0) {

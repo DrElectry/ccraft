@@ -5,9 +5,9 @@
 #include "core/gfx.h"
 #include <cglm/cglm.h>
 
-#define CHUNK_WIDTH 16
+#define CHUNK_WIDTH 32
 #define CHUNK_HEIGHT 128
-#define CHUNK_DEPTH 16
+#define CHUNK_DEPTH 32
 
 typedef enum : uint16_t {
     AIR = 0,
@@ -85,4 +85,3 @@ void chunk_mesh_result_free(ChunkMeshResult* mesh);
 uint16_t chunk_sound_pack(uint16_t tile_id);
 
 #endif
-

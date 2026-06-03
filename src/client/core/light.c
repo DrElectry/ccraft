@@ -1,5 +1,6 @@
 #include "core/light.h"
 #include "core/tile.h"
+#include "core/game.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -16,7 +17,6 @@ static inline uint16_t get_block(const ChunkNeighbors* n, int wx, int wy, int wz
 
 static inline int is_transparent_light(uint16_t id) {
     if (id == AIR) return 1;
-    if (id == LEAVES) return 1;
     if (id == GLASS) return 1;
     if (id == ROSE) return 1;
     if (id == GRASS_CROSS) return 1;
@@ -72,8 +72,8 @@ static void compute_sky_light_full(uint8_t* sky_out, const ChunkNeighbors* n, in
     Pos3* queue = (Pos3*)malloc(total_blocks * sizeof(Pos3));
     int q_head = 0, q_tail = 0;
 
-    /* Vertical pass: full sky (15) from world top down through transparent blocks.
-     * A single top seed + BFS cannot reach the surface (15-block limit). */
+    // vertical pass: full sky (15) from world top down through transparent blocks.
+    // a single top seed + BFS cannot reach the surface (15 block limit).
     for (int wx = min_wx; wx <= max_wx; wx++) {
         for (int wz = min_wz; wz <= max_wz; wz++) {
             int column_open = 1;
@@ -283,6 +283,32 @@ float chunk_light_vertex(const uint8_t* sky_light, const uint8_t* block_light,
 
 float chunk_light_face_vertex(const uint8_t* sky_light, const uint8_t* block_light,
                                int lx, int ly, int lz, enum Tile_face face) {
-    (void)face;
-    return chunk_light_vertex(sky_light, block_light, lx, ly, lz);
+    int sx = lx;
+    int sy = ly;
+    int sz = lz;
+    int offset = 0;
+
+    switch (face) {
+        case FRONT:  sz = lz + 1; break; // +Z
+        case BACK:   sz = lz - 1; offset = 1; break; // -Z
+        case RIGHT:  sx = lx + 1; offset = 1; break; // +X
+        case LEFT:   sx = lx - 1; offset = 1; break; // -X
+        case UP:     sy = ly + 1; break; // +Y
+        case DOWN:   sy = ly - 1; offset = 1; break; // -Y
+    }
+
+    if (sx < 0) sx = 0;
+    if (sx >= CHUNK_WIDTH) sx = CHUNK_WIDTH - 1;
+    if (sy < 0) sy = 0;
+    if (sy >= CHUNK_HEIGHT) sy = CHUNK_HEIGHT - 1;
+    if (sz < 0) sz = 0;
+    if (sz >= CHUNK_DEPTH) sz = CHUNK_DEPTH - 1;
+
+    float light = chunk_light_vertex(sky_light, block_light, sx, sy, sz);
+    
+    if (offset && potato_mode) {
+        light = fminf(light - 0.4f, 1.0f);
+    }
+    
+    return light;
 }

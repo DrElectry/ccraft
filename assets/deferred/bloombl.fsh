@@ -6,7 +6,7 @@ out vec4 fragColor;
 uniform sampler2D image;
 uniform vec2 direction;
 
-const float blurScale = 4.0;
+const float blurScale = 2.0;
 const int samples = 11;
 
 void main()

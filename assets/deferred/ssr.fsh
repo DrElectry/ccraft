@@ -16,8 +16,8 @@ out vec4 fragColor;
 
 const float step = 0.1;
 const float minRayStep = 0.1;
-const float maxSteps = 64;
-const int numBinarySearchSteps = 64;
+const float maxSteps = 32;
+const int numBinarySearchSteps = 8;
 const float reflectionSpecularFalloffExponent = 3.0;
 
 float Metallic;

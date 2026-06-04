@@ -9,8 +9,8 @@ uniform mat4 proj;
 in vec2 out_uv;
 out float fragColor;
 
-const float ssaoRadius = 1.0;
-const float bias = 0.0025;
+const float ssaoRadius = 4.0;
+const float bias = 0.025;
 const int samples = 32;
 
 // pregenerated offline kernel

@@ -266,6 +266,9 @@ void text_draw(HText* text) {
     texture_bind(&text_atlas, 0);
     program_set_int(&text_program, "tex_atlas", 0);
 
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     // shadow pass (0x08)
 
     if (cache->vertex_count > 0) {
@@ -292,11 +295,11 @@ void text_draw(HText* text) {
 
     program_set_uint(&text_program, "color_data", (uint32_t)text->color);
 
-
     vao_bind(&global_vao);
     glDrawElements(GL_TRIANGLES, text->index_count, GL_UNSIGNED_INT, NULL);
-}
 
+    glDisable(GL_BLEND);
+}
 
 void text_free(HText* text) {
     if (!text) return;

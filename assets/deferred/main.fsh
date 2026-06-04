@@ -120,16 +120,16 @@ float pcf(vec4 fragPosLightSpace)
     float bias = max(0.00001 * (1.0 - dot(normal, normalize(lightDir))), 0.0007);
 
     float shadow = 0.0;
-    float radius = 4.0;
+    float radius = 2.0;
 
-    for (int i = 0; i < 64; i++)
+    for (int i = 0; i < 32; i++)
     {
         vec2 offset = rot * poissonDisk[i] * texelSize * radius;
         float closestDepth = texture(dShadow, proj.xy + offset).r;
         shadow += step(closestDepth, currentDepth - bias);
     }
 
-    return shadow / 64.0;
+    return shadow / 32.0;
 }
 
 void main()

@@ -153,7 +153,7 @@ float skinned_angle_diff(float from, float to) {
 
 float skinned_update_body_yaw(float body_yaw, float look_yaw, float dt) {
     const float head_limit = (float)M_PI * 0.1f;
-    const float body_turn_speed = 8.0f;
+    const float body_turn_speed = 64.0f;
 
     float diff = skinned_angle_diff(body_yaw, look_yaw);
     if (fabsf(diff) <= head_limit || dt <= 0.0f) {

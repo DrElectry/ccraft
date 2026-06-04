@@ -22,6 +22,8 @@ void tile_push_face(float* vertices,
                     int face,
                     int atlas_id,
                     float light);
+                    
+void tile_push_cube(float* vertices, unsigned int* indices, float* pos, int* v_cursor, int* i_cursor);
 
 
 #endif

@@ -2,6 +2,7 @@
 #include "gl/vao.h"
 #include "gl/vbo.h"
 #include "gl/ebo.h"
+#include "core/skin.h"
 #include "gl/shader.h"
 #include "utils/fm.h"
 #include <cglm/cglm.h>
@@ -88,6 +89,19 @@ void gfx_render(Render_request *r, Program* active_program) {
     vao_bind(&r->cache.vao);
     glDrawElements(GL_TRIANGLES, r->tri_count * 3, GL_UNSIGNED_INT, NULL);
 }
+
+void gfx_skinned_render(Skinned_render_request* r, Program* active_program) {
+    if (!r) return;
+    if (!r->skinned || !r->look.enabled) return;
+
+    Skinned* sk = r->skinned;
+    sk->gpu.skeleton = r->skeleton;
+    sk->gpu.anim = r->anim;
+
+    program_use(active_program);
+    skinned_render(sk, active_program, 0.0f, &r->look);
+}
+
 
 void gfx_draw_fullscreen_quad() {
     static VAO vao;

@@ -1,5 +1,6 @@
 #include "utils/gltf.h"
-#define CGLTF_IMPLEMENTATION // even with this helper library, the parser is still huge
+#include "core/gfx.h"
+#define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
 #include <string.h>
 #include <stdlib.h>
@@ -35,7 +36,7 @@ static void mat4_from_cgltf(const cgltf_float* src, mat4 dst) {
     dst[1][0] = src[4]; dst[1][1] = src[5]; dst[1][2] = src[6]; dst[1][3] = src[7];
     dst[2][0] = src[8]; dst[2][1] = src[9]; dst[2][2] = src[10]; dst[2][3] = src[11];
     dst[3][0] = src[12]; dst[3][1] = src[13]; dst[3][2] = src[14]; dst[3][3] = src[15];
-} // gyattgpt did this mat4
+}
 
 static void vec3_from_cgltf(const cgltf_float* src, vec3 dst) {
     dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2];
@@ -582,7 +583,7 @@ int gltf_load(const char* path, GLTFModel* out) {
     out->feet_align_y = gltf_compute_feet_align_y(out->skinned);
     printf("gltf_load: feet_align_y = %.3f\n", out->feet_align_y);
     
-    out->animation_count = (int)data->animations_count; // pls just work i am here suffering
+    out->animation_count = (int)data->animations_count;
     if (out->animation_count > 0) {
         out->animations = (AnimationClip**)calloc((size_t)out->animation_count, sizeof(AnimationClip*));
         out->animation_names = (char**)calloc((size_t)out->animation_count, sizeof(char*));
@@ -655,4 +656,73 @@ void gltf_free(GLTFModel* model) {
     }
     
     model->animation_count = 0;
+}
+
+Skinned_render_request* gltf_load_skinned_request(const char* path) {
+    if (!path) {
+        printf("gltf_load_skinned_request: Invalid parameters\n");
+        return NULL;
+    }
+    
+    GLTFModel model;
+    if (!gltf_load(path, &model)) {
+        printf("gltf_load_skinned_request: Failed to load GLTF model\n");
+        return NULL;
+    }
+    
+    Skinned_render_request* request = (Skinned_render_request*)malloc(sizeof(Skinned_render_request));
+    if (!request) {
+        printf("gltf_load_skinned_request: Failed to allocate request\n");
+        gltf_free(&model);
+        return NULL;
+    }
+    
+    memset(request, 0, sizeof(Skinned_render_request));
+    
+    request->skinned = model.skinned;
+    request->skeleton = model.skeleton;
+    
+    request->look.enabled = 1;
+    request->look.head_yaw = 0.0f;
+    request->look.head_pitch = 0.0f;
+    request->look.head_bone = -1;
+    request->look.neck_bone = -1;
+    
+    if (model.animation_count > 0 && model.animations) {
+        request->anim = anim_state_create(model.animations[0]);
+        if (request->anim) {
+            request->anim->loop = 1;
+            request->anim->speed = 1.0f;
+        }
+    }
+    
+    model.skinned = NULL;
+    model.skeleton = NULL;
+    model.animations = NULL;
+    model.animation_names = NULL;
+    model.animation_count = 0;
+    
+    printf("gltf_load_skinned_request: Successfully created request with %d vertices, %d indices\n",
+           request->skinned->vertex_count, request->skinned->index_count);
+    
+    return request;
+}
+
+void gltf_free_skinned_request(Skinned_render_request* request) {
+    if (!request) return;
+    
+    if (request->anim) {
+        anim_state_destroy(request->anim);
+    }
+    
+    if (request->skinned) {
+        skinned_destroy(request->skinned);
+        free(request->skinned);
+    }
+    
+    if (request->skeleton) {
+        skeleton_destroy(request->skeleton);
+    }
+    
+    free(request);
 }

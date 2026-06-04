@@ -39,8 +39,9 @@ File world_file;
 Shader a, b, water_vertex, water_fragment, ba, bbb;
 Program c, water_prog, bc;
 
-static GLTFModel player_walk_model;
-static GLTFModel player_jump_model;
+static Skinned_render_request* player_walk_model;
+static Skinned_render_request* player_jump_model;
+static AnimationClip* walk_clip;
 static AnimState* walk_anim;
 static Program skinned_prog;
 
@@ -113,8 +114,35 @@ static void remote_anim_cleanup(int i) {
     remote_anim[i].body_yaw_init = 0;
 }
 
+static float get_feet_align_y(Skinned_render_request* req) {
+    if (!req || !req->skinned || req->skinned->vertex_count <= 0) {
+        return 0.0f;
+    }
+
+    float min_y = FLT_MAX;
+    for (int i = 0; i < req->skinned->vertex_count; i++) {
+        vec4 local = {
+            req->skinned->vertices[i * 16 + 0],
+            req->skinned->vertices[i * 16 + 1],
+            req->skinned->vertices[i * 16 + 2],
+            1.0f
+        };
+        vec4 world;
+        glm_mat4_mulv(req->skinned->node_transform, local, world);
+        if (world[1] < min_y) {
+            min_y = world[1];
+        }
+    }
+
+    if (min_y == FLT_MAX) {
+        return 0.0f;
+    }
+
+    return -min_y;
+}
+
 static void draw_remote_player(int i, const RemotePlayer* rp, float dt, const mat4 proj, const mat4 view_mat) {
-    if (!rp->active || !player_walk_model.skinned || !walk_anim) {
+    if (!rp->active || !player_walk_model || !walk_anim) {
         return;
     }
 
@@ -122,12 +150,13 @@ static void draw_remote_player(int i, const RemotePlayer* rp, float dt, const ma
 
     if (!remote_anim[i].skinned) {
         remote_anim[i].skinned = malloc(sizeof(Skinned));
-        *remote_anim[i].skinned = *player_walk_model.skinned;
+        memcpy(remote_anim[i].skinned, player_walk_model->skinned, sizeof(Skinned));
         remote_anim[i].skinned->gpu.anim = NULL;
+        remote_anim[i].skinned->gpu.skeleton = player_walk_model->skeleton;
     }
 
     Skinned* sk = remote_anim[i].skinned;
-    sk->gpu.skeleton = player_walk_model.skeleton;
+    sk->gpu.skeleton = player_walk_model->skeleton;
 
     if (!remote_anim[i].walk_state) {
         remote_anim[i].walk_state = anim_state_create(walk_anim->clip);
@@ -157,7 +186,7 @@ static void draw_remote_player(int i, const RemotePlayer* rp, float dt, const ma
 
     float head_yaw = skinned_head_yaw_offset(remote_anim[i].body_yaw, look_yaw);
 
-    float foot_y = player_walk_model.feet_align_y * sk->scale[1]-0.5f;
+    float foot_y = get_feet_align_y(player_walk_model) * sk->scale[1] - 0.5f;
     sk->pos[0] = rp->pos[0];
     sk->pos[1] = rp->pos[1] + foot_y;
     sk->pos[2] = rp->pos[2];
@@ -176,6 +205,13 @@ static void draw_remote_player(int i, const RemotePlayer* rp, float dt, const ma
         .neck_bone = bone_neck,
     };
 
+    Skinned_render_request request = {
+        .skinned = sk,
+        .skeleton = player_walk_model->skeleton,
+        .anim = remote_anim[i].walk_state,
+        .look = look,
+    };
+
     program_use(&skinned_prog);
     texture_bind(&player_tex, 0);
     texture_bind(&player_shininess, 1);
@@ -184,8 +220,9 @@ static void draw_remote_player(int i, const RemotePlayer* rp, float dt, const ma
     program_set_mat4(&skinned_prog, "projection", (float*)proj);
     program_set_mat4(&skinned_prog, "view", (float*)view_mat);
 
-    skinned_render(sk, &skinned_prog, 0.0f, &look);
+    gfx_skinned_render(&request, &skinned_prog);
 }
+
 
 void game_init() {
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
@@ -248,12 +285,7 @@ void game_init() {
 
     input_init(&input_manager, _win->glwin);
 
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, FRONT, 0, 12);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, BACK, 0, 6);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, LEFT, 0, 6);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, RIGHT, 0, 6);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, UP, 0, 15);
-    tile_push_face(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd, DOWN, 0, 4);
+    tile_push_cube(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd);
 
     block.data = aa;
     block.data_size = cc*sizeof(float);
@@ -297,30 +329,24 @@ void game_init() {
     text->scale[1]=0.5f;
     text->scale[2]=0.5f;
 
-    if (!gltf_load("assets/models/player_walk.glb", &player_walk_model)) {
+    player_walk_model = gltf_load_skinned_request("assets/models/player_walk.glb");
+    if (!player_walk_model) {
         printf("Failed to load walk.glb\n");
         return;
     }
     
-    for (int i = 0; i < player_walk_model.animation_count; i++) {
-        printf("Anim %d: %s\n", i, player_walk_model.animation_names[i]);
+    if (player_walk_model->skeleton) {
+        bone_head = skeleton_find_bone(player_walk_model->skeleton, "mixamorig:Head");
+        bone_neck = skeleton_find_bone(player_walk_model->skeleton, "mixamorig:Neck");
     }
     
-    AnimationClip* walk = gltf_get_animation(&player_walk_model, "mixamo.com");
-    if (!walk && player_walk_model.animation_count > 0) {
-        walk = player_walk_model.animations[0];
-    }
-    
-    if (walk) {
-        walk_anim = anim_state_create(walk);
+    walk_clip = player_walk_model->anim ? player_walk_model->anim->clip : NULL;
+    if (walk_clip) {
+        walk_anim = anim_state_create(walk_clip);
         walk_anim->loop = 1;
         walk_anim->speed = 1.0f;
-        player_walk_model.skinned->gpu.skeleton = player_walk_model.skeleton;
-    }
-
-    if (player_walk_model.skeleton) {
-        bone_head = skeleton_find_bone(player_walk_model.skeleton, "mixamorig:Head");
-        bone_neck = skeleton_find_bone(player_walk_model.skeleton, "mixamorig:Neck");
+        player_walk_model->skinned->gpu.skeleton = player_walk_model->skeleton;
+        player_walk_model->skinned->gpu.anim = walk_anim;
     }
 }
 
@@ -364,7 +390,6 @@ void game_tick(float dt) {
 
     player_tick(&world, &player, &input_manager, dt);
     player_get_view(&player, view);
-
 
     if (__onserv) {
         static float last_send = 0.0f;
@@ -858,9 +883,15 @@ void game_destroy() {
         anim_state_destroy(walk_anim);
         walk_anim = NULL;
     }
-    if (player_walk_model.skinned) {
-        player_walk_model.skinned->gpu.anim = NULL;
+    if (player_walk_model) {
+        if (player_walk_model->skinned) {
+            player_walk_model->skinned->gpu.anim = NULL;
+        }
+        gltf_free_skinned_request(player_walk_model);
+        player_walk_model = NULL;
     }
-    gltf_free(&player_walk_model);
-    gltf_free(&player_jump_model);
+    if (player_jump_model) {
+        gltf_free_skinned_request(player_jump_model);
+        player_jump_model = NULL;
+    }
 }

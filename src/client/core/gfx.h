@@ -5,6 +5,9 @@
 #include "gl/vao.h"
 #include "gl/vbo.h"
 #include "gl/shader.h"
+
+#include "core/skin.h"
+
 #include <cglm/cglm.h>
 
 typedef struct {
@@ -27,11 +30,28 @@ typedef struct {
     GPUBuffer cache;
 } Render_request;
 
+typedef struct {
+    float* data;
+    int* triangles;
+
+    int data_size;
+    int tri_count;
+
+    Skinned* skinned;
+    Skeleton* skeleton;
+    AnimState* anim;
+
+    SkinnedLook look;
+} Skinned_render_request;
+
 void gfx_packet_static_request(Render_request* r); // call this whenever you want, it will just cache models ready to render
 void gfx_render(Render_request *r, Program* active_program); // render pre cached model
+void gfx_skinned_render(Skinned_render_request* r, Program* active_program);
+
 void gfx_program_create(Program* a, char* vsrc, char* fsc);
 void gfx_chunk_packet_static_request(Render_request* r); // for chunks (they have lightmaps)
 
 void gfx_draw_fullscreen_quad();
 
 #endif
+

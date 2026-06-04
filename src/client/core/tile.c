@@ -95,3 +95,12 @@ void tile_push_face(float* vertices,
 
     *i_cursor += 6;
 }
+
+void tile_push_cube(float* vertices, unsigned int* indices, float* pos, int* v_cursor, int* i_cursor) {
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, FRONT, 0, 15);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, BACK, 0, 15);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, RIGHT, 0, 15);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, LEFT, 0, 15);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, UP, 0, 15);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, DOWN, 0, 15);
+}

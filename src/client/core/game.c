@@ -36,8 +36,7 @@ uint16_t blockih = IRON_BLOCK;
 
 File world_file;
 
-Shader a, b, water_vertex, water_fragment, ba, bbb;
-Program c, water_prog, bc;
+Program c, water_prog, bc, shadow, shadow_w;
 
 static Skinned_render_request* player_walk_model;
 static Skinned_render_request* player_jump_model;
@@ -278,6 +277,9 @@ void game_init() {
 
     gfx_program_create(&skinned_prog, "assets/things/skin.vsh", "assets/things/skin.fsh");
     skinned_program_init(&skinned_prog);
+
+    gfx_program_create(&shadow, "assets/tile/tile.vsh", "assets/tile/shadow.fsh");
+    gfx_program_create(&shadow_w, "assets/tile/tile_water.vsh", "assets/tile/shadow.fsh");
 
     gfx_program_create(&c, "assets/tile/tile.vsh", "assets/tile/tile.fsh");
     gfx_program_create(&bc, "assets/things/hand.vsh", "assets/things/hand.fsh");
@@ -596,31 +598,29 @@ void game_shadow_pass(void) {
     glm_vec3_normalize(light_dir);
 
     glViewport(0, 0, 2048, 2048); // 4k ultra rtx shadows
+
     glEnable(GL_DEPTH_TEST);
     glClear(GL_DEPTH_BUFFER_BIT);
-    program_use(&c);
+
+    program_use(&shadow);
     texture_bind(&texture_atlas, 0);
-    texture_bind(&roughness, 1);
-    program_set_int(&c, "tex", 0);
-    program_set_int(&c, "roug", 1);
-    program_set_mat4(&c, "proj", (float*)light_proj);
-    program_set_mat4(&c, "view", (float*)light_view);
+    program_set_int(&shadow, "tex", 0);
+    program_set_mat4(&shadow, "proj", (float*)light_proj);
+    program_set_mat4(&shadow, "view", (float*)light_view);
 
-    program_use(&water_prog);
+    program_use(&shadow_w);
     texture_bind(&texture_atlas, 0);
-    texture_bind(&roughness, 1);
-    program_set_int(&water_prog, "tex", 0);
-    program_set_int(&water_prog, "roug", 1);
-    program_set_mat4(&water_prog, "proj", (float*)light_proj);
-    program_set_mat4(&water_prog, "view", (float*)light_view);
+    program_set_int(&shadow_w, "tex", 0);
+    program_set_mat4(&shadow_w, "proj", (float*)light_proj);
+    program_set_mat4(&shadow_w, "view", (float*)light_view);
 
-    world_render(&world, &c, &water_prog);
+    world_render(&world, &shadow, &shadow_w);
 
-    program_use(&c);
+    program_use(&shadow);
 
     texture_bind(&textt, 0);
     texture_bind(&brightt, 1);
-    gfx_render(text, &c);
+    gfx_render(text, &shadow);
 
     if (__onserv) {
         network_pump();

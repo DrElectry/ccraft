@@ -11,6 +11,8 @@
 #include "utils/fm.h"
 #include "core/game.h"
 
+static void world_install_chunk(World* world, int cx, int cz, uint16_t* data);
+
 void world_init(World* world) {
     world->chunks_map = malloc(sizeof(Chunk) * MAX_LOADED_CHUNKS);
     world->positions_map = malloc(sizeof(vec2) * MAX_LOADED_CHUNKS);
@@ -28,21 +30,24 @@ void world_init(World* world) {
 
     world->pending_count = 0;
 
+    world->far_water_mesh = (Render_request){0};
+    world->far_water_dirty = 1;
+    world->last_far_player_cx = 0;
+    world->last_far_player_cz = 0;
+
     world_gen_start();
 }
 
 void world_load(World* world, File* file) {
     ASSERT(memcmp(file->data, "CCRAFT", 6) == 0, "%s is not a valid ccraft file", file->src);
     
-    int offset = 6; // CCRAFT header
+    int offset = 6;
     
-    // 8 bytes seed
     uint64_t seed;
     memcpy(&seed, file->data + offset, 8);
     offset += 8;
     rng_seed(seed);
     
-    // player data (20 bytes)
     float player_data[5];
     memcpy(player_data, file->data + offset, 20);
     offset += 20;
@@ -51,7 +56,6 @@ void world_load(World* world, File* file) {
     memcpy(&total_changes, file->data + offset, sizeof(int));
     offset += sizeof(int);
     
-    // capacity
     if (world->pending_block_capacity < total_changes) {
         world->pending_block_capacity = total_changes;
         world->pending_block_changes = realloc(world->pending_block_changes, 
@@ -191,8 +195,6 @@ void world_queue_block_change(World* world, int x, int y, int z, uint16_t block)
     world->pending_block_count++;
 }
 
-// help me
-
 int world_set_block(World* world, int wx, int wy, int wz, uint16_t block) {
     if (wy < 0 || wy >= CHUNK_HEIGHT)
         return 0;
@@ -210,7 +212,6 @@ int world_set_block(World* world, int wx, int wy, int wz, uint16_t block) {
     int lz = floor_mod(wz, CHUNK_DEPTH);
 
     int index = lx + CHUNK_WIDTH * (wy + CHUNK_HEIGHT * lz);
-    // persisting :0
     world_queue_block_change(world, wx, wy, wz, block);
     chunk->data[index] = block;
 
@@ -237,7 +238,7 @@ void new_world(const char* filename) {
     float player_data[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     file_addwrite(&file, (char*)player_data, 20);
     
-    int zero = 0; // nice code
+    int zero = 0;
     file_addwrite(&file, (char*)&zero, sizeof(int));
 }
 
@@ -318,6 +319,116 @@ void world_rebuild_chunk(World* world, int cx, int cz) {
     world_mesh_submit(world, cx, cz);
 }
 
+static void world_build_far_water_mesh(World* world, int player_cx, int player_cz) {
+    int render_dist = WORLD_RENDER_DISTANCE;
+    int far_start = FAR_WATER_DISTANCE;
+    
+    int min_cx = player_cx - render_dist;
+    int max_cx = player_cx + render_dist;
+    int min_cz = player_cz - render_dist;
+    int max_cz = player_cz + render_dist;
+    
+    int quads = 0;
+    for (int cx = min_cx; cx <= max_cx; cx++) {
+        for (int cz = min_cz; cz <= max_cz; cz++) {
+            int dx = cx - player_cx;
+            int dz = cz - player_cz;
+            int dist2 = dx*dx + dz*dz;
+            if (dist2 <= render_dist*render_dist && dist2 > far_start*far_start) {
+                quads++;
+            }
+        }
+    }
+    
+    if (quads == 0) {
+        if (world->far_water_mesh.data) {
+            free(world->far_water_mesh.data);
+            world->far_water_mesh.data = NULL;
+            world->far_water_mesh.tri_count = 0;
+        }
+        return;
+    }
+    
+    int vertices_per_quad = 4;
+    int indices_per_quad = 6;
+    int total_verts = quads * vertices_per_quad;
+    int total_indices = quads * indices_per_quad;
+    
+    float* vertices = malloc(total_verts * 9 * sizeof(float));
+    int* indices = malloc(total_indices * sizeof(int));
+    
+    int v_offset = 0;
+    int i_offset = 0;
+    int base_vertex = 0;
+    
+    float water_level = 24.0f;
+    
+    for (int cx = min_cx; cx <= max_cx; cx++) {
+        for (int cz = min_cz; cz <= max_cz; cz++) {
+            int dx = cx - player_cx;
+            int dz = cz - player_cz;
+            int dist2 = dx*dx + dz*dz;
+            if (dist2 > render_dist*render_dist || dist2 <= far_start*far_start)
+                continue;
+            
+            float x0 = cx * CHUNK_WIDTH;
+            float z0 = cz * CHUNK_DEPTH;
+            float x1 = x0 + CHUNK_WIDTH;
+            float z1 = z0 + CHUNK_DEPTH;
+            
+            float uv[8] = {0,0, 1,0, 1,1, 0,1};
+            
+            float verts[4][3] = {
+                {x0, water_level, z0},
+                {x1, water_level, z0},
+                {x1, water_level, z1},
+                {x0, water_level, z1}
+            };
+            
+            for (int i = 0; i < 4; i++) {
+                int base = v_offset + i * 9;
+                vertices[base + 0] = verts[i][0];
+                vertices[base + 1] = verts[i][1];
+                vertices[base + 2] = verts[i][2];
+                vertices[base + 3] = uv[i*2];
+                vertices[base + 4] = uv[i*2+1];
+                vertices[base + 5] = 0.0f;
+                vertices[base + 6] = 1.0f;
+                vertices[base + 7] = 0.0f;
+                vertices[base + 8] = 1.0f;
+            }
+            
+            indices[i_offset + 0] = base_vertex + 0;
+            indices[i_offset + 1] = base_vertex + 1;
+            indices[i_offset + 2] = base_vertex + 2;
+            indices[i_offset + 3] = base_vertex + 2;
+            indices[i_offset + 4] = base_vertex + 3;
+            indices[i_offset + 5] = base_vertex + 0;
+            
+            v_offset += 36;
+            i_offset += 6;
+            base_vertex += 4;
+        }
+    }
+    
+    if (world->far_water_mesh.data) {
+        free(world->far_water_mesh.data);
+        free(world->far_water_mesh.triangles);
+        vbo_free(&world->far_water_mesh.cache.vbo);
+        vao_free(&world->far_water_mesh.cache.vao);
+        ebo_free(&world->far_water_mesh.cache.ebo);
+    }
+    
+    world->far_water_mesh.data = vertices;
+    world->far_water_mesh.triangles = indices;
+    world->far_water_mesh.data_size = total_verts * 9 * sizeof(float);
+    world->far_water_mesh.tri_count = total_indices / 3;
+    glm_vec3_copy((vec3){0,0,0}, world->far_water_mesh.rot);
+    glm_vec3_copy((vec3){1,1,1}, world->far_water_mesh.scale);
+    
+    gfx_chunk_packet_static_request(&world->far_water_mesh);
+}
+
 void world_render(World* world, void* active_program, void* water_program, int cull) {
     vec3 cam_pos;
     glm_vec3_copy(player.camera.pos, cam_pos);
@@ -372,51 +483,35 @@ void world_render(World* world, void* active_program, void* water_program, int c
         }
 
         gfx_render(&world->chunks_map[i].model, (Program*)active_program);
-        gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
+        
+        int cx = (int)world->positions_map[i][0];
+        int cz = (int)world->positions_map[i][1];
+        int pcx = floor_div((int)cam_pos[0], CHUNK_WIDTH);
+        int pcz = floor_div((int)cam_pos[2], CHUNK_DEPTH);
+        int dx = cx - pcx;
+        int dz = cz - pcz;
+        int dist2 = dx*dx + dz*dz;
+        
+        if (dist2 <= FAR_WATER_DISTANCE * FAR_WATER_DISTANCE) {
+            gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
+        }
+    }
+    
+    if (world->far_water_mesh.data && world->far_water_mesh.tri_count > 0) {
+        gfx_render(&world->far_water_mesh, (Program*)water_program);
     }
 }
 
-void world_destroy(World* world) {
-    world_gen_stop();
-
-    for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
-        if (world->index_map[i] != -1) {
-            Chunk* chunk = &world->chunks_map[i];
-            if (chunk->model.data) {
-                free(chunk->model.data);
-                chunk->model.data = NULL;
-            }
-            if (chunk->model.triangles) {
-                free(chunk->model.triangles);
-                chunk->model.triangles = NULL;
-            }
-            vbo_free(&chunk->model.cache.vbo);
-            vao_free(&chunk->model.cache.vao);
-            ebo_free(&chunk->model.cache.ebo);
-
-            if (chunk->water_model.data) {
-                free(chunk->water_model.data);
-                chunk->water_model.data = NULL;
-            }
-            if (chunk->water_model.triangles) {
-                free(chunk->water_model.triangles);
-                chunk->water_model.triangles = NULL;
-            }
-            vbo_free(&chunk->water_model.cache.vbo);
-            vao_free(&chunk->water_model.cache.vao);
-            ebo_free(&chunk->water_model.cache.ebo);
-        }
+static void world_update_far_water(World* world, int pcx, int pcz) {
+    if (pcx != world->last_far_player_cx || pcz != world->last_far_player_cz) {
+        world->far_water_dirty = 1;
+        world->last_far_player_cx = pcx;
+        world->last_far_player_cz = pcz;
     }
-
-    free(world->chunks_map);
-    free(world->positions_map);
-    free(world->index_map);
-    free(world->pending_block_changes);
-
-    world->chunks_map = NULL;
-    world->positions_map = NULL;
-    world->index_map = NULL;
-    world->pending_block_changes = NULL;
+    if (world->far_water_dirty) {
+        world_build_far_water_mesh(world, pcx, pcz);
+        world->far_water_dirty = 0;
+    }
 }
 
 static void world_install_chunk(World* world, int cx, int cz, uint16_t* data) {
@@ -502,6 +597,7 @@ void world_tick(World* world, vec3 ppos) {
     int pcx = floor_div((int)ppos[0], CHUNK_WIDTH);
     int pcz = floor_div((int)ppos[2], CHUNK_DEPTH);
 
+    world_update_far_water(world, pcx, pcz);
 
     int render_dist = WORLD_RENDER_DISTANCE;
 
@@ -601,4 +697,63 @@ void world_tick(World* world, vec3 ppos) {
     }
 
     world_process_rebuild_queue(world);
+}
+
+void world_destroy(World* world) {
+    world_gen_stop();
+
+    for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
+        if (world->index_map[i] != -1) {
+            Chunk* chunk = &world->chunks_map[i];
+            if (chunk->data) {
+                free(chunk->data);
+                chunk->data = NULL;
+            }
+            if (chunk->model.data) {
+                free(chunk->model.data);
+                chunk->model.data = NULL;
+            }
+            if (chunk->model.triangles) {
+                free(chunk->model.triangles);
+                chunk->model.triangles = NULL;
+            }
+            vbo_free(&chunk->model.cache.vbo);
+            vao_free(&chunk->model.cache.vao);
+            ebo_free(&chunk->model.cache.ebo);
+
+            if (chunk->water_model.data) {
+                free(chunk->water_model.data);
+                chunk->water_model.data = NULL;
+            }
+            if (chunk->water_model.triangles) {
+                free(chunk->water_model.triangles);
+                chunk->water_model.triangles = NULL;
+            }
+            vbo_free(&chunk->water_model.cache.vbo);
+            vao_free(&chunk->water_model.cache.vao);
+            ebo_free(&chunk->water_model.cache.ebo);
+        }
+    }
+
+    if (world->far_water_mesh.data) {
+        free(world->far_water_mesh.data);
+        world->far_water_mesh.data = NULL;
+    }
+    if (world->far_water_mesh.triangles) {
+        free(world->far_water_mesh.triangles);
+        world->far_water_mesh.triangles = NULL;
+    }
+    vbo_free(&world->far_water_mesh.cache.vbo);
+    vao_free(&world->far_water_mesh.cache.vao);
+    ebo_free(&world->far_water_mesh.cache.ebo);
+
+    free(world->chunks_map);
+    free(world->positions_map);
+    free(world->index_map);
+    free(world->pending_block_changes);
+
+    world->chunks_map = NULL;
+    world->positions_map = NULL;
+    world->index_map = NULL;
+    world->pending_block_changes = NULL;
 }

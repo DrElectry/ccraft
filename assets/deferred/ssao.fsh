@@ -111,8 +111,7 @@ void main()
         occ += range * ndot;
     }
 
-    occ *= invSamples;
-    occ *= 0.6;
+    occ /= 64;
 
     fragColor = 1.0 - clamp(occ, 0.0, 1.0);
 }

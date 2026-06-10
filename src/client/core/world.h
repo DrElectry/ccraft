@@ -18,15 +18,16 @@
 #define WORLD_RENDER_DISTANCE 8
 #endif
 
+#ifndef FAR_WATER_DISTANCE
+#define FAR_WATER_DISTANCE 4   // chunks beyond this use combined water mesh
+#endif
+
 typedef struct BlockChange {
     int x;
     int y;
     int z;
     uint16_t block;
-} BlockChange; // gcc will probably pad it
-
-// for block changes i decided to hold 64000 of those in memory, which i can easily allocate
-// then, when we load the chunk we check those block changes
+} BlockChange;
 
 typedef struct World {
     Chunk* chunks_map;
@@ -40,6 +41,11 @@ typedef struct World {
     int pending_block_count;
     int pending_block_capacity;
 
+    // Far water optimization
+    Render_request far_water_mesh;
+    int far_water_dirty;
+    int last_far_player_cx;
+    int last_far_player_cz;
 } World;
 
 void world_init(World* world);

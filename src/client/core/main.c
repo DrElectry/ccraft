@@ -136,16 +136,17 @@ int main(int argc, char* argv[]) {
     FBO gbuffer;
     FBO shadow_pass;
     FBO ssaofb;
+    FBO ssaoblurfb;
     FBO ppfb;
     FBO prev_frame;
     FBO ssrfb;
-    FBO bloombfb;
-    FBO bloomblfb;
+    FBO bloomfb;
+    FBO blurfb;
     FBO ffb;
 
-    Shader mainv, mainf, ssaof, ppf, ssrf, bloombf, bloomblf, crossf;
-    Program main, ssao, pp, ssr, bloomb, bloombl, cross;
-    File mainfv, mainff, ssaoff, ppff, ssrff, bloombff, bloomblff, crossff;
+    Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, crossf;
+    Program main, ssao, pp, ssr, blur, bloom, cross;
+    File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, crossff;
 
     Texture crosshair;
 
@@ -161,8 +162,8 @@ int main(int argc, char* argv[]) {
     ssaof.type = GL_FRAGMENT_SHADER;
     ppf.type = GL_FRAGMENT_SHADER;
     ssrf.type = GL_FRAGMENT_SHADER;
-    bloombf.type = GL_FRAGMENT_SHADER;
-    bloomblf.type = GL_FRAGMENT_SHADER;
+    bloomf.type = GL_FRAGMENT_SHADER;
+    blurf.type = GL_FRAGMENT_SHADER;
     crossf.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
@@ -170,8 +171,8 @@ int main(int argc, char* argv[]) {
     ssaoff = file_open("assets/deferred/ssao.fsh");
     ppff = file_open("assets/deferred/pp.fsh");
     ssrff = file_open("assets/deferred/ssr.fsh");
-    bloombff = file_open("assets/deferred/bloomb.fsh");
-    bloomblff = file_open("assets/deferred/bloombl.fsh");
+    bloomff = file_open("assets/deferred/bloom.fsh");
+    blurff = file_open("assets/deferred/blur.fsh");
     crossff = file_open("assets/gui/crosshair.fsh");
 
     shader_create(&mainv, mainfv.data);
@@ -179,29 +180,31 @@ int main(int argc, char* argv[]) {
     shader_create(&ssaof, ssaoff.data);
     shader_create(&ppf, ppff.data);
     shader_create(&ssrf, ssrff.data);
-    shader_create(&bloombf, bloombff.data);
-    shader_create(&bloomblf, bloomblff.data);
+    shader_create(&bloomf, bloomff.data);
+    shader_create(&blurf, blurff.data);
     shader_create(&crossf, crossff.data);
 
     program_create(&main, &mainv, &mainf);
     program_create(&ssao, &mainv, &ssaof);
     program_create(&pp, &mainv, &ppf);
     program_create(&ssr, &mainv, &ssrf);
-    program_create(&bloomb, &mainv, &bloombf);
-    program_create(&bloombl, &mainv, &bloomblf);
+    program_create(&blur, &mainv, &blurf);
+    program_create(&bloom, &mainv, &bloomf);
     program_create(&cross, &mainv, &crossf);
 
     ssrfb.color_formats[0] = FBO_COLOR_RGBA16F;
-    bloombfb.color_formats[0] = FBO_COLOR_RGBA16F;
-    bloomblfb.color_formats[0] = FBO_COLOR_RGBA16F;
+    bloomfb.color_formats[0] = FBO_COLOR_RGBA16F;
+    blurfb.color_formats[0] = FBO_COLOR_RGBA16F;
+    ssaoblurfb.color_formats[0] = FBO_COLOR_RGBA16F;
     ffb.color_formats[1] = FBO_COLOR_RGBA16F;
 
     fbo_create(&ssaofb, WIDTH/2, HEIGHT/2, 1);
+    fbo_create(&ssaoblurfb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&prev_frame, WIDTH, HEIGHT, 1);
     fbo_create(&ppfb, WIDTH, HEIGHT, 1);
     fbo_create(&ssrfb, WIDTH/2, HEIGHT/2, 1);
-    fbo_create(&bloombfb, WIDTH/2, HEIGHT/2, 1);
-    fbo_create(&bloomblfb, WIDTH/2, HEIGHT/2, 1);
+    fbo_create(&bloomfb, WIDTH/2, HEIGHT/2, 1);
+    fbo_create(&blurfb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&ffb, WIDTH, HEIGHT, 1);
 
     gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
@@ -222,14 +225,14 @@ int main(int argc, char* argv[]) {
     double last_time = glfwGetTime();
     float fps_timer = 0.0f;
     int fps_counter = 0;
-    float time;
+    float time = 0.0f;
 
     while (!window_shouldclose()) {
         double current_time = glfwGetTime();
         float delta_time = (float)(current_time - last_time);
         last_time = current_time;
 
-        time+=delta_time;
+        time += delta_time;
 
         game_tick(delta_time);
 
@@ -253,8 +256,8 @@ int main(int argc, char* argv[]) {
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
 
-        fbo_bind(&prev_frame);
         // yuck yuck copying
+        fbo_bind(&prev_frame);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prev_frame.id);
         glBlitFramebuffer(0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_LINEAR);
@@ -297,6 +300,36 @@ int main(int argc, char* argv[]) {
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
+        fbo_bind(&ssaoblurfb);
+
+        program_use(&blur);
+
+        fbo_bind_texture(&ssaofb, 0, 0);
+
+        program_set_int(&blur, "image", 0);
+        program_set_vec2(&blur, "direction", (float[]){1.0f, 0.0f});
+        program_set_vec2(&blur, "blur_ratio", ssao_ratio);
+        program_set_float(&blur, "blurScale", 1.0f);
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
+        fbo_bind(&ssaofb);
+
+        program_use(&blur);
+
+        fbo_bind_texture(&ssaoblurfb, 0, 0);
+
+        program_set_int(&blur, "image", 0);
+        program_set_vec2(&blur, "direction", (float[]){0.0f, 1.0f});
+        program_set_float(&blur, "blurScale", 1.0f);
+        program_set_vec2(&blur, "blur_ratio", ssao_ratio);
 
         gfx_draw_fullscreen_quad();
 
@@ -359,45 +392,44 @@ int main(int argc, char* argv[]) {
 
         fbo_unbind();
 
-        fbo_bind(&bloombfb);
+        fbo_bind(&bloomfb);
 
-        program_use(&bloomb);
+        program_use(&bloom);
 
         fbo_bind_texture(&ppfb, 0, 0);
 
-        program_set_int(&bloomb, "sceneTex", 0);
-
-        program_set_vec2(&bloomb, "bloom_ratio", bloom_ratio);
-
-        gfx_draw_fullscreen_quad();
-
-        fbo_unbind();
-
-        fbo_bind(&bloomblfb);
-
-        program_use(&bloombl);
-
-        fbo_bind_texture(&bloombfb, 0, 0);
-
-        program_set_int(&bloombl, "image", 0);
-        program_set_vec2(&bloombl, "direction", (float[]){1.0f, 0.0f});
-
-        program_set_vec2(&bloombl, "bloom_ratio", bloom_ratio);
+        program_set_int(&bloom, "image", 0);
+        program_set_vec2(&bloom, "bloom_ratio", bloom_ratio);
 
         gfx_draw_fullscreen_quad();
 
         fbo_unbind();
 
-        fbo_bind(&bloombfb);
+        fbo_bind(&blurfb);
 
-        program_use(&bloombl);
+        program_use(&blur);
 
-        fbo_bind_texture(&bloomblfb, 0, 0);
+        fbo_bind_texture(&bloomfb, 0, 0);
 
-        program_set_int(&bloombl, "image", 0);
-        program_set_vec2(&bloombl, "direction", (float[]){0.0f, 1.0f});
+        program_set_int(&blur, "image", 0);
+        program_set_vec2(&blur, "direction", (float[]){1.0f, 0.0f});
+        program_set_float(&blur, "blurScale", 2.0f);
+        program_set_vec2(&blur, "blur_ratio", bloom_ratio);
 
-        program_set_vec2(&bloombl, "bloom_ratio", bloom_ratio);
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
+        fbo_bind(&bloomfb);
+
+        program_use(&blur);
+
+        fbo_bind_texture(&blurfb, 0, 0);
+
+        program_set_int(&blur, "image", 0);
+        program_set_vec2(&blur, "direction", (float[]){0.0f, 1.0f});
+        program_set_float(&blur, "blurScale", 2.0f);
+        program_set_vec2(&blur, "blur_ratio", bloom_ratio);
 
         gfx_draw_fullscreen_quad();
 
@@ -409,7 +441,7 @@ int main(int argc, char* argv[]) {
 
         fbo_bind_texture(&ppfb, 0, 0);
         fbo_bind_depth_texture(&gbuffer, 1);
-        fbo_bind_texture(&bloombfb, 0, 2);
+        fbo_bind_texture(&bloomfb, 0, 2);
 
         program_set_int(&pp, "colorTexture", 0);
         program_set_int(&pp, "depthTexture", 1);

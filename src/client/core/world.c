@@ -9,6 +9,7 @@
 #include "utils/log.h"
 #include "utils/noise.h"
 #include "utils/fm.h"
+#include "core/game.h"
 
 void world_init(World* world) {
     world->chunks_map = malloc(sizeof(Chunk) * MAX_LOADED_CHUNKS);
@@ -318,11 +319,56 @@ void world_rebuild_chunk(World* world, int cx, int cz) {
 }
 
 void world_render(World* world, void* active_program, void* water_program) {
+    vec3 cam_pos;
+    glm_vec3_copy(player.camera.pos, cam_pos);
+
+    vec3 forward;
+    glm_vec3_copy(player.camera.forward, forward);
+
+    float forward_len2 = forward[0] * forward[0] + forward[1] * forward[1] + forward[2] * forward[2];
+    if (forward_len2 > 0.000001f) {
+        float inv = 1.0f / sqrtf(forward_len2);
+        forward[0] *= inv;
+        forward[1] *= inv;
+        forward[2] *= inv;
+    }
+
     for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
-        if (world->index_map[i] != -1) {
-            gfx_render(&world->chunks_map[i].model, (Program*)active_program);
-            gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
+        if (world->index_map[i] == -1) continue;
+
+        // XZ plane bounding box (ignore Y)
+        vec2 box_min_xz = {
+            world->chunks_map[i].model.pos[0],
+            world->chunks_map[i].model.pos[2]
+        };
+        vec2 box_max_xz = {
+            world->chunks_map[i].model.pos[0] + CHUNK_WIDTH,
+            world->chunks_map[i].model.pos[2] + CHUNK_DEPTH
+        };
+
+        float max_dot = -1e30f;
+
+        // Only test the 4 corners in XZ plane
+        for (int ix = 0; ix < 2; ix++) {
+            for (int iz = 0; iz < 2; iz++) {
+                vec3 corner = {
+                    ix ? box_max_xz[0] : box_min_xz[0],
+                    cam_pos[1],  // Use camera Y position as the test height
+                    iz ? box_max_xz[1] : box_min_xz[1]
+                };
+
+                float dx = corner[0] - cam_pos[0];
+                float dy = corner[1] - cam_pos[1];
+                float dz = corner[2] - cam_pos[2];
+                float d = forward[0] * dx + forward[1] * dy + forward[2] * dz;
+                if (d > max_dot) max_dot = d;
+            }
         }
+
+        if (max_dot < 0.0f) continue;
+
+        gfx_render(&world->chunks_map[i].model, (Program*)active_program);
+        gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
     }
 }
 

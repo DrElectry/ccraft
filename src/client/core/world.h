@@ -19,7 +19,7 @@
 #endif
 
 #ifndef FAR_WATER_DISTANCE
-#define FAR_WATER_DISTANCE 4   // chunks beyond this use combined water mesh
+#define FAR_WATER_DISTANCE 4
 #endif
 
 typedef struct BlockChange {
@@ -40,12 +40,6 @@ typedef struct World {
     BlockChange* pending_block_changes;
     int pending_block_count;
     int pending_block_capacity;
-
-    // Far water optimization
-    Render_request far_water_mesh;
-    int far_water_dirty;
-    int last_far_player_cx;
-    int last_far_player_cz;
 } World;
 
 void world_init(World* world);
@@ -67,7 +61,7 @@ void world_process_rebuild_queue(World* world);
 
 void world_queue_block_change(World* world, int x, int y, int z, uint16_t block);
 
-void world_render(World* world, void* active_program, void* water_program, int cull) ;
+void world_render(World* world, void* active_program, void* water_program, int cull);
 void world_tick(World* world, vec3 ppos);
 
 void world_reload_render_distance(World* world, vec3 ppos);

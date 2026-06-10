@@ -4,6 +4,7 @@ uniform sampler2D gAlbedo;
 uniform sampler2D gPosition;
 uniform sampler2D gNormal;
 uniform sampler2D gRoughness;
+uniform sampler2D gDepth;
 
 uniform mat4 invView;
 uniform mat4 projection;
@@ -29,6 +30,11 @@ vec3 SSRBlur(vec2 uv);
 
 void main()
 {
+    float d0 = texture(gDepth, out_uv).r;
+    if (d0 >= 0.999999) {
+        fragColor = vec4(0.0);
+        return;
+    }
     Metallic = texture(gRoughness, out_uv).r;
 
     vec3 worldNormal = normalize(texture(gNormal, out_uv).rgb);

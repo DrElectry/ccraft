@@ -304,11 +304,13 @@ int main(int argc, char* argv[]) {
         fbo_bind_texture(&gbuffer, 1, 1);
         fbo_bind_texture(&gbuffer, 2, 3);
         fbo_bind_texture(&gbuffer, 3, 4);
+        fbo_bind_depth_texture(&gbuffer, 5);
 
         program_set_int(&ssr, "gAlbedo", 0);
         program_set_int(&ssr, "gNormal", 1);
         program_set_int(&ssr, "gPosition", 3);
         program_set_int(&ssr, "gRoughness", 4);
+        program_set_int(&ssr, "gDepth", 5);
 
         program_set_mat4(&ssr, "projection", (float*)projection);
         program_set_mat4(&ssr, "view", (float*)view);

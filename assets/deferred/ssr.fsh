@@ -5,6 +5,7 @@ uniform sampler2D gPosition;
 uniform sampler2D gNormal;
 uniform sampler2D gRoughness;
 uniform sampler2D gDepth;
+uniform vec2 ssr_ratio;
 
 uniform mat4 invView;
 uniform mat4 projection;
@@ -30,18 +31,20 @@ vec3 SSRBlur(vec2 uv);
 
 void main()
 {
-    float d0 = texture(gDepth, out_uv).r;
+    vec2 scaled_uv = out_uv * ssr_ratio;
+    
+    float d0 = texture(gDepth, scaled_uv).r;
     if (d0 >= 0.999999) {
         fragColor = vec4(0.0);
         return;
     }
-    Metallic = texture(gRoughness, out_uv).r;
+    Metallic = texture(gRoughness, scaled_uv).r;
 
-    vec3 worldNormal = normalize(texture(gNormal, out_uv).rgb);
+    vec3 worldNormal = normalize(texture(gNormal, scaled_uv).rgb);
     vec3 viewNormal  = normalize(vec3(view * vec4(worldNormal, 0.0)));
 
-    vec3 viewPos = textureLod(gPosition, out_uv, 2).xyz;
-    vec3 albedo  = texture(gAlbedo, out_uv).rgb;
+    vec3 viewPos = textureLod(gPosition, scaled_uv, 2).xyz;
+    vec3 albedo  = texture(gAlbedo, scaled_uv).rgb;
 
     vec3 F0      = mix(vec3(0.04), albedo, Metallic);
     vec3 Fresnel = fresnelSchlick(
@@ -139,7 +142,7 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 
 vec3 SSRBlur(vec2 uv)
 {
-    vec2 texel = 1.0 / vec2(textureSize(gAlbedo, 0));
+    vec2 texel = 1.0 / (vec2(textureSize(gAlbedo, 0)) / ssr_ratio);
     
     float metallic = clamp(Metallic, 0.0, 1.0);
     

@@ -15,7 +15,7 @@
 #endif
 
 #ifndef WORLD_RENDER_DISTANCE
-#define WORLD_RENDER_DISTANCE 4
+#define WORLD_RENDER_DISTANCE 8
 #endif
 
 typedef struct BlockChange {
@@ -61,7 +61,7 @@ void world_process_rebuild_queue(World* world);
 
 void world_queue_block_change(World* world, int x, int y, int z, uint16_t block);
 
-void world_render(World* world, void* active_program, void* water_program) ;
+void world_render(World* world, void* active_program, void* water_program, int cull) ;
 void world_tick(World* world, vec3 ppos);
 
 void world_reload_render_distance(World* world, vec3 ppos);

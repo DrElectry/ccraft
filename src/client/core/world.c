@@ -318,7 +318,7 @@ void world_rebuild_chunk(World* world, int cx, int cz) {
     world_mesh_submit(world, cx, cz);
 }
 
-void world_render(World* world, void* active_program, void* water_program) {
+void world_render(World* world, void* active_program, void* water_program, int cull) {
     vec3 cam_pos;
     glm_vec3_copy(player.camera.pos, cam_pos);
 
@@ -336,38 +336,40 @@ void world_render(World* world, void* active_program, void* water_program) {
     for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
         if (world->index_map[i] == -1) continue;
 
-        vec3 box_min = {
-            world->chunks_map[i].model.pos[0],
-            0.0f,
-            world->chunks_map[i].model.pos[2]
-        };
-        vec3 box_max = {
-            world->chunks_map[i].model.pos[0] + CHUNK_WIDTH,
-            (float)CHUNK_HEIGHT,
-            world->chunks_map[i].model.pos[2] + CHUNK_DEPTH
-        };
+        if (cull) {
+            vec3 box_min = {
+                world->chunks_map[i].model.pos[0],
+                0.0f,
+                world->chunks_map[i].model.pos[2]
+            };
+            vec3 box_max = {
+                world->chunks_map[i].model.pos[0] + CHUNK_WIDTH,
+                (float)CHUNK_HEIGHT,
+                world->chunks_map[i].model.pos[2] + CHUNK_DEPTH
+            };
 
-        float max_dot = -1e30f;
+            float max_dot = -1e30f;
 
-        for (int ix = 0; ix < 2; ix++) {
-            for (int iy = 0; iy < 2; iy++) {
-                for (int iz = 0; iz < 2; iz++) {
-                    vec3 corner = {
-                        ix ? box_max[0] : box_min[0],
-                        iy ? box_max[1] : box_min[1],
-                        iz ? box_max[2] : box_min[2]
-                    };
+            for (int ix = 0; ix < 2; ix++) {
+                for (int iy = 0; iy < 2; iy++) {
+                    for (int iz = 0; iz < 2; iz++) {
+                        vec3 corner = {
+                            ix ? box_max[0] : box_min[0],
+                            iy ? box_max[1] : box_min[1],
+                            iz ? box_max[2] : box_min[2]
+                        };
 
-                    float dx = corner[0] - cam_pos[0];
-                    float dy = corner[1] - cam_pos[1];
-                    float dz = corner[2] - cam_pos[2];
-                    float d = forward[0] * dx + forward[1] * dy + forward[2] * dz;
-                    if (d > max_dot) max_dot = d;
+                        float dx = corner[0] - cam_pos[0];
+                        float dy = corner[1] - cam_pos[1];
+                        float dz = corner[2] - cam_pos[2];
+                        float d = forward[0] * dx + forward[1] * dy + forward[2] * dz;
+                        if (d > max_dot) max_dot = d;
+                    }
                 }
             }
-        }
 
-        if (max_dot < 0.0f) continue;
+            if (max_dot < 0.0f) continue;
+        }
 
         gfx_render(&world->chunks_map[i].model, (Program*)active_program);
         gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);

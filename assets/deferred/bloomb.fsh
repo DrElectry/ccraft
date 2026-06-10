@@ -5,10 +5,12 @@ in vec2 out_uv;
 out vec4 fragColor;
 
 uniform sampler2D sceneTex;
+uniform vec2 bloom_ratio;
 
 void main()
 {
-    vec3 color = texture(sceneTex, out_uv).rgb;
+    vec2 scaled_uv = out_uv * bloom_ratio;
+    vec3 color = texture(sceneTex, scaled_uv).rgb;
 
     float brightness =
         dot(color, vec3(0.2126, 0.7152, 0.0722));

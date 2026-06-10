@@ -191,27 +191,31 @@ int main(int argc, char* argv[]) {
     program_create(&bloombl, &mainv, &bloomblf);
     program_create(&cross, &mainv, &crossf);
 
-    fbo_create(&ssaofb, WIDTH, HEIGHT, 1);
-    fbo_create(&prev_frame, WIDTH, HEIGHT, 1);
-    fbo_create(&ppfb, WIDTH, HEIGHT, 1);
-    fbo_create(&ssrfb, WIDTH, HEIGHT, 1);
-    fbo_create(&bloombfb, WIDTH, HEIGHT, 1);
-    fbo_create(&bloomblfb, WIDTH, HEIGHT, 1);
-    fbo_create(&ffb, WIDTH, HEIGHT, 1);
-
     ssrfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloombfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloomblfb.color_formats[0] = FBO_COLOR_RGBA16F;
     ffb.color_formats[1] = FBO_COLOR_RGBA16F;
 
-    fbo_create(&gbuffer, WIDTH, HEIGHT, 4);
+    fbo_create(&ssaofb, WIDTH/2, HEIGHT/2, 1);
+    fbo_create(&prev_frame, WIDTH, HEIGHT, 1);
+    fbo_create(&ppfb, WIDTH, HEIGHT, 1);
+    fbo_create(&ssrfb, WIDTH/2, HEIGHT/2, 1);
+    fbo_create(&bloombfb, WIDTH/2, HEIGHT/2, 1);
+    fbo_create(&bloomblfb, WIDTH/2, HEIGHT/2, 1);
+    fbo_create(&ffb, WIDTH, HEIGHT, 1);
 
     gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[2] = FBO_COLOR_RGBA16F;
     gbuffer.color_formats[3] = FBO_COLOR_RG16F;
 
+    fbo_create(&gbuffer, WIDTH, HEIGHT, 4);
+
     fbo_create_depth(&shadow_pass, 2048, 2048);
+
+    float ssao_ratio[2] = {(float)WIDTH / (WIDTH/2), (float)HEIGHT / (HEIGHT/2)};
+    float ssr_ratio[2] = {(float)WIDTH / (WIDTH/2), (float)HEIGHT / (HEIGHT/2)};
+    float bloom_ratio[2] = {(float)WIDTH / (WIDTH/2), (float)HEIGHT / (HEIGHT/2)};
 
     game_init();
 
@@ -289,6 +293,8 @@ int main(int argc, char* argv[]) {
         program_set_mat4(&ssao, "inverseProjection", (float*)inv_projection);
         program_set_mat4(&ssao, "proj", (float*)projection);
 
+        program_set_vec2(&ssao, "ssao_ratio", ssao_ratio);
+
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
 
@@ -314,6 +320,8 @@ int main(int argc, char* argv[]) {
 
         program_set_mat4(&ssr, "projection", (float*)projection);
         program_set_mat4(&ssr, "view", (float*)view);
+
+        program_set_vec2(&ssr, "ssr_ratio", ssr_ratio);
 
         gfx_draw_fullscreen_quad();
 
@@ -359,6 +367,8 @@ int main(int argc, char* argv[]) {
 
         program_set_int(&bloomb, "sceneTex", 0);
 
+        program_set_vec2(&bloomb, "bloom_ratio", bloom_ratio);
+
         gfx_draw_fullscreen_quad();
 
         fbo_unbind();
@@ -372,6 +382,8 @@ int main(int argc, char* argv[]) {
         program_set_int(&bloombl, "image", 0);
         program_set_vec2(&bloombl, "direction", (float[]){1.0f, 0.0f});
 
+        program_set_vec2(&bloombl, "bloom_ratio", bloom_ratio);
+
         gfx_draw_fullscreen_quad();
 
         fbo_unbind();
@@ -384,6 +396,8 @@ int main(int argc, char* argv[]) {
 
         program_set_int(&bloombl, "image", 0);
         program_set_vec2(&bloombl, "direction", (float[]){0.0f, 1.0f});
+
+        program_set_vec2(&bloombl, "bloom_ratio", bloom_ratio);
 
         gfx_draw_fullscreen_quad();
 

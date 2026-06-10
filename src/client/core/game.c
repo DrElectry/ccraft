@@ -496,7 +496,7 @@ void game_shadow_pass(void) {
     program_set_mat4(&shadow_w, "proj", (float*)light_proj);
     program_set_mat4(&shadow_w, "view", (float*)light_view);
 
-    world_render(&world, &shadow, &shadow_w);
+    world_render(&world, &shadow, &shadow_w, 0);
 
     program_use(&shadow);
 
@@ -591,7 +591,7 @@ void game_draw(float time) {
     program_set_mat4(&water_prog, "view", (float*)view);
     program_set_float(&water_prog, "time", time);
 
-    world_render(&world, &c, &water_prog);
+    world_render(&world, &c, &water_prog, 1);
 
     program_use(&c);
 

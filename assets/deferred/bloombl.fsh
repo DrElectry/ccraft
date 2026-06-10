@@ -5,12 +5,14 @@ out vec4 fragColor;
 
 uniform sampler2D image;
 uniform vec2 direction;
+uniform vec2 bloom_ratio;
 
 const float blurScale = 2.0;
 const int samples = 11;
 
 void main()
 {
+    vec2 scaled_uv = out_uv * bloom_ratio;
     vec2 texel = (1.0 / textureSize(image, 0)) * blurScale;
     
     float weights[] = float[](
@@ -25,11 +27,11 @@ void main()
         float offset = float(i) * texel.x;
         vec2 sampleOffset = direction * offset;
         
-        result += texture(image, out_uv + sampleOffset).rgb * weights[i];
-        result += texture(image, out_uv - sampleOffset).rgb * weights[i];
+        result += texture(image, scaled_uv + sampleOffset).rgb * weights[i];
+        result += texture(image, scaled_uv - sampleOffset).rgb * weights[i];
     }
     
-    result -= texture(image, out_uv).rgb * weights[0];
+    result -= texture(image, scaled_uv).rgb * weights[0];
     
     fragColor = vec4(result, 1.0);
 }

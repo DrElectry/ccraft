@@ -10,9 +10,9 @@ uniform sampler2D bloomTexture;
 void main()
 {
     float aperture = 0.10;
-    float blurIntensity = 32.0;
+    float blurIntensity = 16.0;
 
-    float nearFocus = 0.975;
+    float nearFocus = 0.985;
     float farFocus  = 0.99;
 
     vec2 texel = 1.0 / vec2(textureSize(colorTexture, 0));

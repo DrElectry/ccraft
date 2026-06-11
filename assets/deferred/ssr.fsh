@@ -34,11 +34,11 @@ void main()
     vec2 scaled_uv = out_uv * ssr_ratio;
     
     float d0 = texture(gDepth, scaled_uv).r;
-    if (d0 >= 0.999999) {
+    Metallic = texture(gRoughness, scaled_uv).r;
+    if (d0 >= 0.999999 || Metallic == 0.0) {
         fragColor = vec4(0.0);
         return;
     }
-    Metallic = texture(gRoughness, scaled_uv).r;
 
     vec3 worldNormal = normalize(texture(gNormal, scaled_uv).rgb);
     vec3 viewNormal  = normalize(vec3(view * vec4(worldNormal, 0.0)));

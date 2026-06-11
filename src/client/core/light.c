@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define LIGHT_LEVELS 16
+#define LIGHT_LEVELS 8
 #define MAX_LIGHT_BYTE 255
 
 static inline int idx3(int x, int y, int z) {

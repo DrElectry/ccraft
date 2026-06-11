@@ -23,11 +23,11 @@ in vec2 out_uv;
 out vec4 fragColor;
 
 const vec3 FOG_COLOR = vec3(0.6, 0.7, 0.8);
-const float FOG_START = 100.0;
-const float FOG_END = 110.0;
+const float FOG_START = 110.0;
+const float FOG_END = 120.0;
 
 const vec3 SUN_COLOR = vec3(1.0, 0.95, 0.85);
-const float SUN_INTENSITY = 4.0;
+const float SUN_INTENSITY = 512.0;
 
 vec2 poissonDisk[64] = vec2[](
     vec2(-0.942, -0.399), vec2(0.945, -0.768), vec2(-0.094, -0.929), vec2(0.344, 0.293),
@@ -119,7 +119,7 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
     mat2 rot = getRotation(uv);
 
     vec3 normal = normalize(texture(gNormal, uv).rgb * 2.0 - 1.0);
-    float bias = max(0.00005 * (1.0 - dot(normal, normalize(lightDir1))), 0.0005);
+    float bias = (radiusMultiplier < 2.0) ? max(0.00005 * (1.0 - dot(normal, normalize(lightDir1))), 0.0005) : max(0.05 * (1.0 - dot(normal, normalize(lightDir1))), 0.5);
     
     if (radiusMultiplier > 1.0) {
         bias *= 1.5;
@@ -127,7 +127,7 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
 
     float shadow = 0.0;
     float radius = 2.0 * radiusMultiplier;
-    int samples = (radiusMultiplier > 1.0) ? 16 : 32;
+    int samples = (radiusMultiplier > 2.0) ? 16 : 32;
 
     for (int i = 0; i < samples; i++)
     {

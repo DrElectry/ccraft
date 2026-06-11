@@ -3,16 +3,21 @@
 uniform sampler2D gAlbedo;
 uniform sampler2D gDepth;
 uniform sampler2D gNormal;
-uniform sampler2D dShadow;
+uniform sampler2D dShadow1;
+uniform sampler2D dShadow2;
 uniform sampler2D dSSAO;
 uniform sampler2D dSSR;
 
 uniform mat4 inv_projection;
 uniform mat4 inv_view;
-uniform mat4 light_space_matrix;
+uniform mat4 light_space_matrix_near;
+uniform mat4 light_space_matrix_far;
 
-uniform vec3 lightDir;
+uniform vec3 lightDir1;
+uniform vec3 lightDir2;
 uniform vec3 lightColor;
+
+uniform float shadowSplitDistance;
 
 in vec2 out_uv;
 out vec4 fragColor;
@@ -23,9 +28,6 @@ const float FOG_END = 110.0;
 
 const vec3 SUN_COLOR = vec3(1.0, 0.95, 0.85);
 const float SUN_INTENSITY = 4.0;
-const float SUN_SIZE = 0.005;
-const float SUN_GLOW = 0.005;
-const float SUN_GLOW_RADIUS = 0.25;
 
 vec2 poissonDisk[64] = vec2[](
     vec2(-0.942, -0.399), vec2(0.945, -0.768), vec2(-0.094, -0.929), vec2(0.344, 0.293),
@@ -82,7 +84,7 @@ vec3 getRd(vec3 worldPos, vec3 cameraPos)
     return normalize(worldPos - cameraPos);
 }
 
-vec3 getSun(vec3 rd)
+vec3 getSun(vec3 rd, vec3 lightDir)
 {
     vec3 sunDirection = normalize(lightDir);
     float cosTheta = dot(rd, sunDirection);
@@ -101,35 +103,66 @@ vec3 getSun(vec3 rd)
     vec3 diskColor = SUN_COLOR;
     vec3 innerColor = SUN_COLOR * 1.2;
     
-    return (diskColor * sunDisk + innerColor * innerGlow) * SUN_INTENSITY;
+    return (diskColor * sunDisk + innerColor * innerGlow) * 4.0;
 }
 
-float pcf(vec4 fragPosLightSpace)
+float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMultiplier)
 {
     vec3 proj = fragPosLightSpace.xyz / fragPosLightSpace.w;
     proj = proj * 0.5 + 0.5;
 
-    if (proj.z > 1.0)
+    if (proj.z > 1.0 || proj.z < 0.0)
         return 0.0;
 
     float currentDepth = proj.z;
-    vec2 texelSize = 1.0 / vec2(textureSize(dShadow, 0));
-    mat2 rot = getRotation(out_uv);
+    vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
+    mat2 rot = getRotation(uv);
 
-    vec3 normal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
-    float bias = max(0.00001 * (1.0 - dot(normal, normalize(lightDir))), 0.0007);
-
-    float shadow = 0.0;
-    float radius = 2.0;
-
-    for (int i = 0; i < 32; i++)
-    {
-        vec2 offset = rot * poissonDisk[i] * texelSize * radius;
-        float closestDepth = texture(dShadow, proj.xy + offset).r;
-        shadow += step(closestDepth, currentDepth - bias);
+    vec3 normal = normalize(texture(gNormal, uv).rgb * 2.0 - 1.0);
+    float bias = max(0.00005 * (1.0 - dot(normal, normalize(lightDir1))), 0.0005);
+    
+    if (radiusMultiplier > 1.0) {
+        bias *= 1.5;
     }
 
-    return shadow / 32.0;
+    float shadow = 0.0;
+    float radius = 2.0 * radiusMultiplier;
+    int samples = (radiusMultiplier > 1.0) ? 16 : 32;
+
+    for (int i = 0; i < samples; i++)
+    {
+        vec2 offset = rot * poissonDisk[i] * texelSize * radius;
+        float closestDepth = texture(shadowMap, proj.xy + offset).r;
+        shadow += step(closestDepth + bias, currentDepth);
+    }
+
+    return shadow / float(samples);
+}
+
+float calculateShadow(vec3 worldPos, vec2 uv)
+{
+    float dist = length(worldPos - getCameraPos());
+    
+    float blendStart = shadowSplitDistance - 16.0;
+    float blendEnd = shadowSplitDistance + 16.0;
+    
+    vec4 fragPosLightSpaceNear = light_space_matrix_near * vec4(worldPos, 1.0);
+    float shadowNear = pcf(fragPosLightSpaceNear, dShadow1, uv, 1.0);
+    
+    vec4 fragPosLightSpaceFar = light_space_matrix_far * vec4(worldPos, 1.0);
+    float shadowFar = pcf(fragPosLightSpaceFar, dShadow2, uv, 0.5);
+    
+    if (dist <= blendStart) {
+        return shadowNear;
+    }
+    else if (dist >= blendEnd) {
+        return shadowFar;
+    }
+    else {
+        float t = (dist - blendStart) / (blendEnd - blendStart);
+        t = smoothstep(0.0, 1.0, t);
+        return mix(shadowNear, shadowFar, t);
+    }
 }
 
 void main()
@@ -147,12 +180,14 @@ void main()
     vec3 cameraPos = getCameraPos();
     vec3 viewDir = normalize(cameraPos - worldPos);
     
-    vec4 fragPosLightSpace = light_space_matrix * vec4(worldPos, 1.0);
+    float shadow = calculateShadow(worldPos, out_uv);
 
-    float shadow = pcf(fragPosLightSpace);
+    float distToCamera = length(worldPos - cameraPos);
+    vec3 lightDir = normalize(mix(lightDir1, lightDir2, 
+        clamp((distToCamera - (shadowSplitDistance - 8.0)) / 16.0, 0.0, 1.0)));
 
-    vec3 L = normalize(lightDir);
     vec3 V = viewDir;
+    vec3 L = lightDir;
     vec3 H = normalize(L + V);
 
     float NdotL = max(dot(normal, L), 0.0);
@@ -180,12 +215,12 @@ void main()
     float fogFactor = clamp((FOG_END - dist) / (FOG_END - FOG_START), 0.0, 1.0);
 
     vec3 rd = getRd(worldPos, cameraPos);
-    vec3 sunColor = getSun(rd);
+    vec3 sunColor = getSun(rd, lightDir);
 
     finalColor = mix(FOG_COLOR, finalColor, fogFactor);
 
     if (isSky) {
-        finalColor+=+sunColor;
+        finalColor += sunColor;
     }
 
     fragColor = vec4(finalColor, 1.0);

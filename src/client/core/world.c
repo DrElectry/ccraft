@@ -8,7 +8,7 @@
 #include "utils/rand.h"
 #include "utils/log.h"
 #include "utils/noise.h"
-#include "utils/fm.h"
+#include "utils/file.h"
 #include "core/game.h"
 
 static void world_install_chunk(World* world, int cx, int cz, uint16_t* data);

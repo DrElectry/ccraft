@@ -3,7 +3,7 @@
 #include "core/win.h"
 #include "glad.h"
 #include "gl/shader.h"
-#include "utils/fm.h"
+#include "utils/file.h"
 #include "core/player.h"
 #include "gl/tex.h"
 #include "core/gfx.h"
@@ -435,17 +435,17 @@ void game_tick(float dt) {
     network_update_remotes(dt);
 }
 
-void game_shadow_pass(void) {
+void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 out_light_dir, int cascade)  {
     if (__onserv) {
         network_pump();
     }
 
-    glm_ortho(-32.0f, 32.0f, -32.0f, 32.0f, 1.0f, 200.0f, light_proj);
+    glm_ortho(-dist, dist, -dist, dist, 0.01f, 400.0f, light_proj);
 
-    vec3 light_offset = { 20.0f, 40.0f, -30.0f };
+    vec3 light_offset = { 20.0f*cascade, 40.0f*cascade, -30.0f*cascade };
     
-    float orthoSize = 32.0f;
-    float texelSize = (orthoSize * 2.0f) / 2048.0f;
+    float orthoSize = dist;
+    float texelSize = (orthoSize * 2.0f) / scale;
 
     vec3 snapped_player_pos;
     snapped_player_pos[0] = floorf(player.camera.pos[0]);
@@ -474,12 +474,12 @@ void game_shadow_pass(void) {
     glm_vec3_add((vec3){ snapped_world[0], snapped_world[1], snapped_world[2] }, light_offset, light_pos);
     glm_lookat(light_pos, snapped_player_pos, up, light_view);
 
-    glm_mat4_mul(light_proj, light_view, light_space_matrix);
+    glm_mat4_mul(light_proj, light_view, out_light_space_matrix);
 
-    glm_vec3_copy(light_offset, light_dir);
-    glm_vec3_normalize(light_dir);
+    glm_vec3_copy(light_offset, out_light_dir);
+    glm_vec3_normalize(out_light_dir);
 
-    glViewport(0, 0, 2048, 2048); // 4k ultra rtx shadows
+    glViewport(0, 0, scale, scale);
 
     glEnable(GL_DEPTH_TEST);
     glClear(GL_DEPTH_BUFFER_BIT);

@@ -4,7 +4,7 @@
 #include "core/game.h"
 #include "core/gfx.h"
 #include "gl/fbo.h"
-#include "utils/fm.h"
+#include "utils/file.h"
 #include "gl/tex.h"
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
@@ -134,7 +134,8 @@ int main(int argc, char* argv[]) {
     glEnable(GL_CULL_FACE);
 
     FBO gbuffer;
-    FBO shadow_pass;
+    FBO shadow1;
+    FBO shadow2;
     FBO ssaofb;
     FBO ssaoblurfb;
     FBO ppfb;
@@ -143,6 +144,11 @@ int main(int argc, char* argv[]) {
     FBO bloomfb;
     FBO blurfb;
     FBO ffb;
+
+    float light_dir_near[3];
+    float light_dir_far[3];
+    mat4 light_space_matrix_near;
+    mat4 light_space_matrix_far;
 
     Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, crossf;
     Program main, ssao, pp, ssr, blur, bloom, cross;
@@ -214,7 +220,8 @@ int main(int argc, char* argv[]) {
 
     fbo_create(&gbuffer, WIDTH, HEIGHT, 4);
 
-    fbo_create_depth(&shadow_pass, 2048, 2048);
+    fbo_create_depth(&shadow1, 2048, 2048);
+    fbo_create_depth(&shadow2, 1024, 1024);
 
     float ssao_ratio[2] = {(float)WIDTH / (WIDTH/2), (float)HEIGHT / (HEIGHT/2)};
     float ssr_ratio[2] = {(float)WIDTH / (WIDTH/2), (float)HEIGHT / (HEIGHT/2)};
@@ -256,7 +263,6 @@ int main(int argc, char* argv[]) {
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
 
-        // yuck yuck copying
         fbo_bind(&prev_frame);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prev_frame.id);
@@ -273,12 +279,16 @@ int main(int argc, char* argv[]) {
 
         fbo_unbind();
 
-        fbo_bind(&shadow_pass);
-
+        fbo_bind(&shadow1);
+        glClear(GL_DEPTH_BUFFER_BIT);
         window_draw();
+        game_shadow_pass(2048, 32.0f, light_space_matrix_near, light_dir_near, 1);
+        fbo_unbind();
 
-        game_shadow_pass();
-
+        fbo_bind(&shadow2);
+        glClear(GL_DEPTH_BUFFER_BIT);
+        window_draw();
+        game_shadow_pass(1024, 128.0f, light_space_matrix_far, light_dir_far, 2);
         fbo_unbind();
 
         fbo_bind(&ssaofb);
@@ -367,23 +377,31 @@ int main(int argc, char* argv[]) {
         fbo_bind_texture(&gbuffer, 0, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
         fbo_bind_depth_texture(&gbuffer, 2);
-        fbo_bind_depth_texture(&shadow_pass, 3);
-        fbo_bind_texture(&ssaofb, 0, 4);
-        fbo_bind_texture(&ssrfb, 0, 5);
+        fbo_bind_depth_texture(&shadow1, 3);
+        fbo_bind_depth_texture(&shadow2, 4);
+        fbo_bind_texture(&ssaofb, 0, 5);
+        fbo_bind_texture(&ssrfb, 0, 6);
 
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
         program_set_int(&main, "gDepth", 2);
-        program_set_int(&main, "dShadow", 3);
-        program_set_int(&main, "dSSAO", 4);
-        program_set_int(&main, "dSSR", 5);
+        program_set_int(&main, "dShadow1", 3);
+        program_set_int(&main, "dShadow2", 4);
+        program_set_int(&main, "dSSAO", 5);
+        program_set_int(&main, "dSSR", 6);
 
-        program_set_mat4(&main, "light_space_matrix", (float*)light_space_matrix);
+        program_set_mat4(&main, "light_space_matrix_near", (float*)light_space_matrix_near);
+        program_set_mat4(&main, "light_space_matrix_far", (float*)light_space_matrix_far);
+
         program_set_mat4(&main, "inv_projection", (float*)inv_projection);
         program_set_mat4(&main, "inv_view", (float*)inv_view);
 
-        program_set_vec3(&main, "lightDir", (float*)light_dir);
+        program_set_vec3(&main, "lightDir1", (float*)light_dir_near);
+        program_set_vec3(&main, "lightDir2", (float*)light_dir_far);
         program_set_vec3(&main, "lightColor", (float[]){1.0f, 1.0f, 1.0f});
+        
+        float shadow_split_distance = 28.0f;
+        program_set_float(&main, "shadowSplitDistance", shadow_split_distance);
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);

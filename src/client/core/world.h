@@ -2,7 +2,7 @@
 #define WORLD_H
 
 #include "core/chunk.h"
-#include "utils/fm.h"
+#include "utils/file.h"
 #include <cglm/cglm.h>
 #include <stdint.h>
 

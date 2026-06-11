@@ -1,5 +1,5 @@
-#ifndef FM_H
-#define FM_H
+#ifndef FILE_H
+#define FILE_H
 
 #include <stddef.h>
 

@@ -119,10 +119,12 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
     mat2 rot = getRotation(uv);
 
     vec3 normal = normalize(texture(gNormal, uv).rgb * 2.0 - 1.0);
-    float bias = (radiusMultiplier < 2.0) ? max(0.00005 * (1.0 - dot(normal, normalize(lightDir1))), 0.0005) : max(0.05 * (1.0 - dot(normal, normalize(lightDir1))), 0.5);
     
-    if (radiusMultiplier > 1.0) {
-        bias *= 1.5;
+    float bias;
+    if (radiusMultiplier < 2.0) {
+        bias = max(0.002 * (1.0 - dot(normal, normalize(lightDir1))), 0.003);
+    } else {
+        bias = max(0.8 * (1.0 - dot(normal, normalize(lightDir1))), 0.1);
     }
 
     float shadow = 0.0;

@@ -6,35 +6,6 @@
 #include <string.h>
 #include "core/light.h"
 
-#define GEN_WORKERS 16
-#define WORK_QUEUE_CAP 64
-
-typedef enum {
-    JOB_GEN,
-    JOB_MESH,
-} JobKind;
-
-typedef struct {
-    uint16_t center[CHUNK_BLOCK_COUNT];
-    ChunkNeighbors neighbors;
-    uint32_t generation;
-} MeshJobPayload;
-
-typedef struct {
-    JobKind kind;
-    int cx;
-    int cz;
-    MeshJobPayload* mesh;
-} WorkJob;
-
-typedef struct {
-    JobKind kind;
-    int cx;
-    int cz;
-    uint16_t* gen_data;
-    ChunkMeshResult* mesh;
-} WorkResult;
-
 static pthread_t workers[GEN_WORKERS];
 static pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t work_cond = PTHREAD_COND_INITIALIZER;

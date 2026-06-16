@@ -6,7 +6,7 @@ ccraft is a work-in-progress sandbox minecraft like voxel game, written fully in
 
 ### Goals
 
-The goal of this project is to have a flexible, cross platform, easily moddable game with stable multiplayer support while serving as an experimental 3d engine with advanced features (for example skeletal animations, which are already implemented ;) )
+the goal of this project is to have a flexible, cross platform, easily moddable game with stable multiplayer support while serving as an experimental 3d engine with advanced features (for example skeletal animations, which are already implemented ;) )
 
 ### Things i already implemented
 
@@ -18,7 +18,7 @@ The goal of this project is to have a flexible, cross platform, easily moddable 
 
 ### Planned features
 
-The list is huge, but things i need to implement ASAP:
+the list is huge, but things i need to implement ASAP:
 
 - particle system,
 - cleaning up the entire project codebase,
@@ -29,7 +29,7 @@ The list is huge, but things i need to implement ASAP:
 
 ![Demo](pictures/multiplayer_demo.gif)
 
-As i said, multiplayer is under construction, it is still very buggy, but if you want to try it:
+as i said, multiplayer is under construction, it is still very buggy, but if you want to try it:
 
 - run the "server" binary, everything configurable is avaliable inside file "server.properties".
 - connect to the server using the -connect <IP:PORT> flag.
@@ -38,7 +38,7 @@ As i said, multiplayer is under construction, it is still very buggy, but if you
 - chat is avaliable on the server by using the T key, pressing ENTER will send your message to the server from your name.
 - enjoy.
 
-The server runs on 32 TPS with interpolation.
+the server runs on 32 TPS with interpolation.
 
 ### License
 
@@ -46,7 +46,7 @@ MIT license, because sharing is caring.
 
 ### Contribution
 
-Anyone can contribute or fork the project, any help will be greeted with open hands.
+anyone can contribute or fork the project, any help will be greeted with open hands.
 
 ## CREDITS
 

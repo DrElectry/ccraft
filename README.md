@@ -2,13 +2,28 @@
 
 ![Demo](pictures/frame.gif)
 
-ccraft is a W.I.P sandbox minecraft voxel like game. currently not much had been implemented, but it features
+ccraft is a work-in-progress sandbox minecraft like voxel game, written fully in C with OpenGL and a couple of lib dependencies.
 
-- the core "minecraft" game (chunks management, placing and breaking blocks, player movement with physics, collisions, infinite world generation, lightmaps),
+### Goals
+
+The goal of this project is to have a flexible, cross platform, easily moddable game with stable multiplayer support while serving as an experimental 3d engine with advanced features (for example skeletal animations, which are already implemented ;) )
+
+### Things i already implemented
+
+- the core "minecraft" game (chunks management, placing and breaking blocks, player movement with physics, collisions, infinite world generation, lightmaps, world saving and loading),
 - deferred rendering (effects like shadows, SSAO, SSR, bloom, DOF, vignette),
-- gui (text renderer, crosshair),
-- world saving and loading (currently only worlds/main.dat is supported),
+- basic HUD,
+- sounds, ambience.
 - and even a W.I.P multiplayer ;)
+
+### Planned features
+
+The list is huge, but things i need to implement ASAP:
+
+- particle system,
+- cleaning up the entire project codebase,
+- more optimizations,
+- GUI.
 
 ### Multiplayer
 
@@ -24,6 +39,14 @@ As i said, multiplayer is under construction, it is still very buggy, but if you
 - enjoy.
 
 The server runs on 32 TPS with interpolation.
+
+### License
+
+MIT license, because sharing is caring.
+
+### Contribution
+
+Anyone can contribute or fork the project, any help will be greeted with open hands.
 
 ## CREDITS
 

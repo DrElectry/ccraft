@@ -120,16 +120,18 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
 
     vec3 normal = normalize(texture(gNormal, uv).rgb * 2.0 - 1.0);
     
+    float NdotL = dot(normal, normalize(lightDir1));
+    
     float bias;
-    if (radiusMultiplier < 2.0) {
-        bias = max(0.002 * (1.0 - dot(normal, normalize(lightDir1))), 0.003);
+    if (radiusMultiplier > 0.8) {
+        bias = 0.0001 + 0.0003 * (1.0 - NdotL) + texelSize.x * 0.5;
     } else {
-        bias = max(0.8 * (1.0 - dot(normal, normalize(lightDir1))), 0.1);
+        bias = 0.001 + 0.002 * (1.0 - NdotL) + texelSize.x * 3.0;
     }
 
     float shadow = 0.0;
     float radius = 2.0 * radiusMultiplier;
-    int samples = (radiusMultiplier > 2.0) ? 16 : 32;
+    int samples = (radiusMultiplier == 0.5) ? 16 : 32;
 
     for (int i = 0; i < samples; i++)
     {

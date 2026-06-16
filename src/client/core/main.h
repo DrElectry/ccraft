@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "gl/fbo.h"
+
 extern uint64_t __servseed;
 
 #define WIDTH 1280

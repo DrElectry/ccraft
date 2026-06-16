@@ -37,7 +37,7 @@ uint16_t blockih = IRON_BLOCK;
 
 File world_file;
 
-Program c, water_prog, bc, shadow, shadow_w;
+Program c, water_prog, bc, shadow, shadow_w, cursora;
 
 static Skinned_render_request* player_walk_model;
 static Skinned_render_request* player_jump_model;
@@ -72,17 +72,19 @@ float wdelay = 0.0f;
 float pdelay = 0.0f;
 float ndelay = 0.0f;
 
-float aa[64];
-int bb[64];
+float aa[24 * 10] = {0};
+float ee[24 * 10] = {0};
+int bb[36] = {0};
+int ff[36] = {0};
 
 // shitcode
 
-int cc, dd; // for block in our hand
+int cc, dd, gg, hh; // for block in our hand
 
 Input input_manager;
 Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess;
 
-Render_request block; // in your hand
+Render_request block, cursor; // in your hand
 
 static float break_delay = 0.0f;
 static float place_delay = 0.0f;
@@ -145,30 +147,42 @@ void game_init() {
 
     player_init(&player);
 
-    gfx_program_create(&skinned_prog, "assets/things/skin.vsh", "assets/things/skin.fsh");
+    gfx_program_create(&skinned_prog, "assets/misc/skin.vsh", "assets/misc/skin.fsh");
     skinned_program_init(&skinned_prog);
 
     gfx_program_create(&shadow, "assets/tile/tile.vsh", "assets/tile/shadow.fsh");
     gfx_program_create(&shadow_w, "assets/tile/tile_water.vsh", "assets/tile/shadow.fsh");
 
     gfx_program_create(&c, "assets/tile/tile.vsh", "assets/tile/tile.fsh");
-    gfx_program_create(&bc, "assets/things/hand.vsh", "assets/things/hand.fsh");
+    gfx_program_create(&cursora, "assets/tile/tile.vsh", "assets/misc/cursor.fsh");
+    gfx_program_create(&bc, "assets/misc/hand.vsh", "assets/misc/hand.fsh");
     gfx_program_create(&water_prog, "assets/tile/tile_water.vsh", "assets/tile/tile_water.fsh");
 
     input_init(&input_manager, _win->glwin);
 
     tile_push_cube(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd);
+    tile_push_cube(ee, ff, (vec3){0.0f, 0.0f, 0.0f}, &gg, &hh);
 
     block.data = aa;
     block.data_size = cc*sizeof(float);
     block.triangles = bb;
     block.tri_count = dd;
 
+    cursor.data = ee;
+    cursor.data_size = gg*sizeof(float);
+    cursor.triangles = ff;
+    cursor.tri_count = hh;
+
     gfx_chunk_packet_static_request(&block);
+    gfx_chunk_packet_static_request(&cursor);
 
     block.pos[0] = block.pos[1] = block.pos[2] = 0.0f;
     block.rot[0] = block.rot[1] = block.rot[2] = 0.0f;
     block.scale[0] = block.scale[1] = block.scale[2] = 0.3f;
+
+    cursor.pos[0] = cursor.pos[1] = cursor.pos[2] = 0.0f;
+    cursor.rot[0] = cursor.rot[1] = cursor.rot[2] = 0.0f;
+    cursor.scale[0] = cursor.scale[1] = cursor.scale[2] = 1.01f;
 
     glm_mat4_identity(hand_model);
     glm_translate(hand_model, (vec3){50.0f, 50.0f, 50.0f});
@@ -331,6 +345,8 @@ void game_tick(float dt) {
 
     RaycastHit hit;
     raycast_dda(&world, eye, player.camera.forward, 5.0f, &hit);
+
+    glm_vec3_copy((vec3){((float)hit.bx)-0.005f, ((float)hit.by)-0.005f, ((float)hit.bz)-0.005f}, cursor.pos);
 
     break_delay -= dt;
     place_delay -= dt;
@@ -661,6 +677,33 @@ void game_draw(float time) {
     
     vao_bind(&block.cache.vao);
     glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
+
+    program_use(&cursora);
+    program_set_mat4(&cursora, "proj", (float*)projection);
+    program_set_mat4(&cursora, "view", (float*)view);
+    
+    mat4 model_matrix;
+
+    glm_mat4_identity(model_matrix);
+
+    glm_translate(model_matrix, cursor.pos);
+    
+    glm_rotate(model_matrix, cursor.rot[0], (vec3){1.0f, 0.0f, 0.0f});
+    glm_rotate(model_matrix, cursor.rot[1], (vec3){0.0f, 1.0f, 0.0f});
+    glm_rotate(model_matrix, cursor.rot[2], (vec3){0.0f, 0.0f, 1.0f});
+    
+    glm_scale(model_matrix, cursor.scale);
+
+    program_set_mat4(&cursora, "model", (float*)model_matrix);
+
+    GLint current_polygon_mode[2];
+    glGetIntegerv(GL_POLYGON_MODE, current_polygon_mode);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    vao_bind(&cursor.cache.vao);
+    glDrawElements(GL_LINES, cursor.tri_count * 2, GL_UNSIGNED_INT, NULL);
+
+    glPolygonMode(GL_FRONT_AND_BACK, current_polygon_mode[0]);
 
     glEnable(GL_CULL_FACE);
 }

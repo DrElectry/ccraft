@@ -423,10 +423,14 @@ void game_tick(float dt) {
             if (move_x + move_z > 0.5f) {
                 int variant = RAND(0, 3);
                 sound_t* s = pick_pack_sound(below, variant);
-                if (s)
-                    sound_play(s);
 
-                g_footstep_delay = 0.25f;
+                while (!s) { // searching for a sound
+                    int variant = RAND(0, 3);
+                    sound_t* s = pick_pack_sound(below, variant);
+                }
+                
+                sound_play(s);
+                g_footstep_delay = 0.4f;
             }
 
         }

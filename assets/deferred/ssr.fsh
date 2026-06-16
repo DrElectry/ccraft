@@ -143,56 +143,29 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 vec3 SSRBlur(vec2 uv)
 {
     vec2 texel = 1.0 / (vec2(textureSize(gAlbedo, 0)) / ssr_ratio);
-    
-    float metallic = clamp(Metallic, 0.0, 1.0);
-    
-    int maxSamples = int(mix(15, 31, metallic));
-    float radius = mix(1.5, 4.0, metallic);
-    
-    float weights[32];
-    for (int i = 1; i <= 31; i++) {
-        float t = float(i) / float(maxSamples);
-        weights[i] = exp(-t * t * 2.5) * (1.0 - t * 0.3);
+    const int radius = 8;
+    const int taps = 17;
+    float sigma = 3.0;
+    float weights[17];
+    float sum = 0.0;
+    for (int i = 0; i < taps; i++) {
+        int offset = i - radius;
+        float w = exp(-float(offset * offset) / (2.0 * sigma * sigma));
+        weights[i] = w;
+        sum += w;
     }
-    
-    vec3 result = texture(gAlbedo, uv).rgb;
-    
-    if (maxSamples > 1)
-    {
-        vec3 horiz = result * 0.3;
-        float totalWeight = 0.3;
-        
-        for (int x = 1; x <= maxSamples; x++)
-        {
-            float weight = weights[x] * (1.0 - pow(float(x) / float(maxSamples + 1), 1.2));
-            
-            vec2 offsetPos = vec2(float(x) * texel.x * radius, 0.0);
-            vec2 offsetNeg = vec2(-float(x) * texel.x * radius, 0.0);
-            
-            horiz += texture(gAlbedo, uv + offsetPos).rgb * weight;
-            horiz += texture(gAlbedo, uv + offsetNeg).rgb * weight;
-            totalWeight += weight * 2.0;
+    for (int i = 0; i < taps; i++) weights[i] /= sum;
+
+    vec3 blurred = vec3(0.0);
+    for (int dy = 0; dy < taps; dy++) {
+        float wy = weights[dy];
+        int yOff = dy - radius;
+        for (int dx = 0; dx < taps; dx++) {
+            float wx = weights[dx];
+            int xOff = dx - radius;
+            vec2 coord = uv + vec2(float(xOff) * texel.x, float(yOff) * texel.y);
+            blurred += wx * wy * texture(gAlbedo, coord).rgb;
         }
-        
-        horiz /= totalWeight;
-        
-        vec3 vert = horiz * 0.3;
-        totalWeight = 0.3;
-        
-        for (int y = 1; y <= maxSamples; y++)
-        {
-            float weight = weights[y] * (1.0 - pow(float(y) / float(maxSamples + 1), 1.2));
-            
-            vec2 offsetPos = vec2(0.0, float(y) * texel.y * radius);
-            vec2 offsetNeg = vec2(0.0, -float(y) * texel.y * radius);
-            
-            vert += texture(gAlbedo, uv + offsetPos).rgb * weight;
-            vert += texture(gAlbedo, uv + offsetNeg).rgb * weight;
-            totalWeight += weight * 2.0;
-        }
-        
-        result = vert / totalWeight;
     }
-    
-    return result;
+    return blurred;
 }

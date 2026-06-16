@@ -20,6 +20,10 @@ typedef struct {
     int noclip;
     float noclip_damping;
     float noclip_accel;
+    float bob_phase;
+    float idle_phase;
+    float smoothed_hspeed;
+    float gravity_pitch;
 } Player;
 
 void player_init(Player* p);

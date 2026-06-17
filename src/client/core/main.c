@@ -443,6 +443,8 @@ int main(int argc, char* argv[]) {
         program_set_int(&main, "gWaterNormal", 9);
         program_set_int(&main, "gWaterDepth", 10);
 
+        program_set_float(&main, "time", time);
+
         program_set_mat4(&main, "light_space_matrix_far", (float*)light_space_matrix_far);
         program_set_mat4(&main, "light_space_matrix_near", (float*)light_space_matrix_near);
 

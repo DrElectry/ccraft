@@ -218,7 +218,7 @@ void main()
         normal = normalize(mix(terrainNormal, waterNormal, waterMix));
         roughness = mix(terrainRoughness, waterRoughness, waterMix);
         metallic = mix(terrainMetallic, waterMetallic, waterMix);
-        depth = mix(terrainDepth, waterDepth, waterMix);
+        depth = waterDepth;
     }
 
     bool isSky = depth > 0.9999;

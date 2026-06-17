@@ -735,6 +735,91 @@ void game_draw(float time) {
     glEnable(GL_CULL_FACE);
 }
 
+void game_draw_misc() {
+    if (__onserv) {
+        remote_draw(projection, view, dt, 0);
+    }
+
+    program_use(&c);
+    texture_bind(&textt, 0);
+    texture_bind(&brightt, 1);
+    gfx_render(text, &c);
+
+    vec3 eye;
+    player_get_eye(&player, eye);
+
+    glm_mat4_identity(hand_model);
+
+    vec3 fwd;
+    vec3 right;
+    vec3 upv;
+    glm_vec3_copy(player.camera.forward, fwd);
+    glm_vec3_copy(player.camera.right, right);
+    glm_vec3_copy(player.camera.up, upv);
+
+    float d = 0.55f;
+    float x = 0.2f;
+    float y = -0.6f;
+
+    vec3 hold_pos;
+    glm_vec3_scale(fwd, d, hold_pos);
+    glm_vec3_muladds(right, x, hold_pos);
+    glm_vec3_muladds(upv, y, hold_pos);
+    glm_vec3_add(hold_pos, eye, hold_pos);
+
+    glm_translate(hand_model, hold_pos);
+
+    mat4 rot;
+    glm_mat4_identity(rot);
+    rot[0][0] = right[0];
+    rot[0][1] = right[1];
+    rot[0][2] = right[2];
+    rot[1][0] = upv[0];
+    rot[1][1] = upv[1];
+    rot[1][2] = upv[2];
+    rot[2][0] = fwd[0];
+    rot[2][1] = fwd[1];
+    rot[2][2] = fwd[2];
+
+    glm_mat4_mul(hand_model, rot, hand_model);
+    glm_scale(hand_model, block.scale);
+
+    program_use(&bc);
+    texture_bind(&texture_atlas, 0);
+    texture_bind(&roughness, 1);
+    program_set_int(&bc, "tex", 0);
+    program_set_int(&bc, "roug", 1);
+    program_set_mat4(&bc, "proj", (float*)projection);
+    program_set_mat4(&bc, "view", (float*)view);
+    program_set_mat4(&bc, "model", (float*)hand_model);
+    program_set_uint(&bc, "id", lookup_atlas[blockih * 6]);
+
+    glDisable(GL_CULL_FACE);
+    vao_bind(&block.cache.vao);
+    glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
+    glEnable(GL_CULL_FACE);
+
+    program_use(&cursora);
+    program_set_mat4(&cursora, "proj", (float*)projection);
+    program_set_mat4(&cursora, "view", (float*)view);
+
+    mat4 model_matrix;
+    glm_mat4_identity(model_matrix);
+    glm_translate(model_matrix, cursor.pos);
+    glm_rotate(model_matrix, cursor.rot[0], (vec3){1.0f, 0.0f, 0.0f});
+    glm_rotate(model_matrix, cursor.rot[1], (vec3){0.0f, 1.0f, 0.0f});
+    glm_rotate(model_matrix, cursor.rot[2], (vec3){0.0f, 0.0f, 1.0f});
+    glm_scale(model_matrix, cursor.scale);
+    program_set_mat4(&cursora, "model", (float*)model_matrix);
+
+    GLint current_polygon_mode[2];
+    glGetIntegerv(GL_POLYGON_MODE, current_polygon_mode);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    vao_bind(&cursor.cache.vao);
+    glDrawElements(GL_LINES, cursor.tri_count * 2, GL_UNSIGNED_INT, NULL);
+    glPolygonMode(GL_FRONT_AND_BACK, current_polygon_mode[0]);
+}
+
 static void project_point_to_screen(vec3 world_pos, float* out_x, float* out_y) {
     vec4 wp = { world_pos[0], world_pos[1], world_pos[2], 1.0f };
     vec4 view_pos;

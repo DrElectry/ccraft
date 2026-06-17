@@ -20,6 +20,7 @@ static inline int is_transparent_light(uint16_t id) {
     if (id == GLASS) return 1;
     if (id == ROSE) return 1;
     if (id == GRASS_CROSS) return 1;
+    if (id == WATER) return 1;
     return 0;
 }
 

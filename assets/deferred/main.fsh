@@ -9,6 +9,11 @@ uniform sampler2D dSSAO;
 uniform sampler2D dSSR;
 uniform sampler2D dSSRWater;
 
+uniform sampler2D gWaterAlbedo;
+uniform sampler2D gWaterDepth;
+uniform sampler2D gWaterNormal;
+uniform sampler2D gWaterRoughness;
+
 uniform mat4 inv_projection;
 uniform mat4 inv_view;
 uniform mat4 light_space_matrix_near;
@@ -179,6 +184,17 @@ void main()
     float roughness = texture(dSSR, out_uv).g;
     float metallic = texture(dSSR, out_uv).b;
 
+    float waterDepth = texture(gWaterDepth, out_uv).r;
+    bool isWater = waterDepth < depth - 0.0001;
+
+    if (isWater) {
+        albedo = texture(gWaterAlbedo, out_uv).rgb;
+        normal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
+        roughness = texture(gWaterRoughness, out_uv).x;
+        metallic = texture(gWaterRoughness, out_uv).y;
+        depth = waterDepth;
+    }
+
     bool isSky = depth > 0.9999;
 
     vec3 worldPos = reconstructWorldPosition(depth);
@@ -201,12 +217,15 @@ void main()
     vec4 ssr1 = texture(dSSR, out_uv);
     vec4 ssr2 = texture(dSSRWater, out_uv);
 
-    vec3 ssrColor = ssr1.rgb;
-    float ssrAlpha = ssr1.a;
+    vec3 ssrColor;
+    float ssrAlpha;
 
-    if (ssr2.a > ssrAlpha) {
+    if (isWater) {
         ssrColor = ssr2.rgb;
         ssrAlpha = ssr2.a;
+    } else {
+        ssrColor = ssr1.rgb;
+        ssrAlpha = ssr1.a;
     }
 
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
@@ -230,7 +249,11 @@ void main()
     vec3 rd = getRd(worldPos, cameraPos);
     vec3 sunColor = getSun(rd, lightDir);
 
-    finalColor = mix(FOG_COLOR, finalColor, fogFactor);
+    float fresnel = max(max(F.r, F.g), F.b);
+
+    finalColor =
+        directLighting +
+        ssrColor * ssrAlpha * fresnel;
 
     if (isSky) {
         finalColor += sunColor;

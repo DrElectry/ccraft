@@ -426,6 +426,10 @@ int main(int argc, char* argv[]) {
         fbo_bind_texture(&ssaofb, 0, 5);
         fbo_bind_texture(&ssrfb, 0, 6);
         fbo_bind_texture(&ssrfb_water, 0, 7);
+        fbo_bind_texture(&water_gbuffer, 0, 8);
+        fbo_bind_texture(&water_gbuffer, 1, 9);
+        fbo_bind_texture(&water_gbuffer, 3, 10);
+        fbo_bind_depth_texture(&water_gbuffer, 11);
 
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
@@ -435,8 +439,11 @@ int main(int argc, char* argv[]) {
         program_set_int(&main, "dSSAO", 5);
         program_set_int(&main, "dSSR", 6);
         program_set_int(&main, "dSSRWater", 7);
+        program_set_int(&main, "gWaterAlbedo", 8);
+        program_set_int(&main, "gWaterNormal", 9);
+        program_set_int(&main, "gWaterRoughness", 10);
+        program_set_int(&main, "gWaterDepth", 11);
 
-        program_set_mat4(&main, "light_space_matrix_near", (float*)light_space_matrix_near);
         program_set_mat4(&main, "light_space_matrix_far", (float*)light_space_matrix_far);
 
         program_set_mat4(&main, "inv_projection", (float*)inv_projection);

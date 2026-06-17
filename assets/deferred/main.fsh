@@ -223,12 +223,20 @@ void main()
 
     bool isSky = depth > 0.9999;
 
-    vec3 worldPos = reconstructWorldPosition(depth);
+    vec3 worldPos;
+    float shadow;
+
+    if (isWater) {
+        worldPos = reconstructWorldPosition(terrainDepth);
+        shadow = calculateShadow(worldPos, out_uv);
+    } else {
+        worldPos = reconstructWorldPosition(depth);
+        shadow = calculateShadow(worldPos, out_uv);
+    }
+
     vec3 cameraPos = getCameraPos();
     vec3 viewDir = normalize(cameraPos - worldPos);
     
-    float shadow = calculateShadow(worldPos, out_uv);
-
     float distToCamera = length(worldPos - cameraPos);
     vec3 lightDir = normalize(mix(lightDir1, lightDir2, 
         clamp((distToCamera - (shadowSplitDistance - 8.0)) / 16.0, 0.0, 1.0)));
@@ -263,7 +271,7 @@ void main()
 
     vec3 diffuse = albedo * lightColor * NdotL * (1.0 - shadow);
 
-    vec3 directLighting = ambient + diffuse;
+    vec3 directLighting = ambient + diffuse * (F*0.0001); // nice F waste
 
     vec3 finalColor;
     if (!isSky)
@@ -277,11 +285,7 @@ void main()
     vec3 rd = getRd(worldPos, cameraPos);
     vec3 sunColor = getSun(rd, lightDir);
 
-    float fresnel = max(max(F.r, F.g), F.b);
-
-    finalColor =
-        directLighting +
-        ssrColor * ssrAlpha * fresnel;
+    finalColor = mix(FOG_COLOR, finalColor, fogFactor);
 
     if (isSky) {
         finalColor += sunColor;

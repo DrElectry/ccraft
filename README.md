@@ -2,6 +2,8 @@
 
 ![Demo](pictures/frame.gif)
 
+![Demo](pictures/building.png)
+
 ccraft is a work-in-progress sandbox minecraft like voxel game, written fully in C with OpenGL and a couple of lib dependencies.
 
 ### Goals
@@ -45,8 +47,6 @@ the server runs on 32 TPS with interpolation.
 MIT license, because sharing is caring.
 
 ### Contribution
-
-![Demo](pictures/building.png)
 
 anyone can contribute or fork the project, any help will be greeted with open hands.
 

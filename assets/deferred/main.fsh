@@ -129,9 +129,9 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
     
     float bias;
     if (radiusMultiplier > 0.8) {
-        bias = 0.001 + 0.002 * (1.0 - NdotL) + texelSize.x * 3.0;
-    } else {
         bias = 0.0001 + 0.0003 * (1.0 - NdotL) + texelSize.x * 0.5;
+    } else {
+        bias = 0.001 + 0.002 * (1.0 - NdotL) + texelSize.x * 3.0;
     }
 
     float shadow = 0.0;
@@ -186,26 +186,10 @@ void main()
     float roughness;
     float metallic;
 
-    if (isWater) {
-        depth = waterDepth;
-        albedo = texture(gWaterAlbedo, out_uv).rgb;
-        normal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
-        roughness = texture(dSSRWater, out_uv).g;
-        metallic = texture(dSSRWater, out_uv).b;
-    } else {
-        depth = terrainDepth;
-        albedo = texture(gAlbedo, out_uv).rgb;
-        normal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
-        roughness = texture(dSSR, out_uv).g;
-        metallic = texture(dSSR, out_uv).b;
-    }
-
-    float waterMix = 0.5;
-
     vec3 waterAlbedo = texture(gWaterAlbedo, out_uv).rgb;
     vec3 waterNormal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
-    float waterRoughness = texture(dSSR, out_uv).g;
-    float waterMetallic = texture(dSSR, out_uv).b;
+    float waterRoughness = texture(dSSRWater, out_uv).g;
+    float waterMetallic = texture(dSSRWater, out_uv).b;
 
     vec3 terrainAlbedo = texture(gAlbedo, out_uv).rgb;
     vec3 terrainNormal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
@@ -213,25 +197,38 @@ void main()
     float terrainMetallic = texture(dSSR, out_uv).b;
 
     if (isWater) {
-        albedo = mix(terrainAlbedo, waterAlbedo, waterMix);
-        normal = normalize(mix(terrainNormal, waterNormal, waterMix));
+        vec2 refractedUV = out_uv + waterNormal.xy * 0.03;
+        refractedUV = clamp(refractedUV, 0.001, 0.999);
+        
+        vec3 refractedTerrainAlbedo = texture(gAlbedo, refractedUV).rgb;
+        vec3 refractedTerrainNormal = normalize(texture(gNormal, refractedUV).rgb * 2.0 - 1.0);
+        
+        float waterDepthVal = waterDepth - terrainDepth;
+        float refractionFade = smoothstep(0.0, 0.3, waterDepthVal);
+        
+        vec3 underwaterTint = vec3(0.4, 0.6, 0.9) * (0.5 + refractionFade * 0.5);
+        
+        vec3 terrainAlbedoFinal = mix(terrainAlbedo, refractedTerrainAlbedo * underwaterTint, refractionFade * 0.7);
+        vec3 terrainNormalFinal = mix(terrainNormal, refractedTerrainNormal, refractionFade * 0.7);
+        
+        float waterMix = 0.5;
+        albedo = mix(terrainAlbedoFinal, waterAlbedo, waterMix);
+        normal = normalize(mix(terrainNormalFinal, waterNormal, waterMix));
         roughness = mix(terrainRoughness, waterRoughness, waterMix);
         metallic = mix(terrainMetallic, waterMetallic, waterMix);
         depth = waterDepth;
+    } else {
+        depth = terrainDepth;
+        albedo = terrainAlbedo;
+        normal = terrainNormal;
+        roughness = terrainRoughness;
+        metallic = terrainMetallic;
     }
 
     bool isSky = depth > 0.99999;
 
-    vec3 worldPos;
-    float shadow;
-
-    if (isWater) {
-        worldPos = reconstructWorldPosition(waterDepth);
-        shadow = calculateShadow(worldPos, out_uv);
-    } else {
-        worldPos = reconstructWorldPosition(depth);
-        shadow = calculateShadow(worldPos, out_uv);
-    }
+    vec3 worldPos = reconstructWorldPosition(depth);
+    float shadow = calculateShadow(worldPos, out_uv);
 
     vec3 cameraPos = getCameraPos();
     vec3 viewDir = normalize(cameraPos - worldPos);

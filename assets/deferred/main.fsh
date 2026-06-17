@@ -177,22 +177,48 @@ float calculateShadow(vec3 worldPos, vec2 uv)
 
 void main()
 {
-    float ao = texture(dSSAO, out_uv).r;
-    vec3 albedo = texture(gAlbedo, out_uv).rgb;
-    float depth = texture(gDepth, out_uv).r;
-    vec3 normal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
-    float roughness = texture(dSSR, out_uv).g;
-    float metallic = texture(dSSR, out_uv).b;
-
+    float terrainDepth = texture(gDepth, out_uv).r;
     float waterDepth = texture(gWaterDepth, out_uv).r;
-    bool isWater = waterDepth < depth - 0.0001;
+    bool isWater = waterDepth < terrainDepth;
+
+    float depth;
+    vec3 albedo;
+    vec3 normal;
+    float roughness;
+    float metallic;
 
     if (isWater) {
+        depth = waterDepth;
         albedo = texture(gWaterAlbedo, out_uv).rgb;
         normal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
         roughness = texture(gWaterRoughness, out_uv).x;
         metallic = texture(gWaterRoughness, out_uv).y;
-        depth = waterDepth;
+    } else {
+        depth = terrainDepth;
+        albedo = texture(gAlbedo, out_uv).rgb;
+        normal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
+        roughness = texture(dSSR, out_uv).g;
+        metallic = texture(dSSR, out_uv).b;
+    }
+
+    float waterMix = 0.5;
+
+    vec3 waterAlbedo = texture(gWaterAlbedo, out_uv).rgb;
+    vec3 waterNormal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
+    float waterRoughness = texture(gWaterRoughness, out_uv).x;
+    float waterMetallic = texture(gWaterRoughness, out_uv).y;
+
+    vec3 terrainAlbedo = texture(gAlbedo, out_uv).rgb;
+    vec3 terrainNormal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
+    float terrainRoughness = texture(dSSR, out_uv).g;
+    float terrainMetallic = texture(dSSR, out_uv).b;
+
+    if (isWater) {
+        albedo = mix(terrainAlbedo, waterAlbedo, waterMix);
+        normal = normalize(mix(terrainNormal, waterNormal, waterMix));
+        roughness = mix(terrainRoughness, waterRoughness, waterMix);
+        metallic = mix(terrainMetallic, waterMetallic, waterMix);
+        depth = mix(terrainDepth, waterDepth, waterMix);
     }
 
     bool isSky = depth > 0.9999;
@@ -213,6 +239,8 @@ void main()
 
     float NdotL = max(dot(normal, L), 0.0);
     float NdotV = max(dot(normal, V), 0.0);
+
+    float ao = texture(dSSAO, out_uv).r;
 
     vec4 ssr1 = texture(dSSR, out_uv);
     vec4 ssr2 = texture(dSSRWater, out_uv);

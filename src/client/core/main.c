@@ -444,6 +444,7 @@ int main(int argc, char* argv[]) {
         program_set_int(&main, "gWaterDepth", 10);
 
         program_set_mat4(&main, "light_space_matrix_far", (float*)light_space_matrix_far);
+        program_set_mat4(&main, "light_space_matrix_near", (float*)light_space_matrix_near);
 
         program_set_mat4(&main, "inv_projection", (float*)inv_projection);
         program_set_mat4(&main, "inv_view", (float*)inv_view);

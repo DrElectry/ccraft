@@ -116,7 +116,7 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
     vec3 proj = fragPosLightSpace.xyz / fragPosLightSpace.w;
     proj = proj * 0.5 + 0.5;
 
-    if (proj.z > 1.0 || proj.z < 0.0)
+    if( proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0 )
         return 0.0;
 
     float currentDepth = proj.z;
@@ -129,9 +129,9 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
     
     float bias;
     if (radiusMultiplier > 0.8) {
-        bias = 0.0001 + 0.0003 * (1.0 - NdotL) + texelSize.x * 0.5;
-    } else {
         bias = 0.001 + 0.002 * (1.0 - NdotL) + texelSize.x * 3.0;
+    } else {
+        bias = 0.0001 + 0.0003 * (1.0 - NdotL) + texelSize.x * 0.5;
     }
 
     float shadow = 0.0;

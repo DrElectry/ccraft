@@ -55,11 +55,6 @@ vec2 poissonDisk[64] = vec2[](
     vec2(0.555, 0.111), vec2(-0.432, -0.321), vec2(0.678, -0.456), vec2(-0.345, 0.123)
 );
 
-vec3 fresnelSchlick(float cosTheta, vec3 F0);
-float DistributionGGX(vec3 N, vec3 H, float roughness);
-float GeometrySchlickGGX(float NdotV, float roughness);
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness);
-
 float rand(vec2 co)
 {
     return fract(sin(dot(co, vec2(12.9898,78.233))) * 43758.5453);
@@ -76,6 +71,14 @@ mat2 getRotation(vec2 uv)
 vec3 reconstructWorldPosition(float depth)
 {
     vec4 ndc = vec4(out_uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+    vec4 viewPos = inv_projection * ndc;
+    viewPos /= viewPos.w;
+    return (inv_view * viewPos).xyz;
+}
+
+vec3 reconstructWorldPositionUV(float depth, vec2 uv)
+{
+    vec4 ndc = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
     vec4 viewPos = inv_projection * ndc;
     viewPos /= viewPos.w;
     return (inv_view * viewPos).xyz;
@@ -187,6 +190,8 @@ void main()
     vec3 normal;
     float roughness;
     float metallic;
+    vec2 shadowUV = out_uv;
+    float shadowDepth;
 
     vec3 waterAlbedo = texture(gWaterAlbedo, out_uv).rgb;
     vec3 waterNormal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
@@ -197,6 +202,8 @@ void main()
     vec3 terrainNormal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
     float terrainRoughness = texture(dSSR, out_uv).g;
     float terrainMetallic = texture(dSSR, out_uv).b;
+
+    vec3 worldPos;
 
     if (isWater)
     {
@@ -232,18 +239,22 @@ void main()
         if (valid)
         {
             belowAlbedo = texture(gAlbedo, refractUVDistorted).rgb;
+            shadowDepth = texture(gDepth, refractUVDistorted).r;
+            shadowUV = refractUVDistorted;
             belowAlbedo = mix(belowAlbedo, vec3(dot(belowAlbedo, vec3(0.333))), 0.15);
         }
         else
         {
             belowAlbedo = texture(gAlbedo, refractUV).rgb;
+            shadowDepth = texture(gDepth, refractUV).r;
+            shadowUV = refractUV;
             belowAlbedo = mix(belowAlbedo, vec3(dot(belowAlbedo, vec3(0.333))), 0.15);
         }
 
         vec4 waterSSR = texture(dSSRWater, out_uv);
         vec3 reflectionColor = mix(FOG_COLOR, waterSSR.rgb, waterSSR.a);
 
-        vec3 worldPos = waterWorldPos;
+        worldPos = waterWorldPos;
         vec3 viewDir = normalize(cameraPos - worldPos);
 
         float fresnel = pow(1.0 - max(dot(waterNormal, viewDir), 0.0), 5.0);
@@ -265,18 +276,21 @@ void main()
         normal = terrainNormal;
         roughness = terrainRoughness;
         metallic = terrainMetallic;
+        shadowUV = out_uv;
+        shadowDepth = depth;
+        worldPos = reconstructWorldPosition(depth);
     }
 
     bool isSky = depth > 0.99999;
 
-    vec3 worldPos = reconstructWorldPosition(depth);
-
-    float shadow = calculateShadow(worldPos, out_uv);
+    vec3 shadowWorldPos = isWater ? reconstructWorldPositionUV(shadowDepth, shadowUV) : worldPos;
 
     vec3 cameraPos = getCameraPos();
     vec3 viewDir = normalize(cameraPos - worldPos);
 
     float distToCamera = length(worldPos - cameraPos);
+
+    float shadow = calculateShadow(shadowWorldPos, shadowUV);
 
     vec3 lightDir = normalize(
         mix(

@@ -12,7 +12,6 @@ uniform sampler2D dSSRWater;
 uniform sampler2D gWaterAlbedo;
 uniform sampler2D gWaterDepth;
 uniform sampler2D gWaterNormal;
-uniform sampler2D gWaterRoughness;
 
 uniform mat4 inv_projection;
 uniform mat4 inv_view;
@@ -191,8 +190,8 @@ void main()
         depth = waterDepth;
         albedo = texture(gWaterAlbedo, out_uv).rgb;
         normal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
-        roughness = texture(gWaterRoughness, out_uv).x;
-        metallic = texture(gWaterRoughness, out_uv).y;
+        roughness = texture(dSSRWater, out_uv).g;
+        metallic = texture(dSSRWater, out_uv).b;
     } else {
         depth = terrainDepth;
         albedo = texture(gAlbedo, out_uv).rgb;
@@ -205,8 +204,8 @@ void main()
 
     vec3 waterAlbedo = texture(gWaterAlbedo, out_uv).rgb;
     vec3 waterNormal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
-    float waterRoughness = texture(gWaterRoughness, out_uv).x;
-    float waterMetallic = texture(gWaterRoughness, out_uv).y;
+    float waterRoughness = texture(dSSR, out_uv).g;
+    float waterMetallic = texture(dSSR, out_uv).b;
 
     vec3 terrainAlbedo = texture(gAlbedo, out_uv).rgb;
     vec3 terrainNormal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
@@ -221,13 +220,13 @@ void main()
         depth = waterDepth;
     }
 
-    bool isSky = depth > 0.9999;
+    bool isSky = depth > 0.99999;
 
     vec3 worldPos;
     float shadow;
 
     if (isWater) {
-        worldPos = reconstructWorldPosition(terrainDepth);
+        worldPos = reconstructWorldPosition(waterDepth);
         shadow = calculateShadow(worldPos, out_uv);
     } else {
         worldPos = reconstructWorldPosition(depth);
@@ -271,7 +270,7 @@ void main()
 
     vec3 diffuse = albedo * lightColor * NdotL * (1.0 - shadow);
 
-    vec3 directLighting = ambient + diffuse * (F*0.0001); // nice F waste
+    vec3 directLighting = ambient + diffuse;
 
     vec3 finalColor;
     if (!isSky)

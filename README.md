@@ -46,6 +46,8 @@ MIT license, because sharing is caring.
 
 ### Contribution
 
+![Demo](pictures/building.png)
+
 anyone can contribute or fork the project, any help will be greeted with open hands.
 
 ## CREDITS

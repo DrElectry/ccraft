@@ -534,12 +534,6 @@ int main(int argc, char* argv[]) {
 
         gfx_draw_fullscreen_quad();
 
-        // Restore common GL state for 3D/2D HUD rendering (cursor/hand/text/remote labels)
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, WIDTH, HEIGHT);
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_CULL_FACE);
-
         game_draw_hud();
 
         glfwSwapBuffers(_win->glwin);

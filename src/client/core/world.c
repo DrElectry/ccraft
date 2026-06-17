@@ -6,6 +6,7 @@
 #include "core/world_gen.h"
 #include "core/light.h"
 #include "utils/rand.h"
+#include "gl/tex.h"
 #include "utils/log.h"
 #include "utils/noise.h"
 #include "utils/file.h"
@@ -314,7 +315,7 @@ void world_rebuild_chunk(World* world, int cx, int cz) {
     world_mesh_submit(world, cx, cz);
 }
 
-void world_render(World* world, void* active_program, void* water_program, int cull) {
+void world_render(World* world, void* active_program, void* water_program, int cull, int render_water) {
     vec3 cam_pos;
     glm_vec3_copy(player.camera.pos, cam_pos);
 
@@ -368,7 +369,71 @@ void world_render(World* world, void* active_program, void* water_program, int c
         }
 
         gfx_render(&world->chunks_map[i].model, (Program*)active_program);
-        gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
+        if (render_water) {
+            gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
+        }
+    }
+}
+
+void world_render_water(World* world, void* program, int cull, void* background_tex) {
+    vec3 cam_pos;
+    glm_vec3_copy(player.camera.pos, cam_pos);
+
+    vec3 forward;
+    glm_vec3_copy(player.camera.forward, forward);
+
+    float forward_len2 = forward[0] * forward[0] + forward[1] * forward[1] + forward[2] * forward[2];
+    if (forward_len2 > 0.000001f) {
+        float inv = 1.0f / sqrtf(forward_len2);
+        forward[0] *= inv;
+        forward[1] *= inv;
+        forward[2] *= inv;
+    }
+
+    Program* prog = (Program*)program;
+    program_use(prog);
+    program_set_int(prog, "background", 0);
+    texture_bind((Texture*)background_tex, 0);
+
+    for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
+        if (world->index_map[i] == -1) continue;
+
+        if (cull) {
+            vec3 box_min = {
+                world->chunks_map[i].water_model.pos[0],
+                0.0f,
+                world->chunks_map[i].water_model.pos[2]
+            };
+            vec3 box_max = {
+                world->chunks_map[i].water_model.pos[0] + CHUNK_WIDTH,
+                (float)CHUNK_HEIGHT,
+                world->chunks_map[i].water_model.pos[2] + CHUNK_DEPTH
+            };
+
+            float max_dot = -1e30f;
+
+            for (int ix = 0; ix < 2; ix++) {
+                for (int iy = 0; iy < 2; iy++) {
+                    for (int iz = 0; iz < 2; iz++) {
+                        vec3 corner = {
+                            ix ? box_max[0] : box_min[0],
+                            iy ? box_max[1] : box_min[1],
+                            iz ? box_max[2] : box_min[2]
+                        };
+
+                        float dx = corner[0] - cam_pos[0];
+                        float dy = corner[1] - cam_pos[1];
+                        float dz = corner[2] - cam_pos[2];
+                        float d = forward[0] * dx + forward[1] * dy + forward[2] * dz;
+                        if (d > max_dot) max_dot = d;
+                    }
+                }
+            }
+
+            if (max_dot < 0.0f) continue;
+        }
+
+        gfx_render(&world->chunks_map[i].water_model, prog);
     }
 }
 

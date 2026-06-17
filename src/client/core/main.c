@@ -134,6 +134,7 @@ int main(int argc, char* argv[]) {
     glEnable(GL_CULL_FACE);
 
     FBO gbuffer;
+    FBO water_gbuffer;
     FBO shadow1;
     FBO shadow2;
     FBO ssaofb;
@@ -141,6 +142,7 @@ int main(int argc, char* argv[]) {
     FBO ppfb;
     FBO prev_frame;
     FBO ssrfb;
+    FBO ssrfb_water;
     FBO bloomfb;
     FBO blurfb;
     FBO ffb;
@@ -209,6 +211,7 @@ int main(int argc, char* argv[]) {
     fbo_create(&prev_frame, WIDTH, HEIGHT, 1);
     fbo_create(&ppfb, WIDTH, HEIGHT, 1);
     fbo_create(&ssrfb, WIDTH/2, HEIGHT/2, 1);
+    fbo_create(&ssrfb_water, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&bloomfb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&blurfb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&ffb, WIDTH, HEIGHT, 1);
@@ -219,6 +222,12 @@ int main(int argc, char* argv[]) {
     gbuffer.color_formats[3] = FBO_COLOR_RG16F;
 
     fbo_create(&gbuffer, WIDTH, HEIGHT, 4);
+    water_gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
+    water_gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
+    water_gbuffer.color_formats[2] = FBO_COLOR_RGBA16F;
+    water_gbuffer.color_formats[3] = FBO_COLOR_RG16F;
+
+    fbo_create(&water_gbuffer, WIDTH, HEIGHT, 4);
 
     fbo_create_depth(&shadow1, 2048, 2048);
     fbo_create_depth(&shadow2, 1024, 1024);
@@ -275,7 +284,17 @@ int main(int argc, char* argv[]) {
         window_update();
         window_draw();
 
-        game_draw(current_time);
+        game_draw_terrain_gbuffer(current_time);
+
+        fbo_unbind();
+
+        fbo_bind(&water_gbuffer);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        window_update();
+        window_draw();
+
+        game_draw_water_gbuffer(current_time);
 
         fbo_unbind();
 
@@ -370,6 +389,31 @@ int main(int argc, char* argv[]) {
 
         fbo_unbind();
 
+        fbo_bind(&ssrfb_water);
+
+        program_use(&ssr);
+
+        fbo_bind_texture(&prev_frame, 0, 0);
+        fbo_bind_texture(&water_gbuffer, 1, 1);
+        fbo_bind_texture(&water_gbuffer, 2, 3);
+        fbo_bind_texture(&water_gbuffer, 3, 4);
+        fbo_bind_depth_texture(&water_gbuffer, 5);
+
+        program_set_int(&ssr, "gAlbedo", 0);
+        program_set_int(&ssr, "gNormal", 1);
+        program_set_int(&ssr, "gPosition", 3);
+        program_set_int(&ssr, "gRoughness", 4);
+        program_set_int(&ssr, "gDepth", 5);
+
+        program_set_mat4(&ssr, "projection", (float*)projection);
+        program_set_mat4(&ssr, "view", (float*)view);
+
+        program_set_vec2(&ssr, "ssr_ratio", ssr_ratio);
+
+        gfx_draw_fullscreen_quad();
+
+        fbo_unbind();
+
         fbo_bind(&ppfb);
 
         program_use(&main);
@@ -381,6 +425,7 @@ int main(int argc, char* argv[]) {
         fbo_bind_depth_texture(&shadow2, 4);
         fbo_bind_texture(&ssaofb, 0, 5);
         fbo_bind_texture(&ssrfb, 0, 6);
+        fbo_bind_texture(&ssrfb_water, 0, 7);
 
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
@@ -389,6 +434,7 @@ int main(int argc, char* argv[]) {
         program_set_int(&main, "dShadow2", 4);
         program_set_int(&main, "dSSAO", 5);
         program_set_int(&main, "dSSR", 6);
+        program_set_int(&main, "dSSRWater", 7);
 
         program_set_mat4(&main, "light_space_matrix_near", (float*)light_space_matrix_near);
         program_set_mat4(&main, "light_space_matrix_far", (float*)light_space_matrix_far);

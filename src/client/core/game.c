@@ -589,6 +589,33 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     glViewport(0, 0, WIDTH, HEIGHT);
 }
 
+void game_draw_terrain_gbuffer(float time) {
+    (void)time;
+
+    program_use(&c);
+    texture_bind(&texture_atlas, 0);
+    texture_bind(&roughness, 1);
+    program_set_int(&c, "tex", 0);
+    program_set_int(&c, "roug", 1);
+    program_set_mat4(&c, "proj", (float*)projection);
+    program_set_mat4(&c, "view", (float*)view);
+
+    world_render(&world, &c, &water_prog, 1, 0);
+}
+
+void game_draw_water_gbuffer(float time) {
+    program_use(&water_prog);
+    texture_bind(&texture_atlas, 0);
+    texture_bind(&roughness, 1);
+    program_set_int(&water_prog, "tex", 0);
+    program_set_int(&water_prog, "roug", 1);
+    program_set_mat4(&water_prog, "proj", (float*)projection);
+    program_set_mat4(&water_prog, "view", (float*)view);
+    program_set_float(&water_prog, "time", time);
+
+    world_render_water_only(&world, &water_prog, 1);
+}
+
 void game_draw(float time) {
     float dt = time - last_time;
     last_time = time;

@@ -227,31 +227,30 @@ void main()
 
         distortion *= distortionStrength;
 
-        vec2 refractUVDistorted = clamp(out_uv + distortion, 0.001, 0.999);
-        vec2 refractUV = out_uv;
+        vec2 refractUV = clamp(out_uv + distortion, 0.001, 0.999);
+        vec2 reflectUV = out_uv;
 
-        float sceneDepthRefract = texture(gDepth, refractUVDistorted).r;
-
+        float sceneDepthRefract = texture(gDepth, refractUV).r;
         bool valid = sceneDepthRefract > waterDepth;
 
         vec3 belowAlbedo;
 
         if (valid)
         {
-            belowAlbedo = texture(gAlbedo, refractUVDistorted).rgb;
-            shadowDepth = texture(gDepth, refractUVDistorted).r;
-            shadowUV = refractUVDistorted;
-            belowAlbedo = mix(belowAlbedo, vec3(dot(belowAlbedo, vec3(0.333))), 0.15);
-        }
-        else
-        {
             belowAlbedo = texture(gAlbedo, refractUV).rgb;
             shadowDepth = texture(gDepth, refractUV).r;
             shadowUV = refractUV;
             belowAlbedo = mix(belowAlbedo, vec3(dot(belowAlbedo, vec3(0.333))), 0.15);
         }
+        else
+        {
+            belowAlbedo = texture(gAlbedo, out_uv).rgb;
+            shadowDepth = texture(gDepth, out_uv).r;
+            shadowUV = out_uv;
+            belowAlbedo = mix(belowAlbedo, vec3(dot(belowAlbedo, vec3(0.333))), 0.15);
+        }
 
-        vec4 waterSSR = texture(dSSRWater, out_uv);
+        vec4 waterSSR = texture(dSSRWater, reflectUV);
         vec3 reflectionColor = mix(FOG_COLOR, waterSSR.rgb, waterSSR.a);
 
         worldPos = waterWorldPos;

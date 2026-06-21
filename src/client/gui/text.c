@@ -266,6 +266,13 @@ void text_draw(HText* text) {
     texture_bind(&text_atlas, 0);
     program_set_int(&text_program, "tex_atlas", 0);
 
+    GLboolean depth_test_enabled = glIsEnabled(GL_DEPTH_TEST);
+    GLboolean depth_mask;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
+
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -299,6 +306,9 @@ void text_draw(HText* text) {
     glDrawElements(GL_TRIANGLES, text->index_count, GL_UNSIGNED_INT, NULL);
 
     glDisable(GL_BLEND);
+
+    if (depth_test_enabled) glEnable(GL_DEPTH_TEST);
+    glDepthMask(depth_mask);
 }
 
 void text_free(HText* text) {

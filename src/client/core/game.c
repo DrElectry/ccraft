@@ -182,7 +182,7 @@ void game_init() {
 
     cursor.pos[0] = cursor.pos[1] = cursor.pos[2] = 0.0f;
     cursor.rot[0] = cursor.rot[1] = cursor.rot[2] = 0.0f;
-    cursor.scale[0] = cursor.scale[1] = cursor.scale[2] = 1.01f;
+    cursor.scale[0] = cursor.scale[1] = cursor.scale[2] = 1.0001f;
 
     glm_mat4_identity(hand_model);
     glm_translate(hand_model, (vec3){50.0f, 50.0f, 50.0f});
@@ -346,7 +346,7 @@ void game_tick(float dt) {
     RaycastHit hit;
     raycast_dda(&world, eye, player.camera.forward, 5.0f, &hit);
 
-    glm_vec3_copy((vec3){((float)hit.bx)-0.005f, ((float)hit.by)-0.005f, ((float)hit.bz)-0.005f}, cursor.pos);
+    glm_vec3_copy((vec3){((float)hit.bx)-0.00005f, ((float)hit.by)-0.00005f, ((float)hit.bz)-0.00005f}, cursor.pos);
 
     break_delay -= dt;
     place_delay -= dt;
@@ -724,12 +724,12 @@ void game_draw(float time) {
     program_set_mat4(&cursora, "model", (float*)model_matrix);
 
     GLint current_polygon_mode[2];
-    glGetIntegerv(GL_POLYGON_MODE, current_polygon_mode);
 
+    glGetIntegerv(GL_POLYGON_MODE, current_polygon_mode);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
     vao_bind(&cursor.cache.vao);
     glDrawElements(GL_LINES, cursor.tri_count * 2, GL_UNSIGNED_INT, NULL);
-
     glPolygonMode(GL_FRONT_AND_BACK, current_polygon_mode[0]);
 
     glEnable(GL_CULL_FACE);

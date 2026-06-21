@@ -26,6 +26,13 @@ typedef struct {
     pthread_mutex_t clients_mutex;
 } Server;
 
+typedef struct {
+    int32_t x;
+    int32_t y;
+    int32_t z;
+    uint16_t block_type;
+} ServerBlockChange;
+
 extern Server global_server;
 
 void server_init(Server* server);

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "globals.h"
 #include "net_platform.h"
@@ -16,14 +17,7 @@
     #include <netinet/tcp.h>
 #endif
 
-Server global_server;   
-
-typedef struct {
-    int32_t x;
-    int32_t y;
-    int32_t z;
-    uint16_t block_type;
-} ServerBlockChange;
+Server global_server;
 
 static ServerBlockChange* g_pending_block_changes = NULL;
 static int g_pending_block_count = 0;
@@ -97,6 +91,40 @@ static void send_world_snapshot(Client* client) {
     pthread_mutex_unlock(&g_block_mutex);
 }
 
+static void* console_input_thread(void* arg) {
+    Server* server = (Server*)arg;
+    char line[512];
+
+    while (server->running) {
+        if (fgets(line, sizeof(line), stdin) == NULL) {
+            break;
+        }
+
+        size_t len = strlen(line);
+        if (len > 0 && line[len - 1] == '\n') {
+            line[len - 1] = '\0';
+        }
+
+        if (len == 0 || line[0] == '\0') {
+            continue;
+        }
+
+        ChatMessagePacket chat;
+        memset(&chat, 0, sizeof(chat));
+        chat.type = PKT_CHAT_MESSAGE;
+        chat.client_id = 0;
+        strncpy(chat.nickname, "Server", MAX_NICKNAME_LEN - 1);
+        chat.nickname[MAX_NICKNAME_LEN - 1] = '\0';
+        strncpy(chat.message, line, MAX_MESSAGE_LEN - 1);
+        chat.message[MAX_MESSAGE_LEN - 1] = '\0';
+
+        server_broadcast(server, &chat, sizeof(chat), 0);
+        printf("Server: %s\n", line);
+    }
+
+    return NULL;
+}
+
 void* handle_client(void* arg) {
     Client* client = (Client*)arg;
     uint8_t buffer[4096];
@@ -129,8 +157,6 @@ void* handle_client(void* arg) {
     }
     
     printf("%s joined as <%s>\n", client_ip, client->nickname);
-
-
     
     HandshakePacket handshake;
     memset(&handshake, 0, sizeof(handshake));
@@ -164,7 +190,7 @@ void* handle_client(void* arg) {
         memset(&chat, 0, sizeof(chat));
         chat.type = PKT_CHAT_MESSAGE;
         chat.client_id = 0;
-        strncpy(chat.nickname, "server", MAX_NICKNAME_LEN - 1);
+        strncpy(chat.nickname, "Server", MAX_NICKNAME_LEN - 1);
         chat.nickname[MAX_NICKNAME_LEN - 1] = '\0';
         snprintf(chat.message, sizeof(chat.message), "%s joined the server", client->nickname);
         server_broadcast(&global_server, &chat, sizeof(chat), 0);
@@ -263,6 +289,14 @@ void* handle_client(void* arg) {
                         break;
                     }
                     ChatMessagePacket* chat_pkt = (ChatMessagePacket*)(buffer + offset);
+                    char lower_msg[MAX_MESSAGE_LEN];
+                    strncpy(lower_msg, chat_pkt->message, MAX_MESSAGE_LEN - 1);
+                    lower_msg[MAX_MESSAGE_LEN - 1] = '\0';
+                    for (int i = 0; lower_msg[i]; i++) {
+                        lower_msg[i] = tolower((unsigned char)lower_msg[i]);
+                    }
+                    printf("%s: %s\n", client->nickname, lower_msg);
+                    
                     ChatMessagePacket forward_pkt;
                     memcpy(&forward_pkt, chat_pkt, sizeof(ChatMessagePacket));
                     forward_pkt.client_id = client->client_id;
@@ -293,15 +327,13 @@ void* handle_client(void* arg) {
     
     char disconnect_nickname[MAX_NICKNAME_LEN];
     
-    // handshake completed
-    
     strncpy(disconnect_nickname, client->nickname, MAX_NICKNAME_LEN);
     
     {
         ChatMessagePacket chat;
         memset(&chat, 0, sizeof(chat));
         chat.type = PKT_CHAT_MESSAGE;
-        chat.client_id = 0; // 0 is the sys messages
+        chat.client_id = 0;
         strncpy(chat.nickname, "server", MAX_NICKNAME_LEN - 1);
         chat.nickname[MAX_NICKNAME_LEN - 1] = '\0';
         snprintf(chat.message, sizeof(chat.message), "%s left the server", disconnect_nickname);
@@ -385,6 +417,13 @@ void server_start(Server* server) {
     printf("Running on %s:%u\n", config.ip, config.port);
     
     server->running = 1;
+    
+    pthread_t console_thread;
+    if (pthread_create(&console_thread, NULL, console_input_thread, server) == 0) {
+        pthread_detach(console_thread);
+    } else {
+        perror("pthread_create for console input");
+    }
     
     fd_set read_fds;
     uint32_t next_client_id = 1;
@@ -497,4 +536,3 @@ void server_stop(Server* server) {
     pthread_mutex_unlock(&g_block_mutex);
     pthread_mutex_destroy(&g_block_mutex);
 }
-

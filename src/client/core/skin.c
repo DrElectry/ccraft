@@ -475,9 +475,6 @@ void skinned_render(Skinned* s, Program* active_program, float delta_time, const
         return;
     }
 
-    if (s->gpu.anim && delta_time > 0.0f) {
-        anim_state_update(s->gpu.anim, delta_time);
-    }
     if (s->gpu.anim) {
         anim_calc_bone_matrices(s->gpu.anim, s->gpu.skeleton, local_mats);
     } else {

@@ -689,7 +689,11 @@ Skinned_render_request* gltf_load_skinned_request(const char* path) {
     request->look.neck_bone = -1;
     
     if (model.animation_count > 0 && model.animations) {
-        request->anim = anim_state_create(model.animations[0]);
+        // Prefer idle as the default pose for remotes.
+        AnimationClip* idle = gltf_get_animation(&model, "idle");
+        if (!idle) idle = model.animations[0];
+
+        request->anim = anim_state_create(idle);
         if (request->anim) {
             request->anim->loop = 1;
             request->anim->speed = 1.0f;

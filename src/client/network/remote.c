@@ -18,7 +18,8 @@ static RemoteRenderCtx g_ctx = {0};
 
 void remote_set_render_ctx(
     Skinned_render_request* player_walk_model,
-    AnimState* walk_anim,
+    AnimationClip* walk_clip,
+    AnimationClip* idle_clip,
     Program* skinned_prog,
     Texture* player_tex,
     Texture* player_shininess,
@@ -26,7 +27,8 @@ void remote_set_render_ctx(
     int bone_neck
 ) {
     g_ctx.player_walk_model = player_walk_model;
-    g_ctx.walk_anim = walk_anim;
+    g_ctx.walk_clip = walk_clip;
+    g_ctx.idle_clip = idle_clip;
     g_ctx.skinned_prog = skinned_prog;
     g_ctx.player_tex = player_tex;
     g_ctx.player_shininess = player_shininess;
@@ -36,10 +38,24 @@ void remote_set_render_ctx(
 
 static RemoteAnim remote_anim[CLIENT_MAX_REMOTES];
 
+static inline void remote_anim_set_playing(AnimState* walk, AnimState* idle, int walking) {
+    if (walking) {
+        if (walk) walk->is_playing = true;
+        if (idle) idle->is_playing = false;
+    } else {
+        if (idle) idle->is_playing = true;
+        if (walk) walk->is_playing = false;
+    }
+}
+
 void remote_anim_cleanup(int i) {
     if (remote_anim[i].walk_state) {
         anim_state_destroy(remote_anim[i].walk_state);
         remote_anim[i].walk_state = NULL;
+    }
+    if (remote_anim[i].idle_state) {
+        anim_state_destroy(remote_anim[i].idle_state);
+        remote_anim[i].idle_state = NULL;
     }
     if (remote_anim[i].skinned) {
         free(remote_anim[i].skinned);
@@ -78,10 +94,9 @@ float get_feet_align_y(Skinned_render_request* req) {
 
 void draw_remote_player(int i, const RemotePlayer* rp, float dt, const mat4 proj, const mat4 view_mat, int shadow_pass) {
     (void)shadow_pass;
+    (void)dt;
 
-    if (!rp->active || !g_ctx.player_walk_model || !g_ctx.walk_anim) {
-        return;
-    }
+    if (!rp->active || !g_ctx.player_walk_model || !g_ctx.walk_clip || !g_ctx.idle_clip) return;
 
     int walking = rp->on_ground != 0;
 
@@ -96,43 +111,41 @@ void draw_remote_player(int i, const RemotePlayer* rp, float dt, const mat4 proj
     sk->gpu.skeleton = g_ctx.player_walk_model->skeleton;
 
     if (!remote_anim[i].walk_state) {
-        remote_anim[i].walk_state = anim_state_create(g_ctx.walk_anim->clip);
+        remote_anim[i].walk_state = anim_state_create(g_ctx.walk_clip);
         remote_anim[i].walk_state->loop = 1;
-        remote_anim[i].walk_state->speed = 1.0f;
+        remote_anim[i].walk_state->speed = 0.75f;
+    }
+    if (!remote_anim[i].idle_state) {
+        remote_anim[i].idle_state = anim_state_create(g_ctx.idle_clip);
+        remote_anim[i].idle_state->loop = 1;
+        remote_anim[i].idle_state->speed = 0.75f;
     }
 
-    if (walking) {
-        anim_state_play(remote_anim[i].walk_state);
-        anim_state_update(remote_anim[i].walk_state, dt);
-    } else {
-        remote_anim[i].walk_state->current_time = 0.1f;
-        remote_anim[i].walk_state->is_playing = 0;
-    }
-    sk->gpu.anim = remote_anim[i].walk_state;
+    AnimState* active_anim = walking ? remote_anim[i].walk_state : remote_anim[i].idle_state;
+    sk->gpu.anim = active_anim;
+
+    const float YAW_PI_CORR = 3.14159265358979323846f;
 
     if (!remote_anim[i].body_yaw_init) {
-        remote_anim[i].body_yaw = rp->rot[1];
+        remote_anim[i].body_yaw = rp->rot[1] + YAW_PI_CORR;
         remote_anim[i].body_yaw_init = 1;
     }
 
-    float look_yaw = rp->rot[1];
-    float look_pitch = rp->rot[0];
-    if (dt > 0.0f) {
-        remote_anim[i].body_yaw = skinned_update_body_yaw(remote_anim[i].body_yaw, look_yaw, dt);
-    }
+    float look_yaw = rp->rot[1] + YAW_PI_CORR;
+    float look_pitch = -rp->rot[0];
 
     float head_yaw = skinned_head_yaw_offset(remote_anim[i].body_yaw, look_yaw);
 
-    float foot_y = get_feet_align_y(g_ctx.player_walk_model) * sk->scale[1] - 0.5f;
+    float foot_y = get_feet_align_y(g_ctx.player_walk_model) * sk->scale[1];
     sk->pos[0] = rp->pos[0];
     sk->pos[1] = rp->pos[1] + foot_y;
     sk->pos[2] = rp->pos[2];
     sk->rot[0] = 0.0f;
     sk->rot[1] = remote_anim[i].body_yaw;
     sk->rot[2] = 0.0f;
-    sk->scale[0] = 0.5f;
-    sk->scale[1] = 0.5f;
-    sk->scale[2] = 0.5f;
+    sk->scale[0] = 1.0f;
+    sk->scale[1] = 1.0f;
+    sk->scale[2] = 1.0f;
 
     SkinnedLook look = {
         .enabled = 1,
@@ -145,7 +158,7 @@ void draw_remote_player(int i, const RemotePlayer* rp, float dt, const mat4 proj
     Skinned_render_request request = {
         .skinned = sk,
         .skeleton = g_ctx.player_walk_model->skeleton,
-        .anim = remote_anim[i].walk_state,
+        .anim = active_anim,
         .look = look,
     };
 
@@ -167,7 +180,49 @@ void remote_init(void) {
     memset(remote_anim, 0, sizeof(remote_anim));
 }
 
+void remote_update(float dt) {
+    if (dt <= 0.0f) return;
+    RemotePlayer* remotes = network_get_remote_players();
+
+    const float YAW_PI_CORR = 3.14159265358979323846f;
+
+    for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
+        RemotePlayer* rp = &remotes[i];
+        if (!rp->active || !g_ctx.player_walk_model || !g_ctx.walk_clip || !g_ctx.idle_clip) continue;
+
+        int walking = rp->on_ground != 0;
+
+        if (!remote_anim[i].walk_state) {
+            remote_anim[i].walk_state = anim_state_create(g_ctx.walk_clip);
+            remote_anim[i].walk_state->loop = 1;
+            remote_anim[i].walk_state->speed = 0.75f;
+        }
+        if (!remote_anim[i].idle_state) {
+            remote_anim[i].idle_state = anim_state_create(g_ctx.idle_clip);
+            remote_anim[i].idle_state->loop = 1;
+            remote_anim[i].idle_state->speed = 0.75f;
+        }
+
+        remote_anim_set_playing(remote_anim[i].walk_state, remote_anim[i].idle_state, walking);
+
+        if (walking) {
+            anim_state_update(remote_anim[i].walk_state, dt);
+        } else {
+            anim_state_update(remote_anim[i].idle_state, dt);
+        }
+
+        if (!remote_anim[i].body_yaw_init) {
+            remote_anim[i].body_yaw = rp->rot[1] + YAW_PI_CORR;
+            remote_anim[i].body_yaw_init = 1;
+        }
+
+        float look_yaw = rp->rot[1] + YAW_PI_CORR;
+        remote_anim[i].body_yaw = skinned_update_body_yaw(remote_anim[i].body_yaw, look_yaw, dt);
+    }
+}
+
 void remote_draw(const mat4 proj, const mat4 view, float dt, int shadow_pass) {
+    (void)dt;
     RemotePlayer* remotes = network_get_remote_players();
     for (int i = 0; i < CLIENT_MAX_REMOTES; i++) {
         if (!remotes[i].active) {

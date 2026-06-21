@@ -42,7 +42,9 @@ Program c, water_prog, bc, shadow, shadow_w, cursora;
 static Skinned_render_request* player_walk_model;
 static Skinned_render_request* player_jump_model;
 static AnimationClip* walk_clip;
+static AnimationClip* idle_clip;
 static AnimState* walk_anim;
+static GLTFModel player_model;
 static Program skinned_prog;
 
 static int bone_head = -1;
@@ -62,7 +64,7 @@ vec3 up = { 0.0f, 1.0f, 0.0f };
 
 float last_time = 0.0f;
 
-float dt;
+float dt = 0.0f;
 
 int wireframe = 0;
 int potato_mode = 0;
@@ -138,9 +140,19 @@ void game_init() {
 
     texture_create(&texture_atlas, "assets/textures/terrain.png");
     texture_create(&roughness, "assets/textures/shiny.png");
+
+    player_tex.mag_filter = GL_NEAREST;
+    player_tex.min_filter = GL_NEAREST;
+    player_tex.wrap_s = GL_REPEAT;
+    player_tex.wrap_t = GL_REPEAT;
+
+    player_shininess.mag_filter = GL_NEAREST;
+    player_shininess.min_filter = GL_NEAREST;
+    player_shininess.wrap_s = GL_REPEAT;
+    player_shininess.wrap_t = GL_REPEAT;
     
     texture_create(&player_tex, "assets/textures/player.png");
-    texture_create(&player_shininess, "assets/textures/player.png");
+    texture_create(&player_shininess, "assets/textures/txt_shininess.png");
 
     texture_create(&brightt, "assets/textures/txt_shininess.png");
     texture_create(&textt, "assets/textures/txt.png");
@@ -215,22 +227,36 @@ void game_init() {
     text->scale[1]=0.5f;
     text->scale[2]=0.5f;
 
-    player_walk_model = gltf_load_skinned_request("assets/models/player_walk.glb");
+    player_walk_model = gltf_load_skinned_request("assets/models/player.glb");
     if (!player_walk_model) {
-        printf("Failed to load walk.glb\n");
+        printf("Failed to load player.glb\n");
         return;
     }
-    
-    if (player_walk_model->skeleton) {
-        bone_head = skeleton_find_bone(player_walk_model->skeleton, "mixamorig:Head");
-        bone_neck = skeleton_find_bone(player_walk_model->skeleton, "mixamorig:Neck");
+
+    if (!gltf_load("assets/models/player.glb", &player_model)) {
+        printf("Failed to load player.glb for animation lookup\n");
     }
-    
-    walk_clip = player_walk_model->anim ? player_walk_model->anim->clip : NULL;
+
+    if (player_walk_model->skeleton) {
+        bone_head = skeleton_find_bone(player_walk_model->skeleton, "Head");
+        bone_neck = skeleton_find_bone(player_walk_model->skeleton, "Waist");
+    }
+
+    walk_clip = gltf_get_animation(&player_model, "walk");
+    idle_clip = gltf_get_animation(&player_model, "idle");
+
+    // fallback
+    if (!walk_clip && player_walk_model->anim) {
+        walk_clip = player_walk_model->anim->clip;
+    }
+    if (!idle_clip) {
+        idle_clip = walk_clip;
+    }
+
     if (walk_clip) {
         walk_anim = anim_state_create(walk_clip);
         walk_anim->loop = 1;
-        walk_anim->speed = 1.0f;
+        walk_anim->speed = 0.5f;
         player_walk_model->skinned->gpu.skeleton = player_walk_model->skeleton;
         player_walk_model->skinned->gpu.anim = walk_anim;
     }
@@ -238,7 +264,8 @@ void game_init() {
     remote_init();
     remote_set_render_ctx(
         player_walk_model,
-        walk_anim,
+        walk_clip,
+        idle_clip,
         &skinned_prog,
         &player_tex,
         &player_shininess,
@@ -247,8 +274,8 @@ void game_init() {
     );
 }
 
-void game_tick(float dt) {
-    dt=dt;
+void game_tick(float dt_p) {
+    dt=dt_p;
     glm_mat4_mul(projection, view, prev_view_proj);
 
     packs_ensure_loaded();
@@ -452,6 +479,7 @@ void game_tick(float dt) {
         }
     }
 
+    remote_update(dt);
     network_update_remotes(dt);
 }
 
@@ -623,10 +651,6 @@ void game_draw_water_gbuffer(float time) {
 }
 
 void game_draw(float time) {
-    float dt = time - last_time;
-    last_time = time;
-    if (dt <= 0.0f) dt = 0.016f;
-
     program_use(&c);
     texture_bind(&texture_atlas, 0);
     texture_bind(&roughness, 1);
@@ -882,7 +906,7 @@ void game_draw_hud() {
         }
 
         float sx = 0.0f, sy = 0.0f;
-        vec3 wp = { remotes[i].pos[0], remotes[i].pos[1] + 1.8f, remotes[i].pos[2] };
+        vec3 wp = { remotes[i].pos[0], remotes[i].pos[1] + 2.0f, remotes[i].pos[2] };
         project_point_to_screen(wp, &sx, &sy);
 
         int text_length = strlen(remote_nick_buf[i]);
@@ -909,17 +933,14 @@ void game_destroy() {
     sound_pack_destroy();
     world_destroy(&world);
 
-    if (walk_anim) {
-        anim_state_destroy(walk_anim);
-        walk_anim = NULL;
-    }
+    (void)walk_anim;
     if (player_walk_model) {
-        if (player_walk_model->skinned) {
-            player_walk_model->skinned->gpu.anim = NULL;
-        }
-        gltf_free_skinned_request(player_walk_model);
+        player_walk_model->skinned = NULL;
+        player_walk_model->skeleton = NULL;
+        free(player_walk_model);
         player_walk_model = NULL;
     }
+    gltf_free(&player_model);
     if (player_jump_model) {
         gltf_free_skinned_request(player_jump_model);
         player_jump_model = NULL;

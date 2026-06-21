@@ -10,6 +10,7 @@
 
 typedef struct {
     AnimState* walk_state;
+    AnimState* idle_state;
     Skinned* skinned;
     float body_yaw;
     int body_yaw_init;
@@ -17,7 +18,8 @@ typedef struct {
 
 typedef struct {
     Skinned_render_request* player_walk_model;
-    AnimState* walk_anim;
+    AnimationClip* walk_clip;
+    AnimationClip* idle_clip;
     Program* skinned_prog;
     Texture* player_tex;
     Texture* player_shininess;
@@ -27,9 +29,12 @@ typedef struct {
 
 void remote_init(void);
 
+void remote_update(float dt);
+
 void remote_set_render_ctx(
     Skinned_render_request* player_walk_model,
-    AnimState* walk_anim,
+    AnimationClip* walk_clip,
+    AnimationClip* idle_clip,
     Program* skinned_prog,
     Texture* player_tex,
     Texture* player_shininess,

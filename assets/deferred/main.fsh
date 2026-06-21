@@ -136,11 +136,11 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
     if (radiusMultiplier > 0.5) {
         bias = 0.00005 + 0.000015 * (1.0 - NdotL) + texelSize.x * 0.5;
     } else {
-        bias = 0.005 + 0.001 * (1.0 - NdotL) + texelSize.x * 3.0;
+        bias = 0.001 + 0.0005 * (1.0 - NdotL) + texelSize.x * 3.0;
     }
 
     float radius = 2.0 * radiusMultiplier;
-    int totalSamples = (radiusMultiplier > 0.5) ? 32 : 16;
+    int totalSamples = (radiusMultiplier > 0.5) ? 16 : 32;
     int edgeSamples = 4;
     
     float shadow = 0.0;

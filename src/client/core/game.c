@@ -468,9 +468,11 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     float texelSize = (orthoSize * 2.0f) / scale;
 
     vec3 snapped_player_pos;
-    snapped_player_pos[0] = floorf(player.camera.pos[0]);
-    snapped_player_pos[1] = floorf(player.camera.pos[1]+0.01f);
-    snapped_player_pos[2] = floorf(player.camera.pos[2]);
+    float lodSnap = 8.0f;
+
+    snapped_player_pos[0] = floorf(player.camera.pos[0] / lodSnap) * lodSnap;
+    snapped_player_pos[1] = floorf((player.camera.pos[1] + 0.01f) / lodSnap) * lodSnap;
+    snapped_player_pos[2] = floorf(player.camera.pos[2] / lodSnap) * lodSnap;
 
     vec3 light_pos;
     glm_vec3_add(snapped_player_pos, light_offset, light_pos);

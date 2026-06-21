@@ -302,7 +302,7 @@ int main(int argc, char* argv[]) {
         fbo_bind(&shadow1);
         glClear(GL_DEPTH_BUFFER_BIT);
         window_draw();
-        game_shadow_pass(2048, 32.0f, light_space_matrix_near, light_dir_near, 1);
+        game_shadow_pass(2048, 16.0f, light_space_matrix_near, light_dir_near, 1);
         fbo_unbind();
 
         fbo_bind(&shadow2);
@@ -455,7 +455,7 @@ int main(int argc, char* argv[]) {
         program_set_vec3(&main, "lightDir2", (float*)light_dir_far);
         program_set_vec3(&main, "lightColor", (float[]){1.0f, 1.0f, 1.0f});
         
-        float shadow_split_distance = 28.0f;
+        float shadow_split_distance = 11.0f;
         program_set_float(&main, "shadowSplitDistance", shadow_split_distance);
 
         glDisable(GL_DEPTH_TEST);

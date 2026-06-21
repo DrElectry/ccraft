@@ -36,23 +36,24 @@ const float FOG_END = 120.0;
 const vec3 SUN_COLOR = vec3(1.0, 0.95, 0.85);
 const float SUN_INTENSITY = 512.0;
 
-vec2 poissonDisk[64] = vec2[](
-    vec2(-0.942, -0.399), vec2(0.945, -0.768), vec2(-0.094, -0.929), vec2(0.344, 0.293),
-    vec2(-0.815, 0.457), vec2(-0.815, -0.879), vec2(-0.382, 0.276), vec2(0.974, 0.756),
-    vec2(0.443, -0.975), vec2(0.537, -0.473), vec2(-0.264, -0.418), vec2(0.791, 0.190),
-    vec2(-0.241, 0.997), vec2(-0.814, 0.914), vec2(0.199, 0.786), vec2(0.143, -0.141),
-    vec2(-0.512, 0.623), vec2(0.678, 0.432), vec2(-0.321, -0.756), vec2(0.876, -0.234),
-    vec2(-0.987, 0.123), vec2(0.432, 0.876), vec2(-0.654, -0.543), vec2(0.234, -0.987),
-    vec2(-0.123, 0.765), vec2(0.765, -0.432), vec2(-0.876, -0.123), vec2(0.543, 0.654),
-    vec2(-0.432, 0.987), vec2(0.321, -0.678), vec2(-0.678, 0.876), vec2(0.987, -0.321),
-    vec2(0.234, 0.567), vec2(-0.345, 0.456), vec2(0.654, -0.123), vec2(-0.876, 0.234),
-    vec2(0.111, -0.555), vec2(-0.555, -0.111), vec2(0.789, 0.456), vec2(-0.123, -0.789),
-    vec2(0.456, -0.654), vec2(-0.789, 0.123), vec2(0.321, 0.876), vec2(-0.654, 0.321),
-    vec2(0.555, -0.789), vec2(-0.987, -0.456), vec2(0.876, 0.555), vec2(-0.456, -0.987),
-    vec2(0.123, -0.321), vec2(-0.321, -0.654), vec2(0.654, 0.789), vec2(-0.789, 0.555),
-    vec2(0.456, -0.876), vec2(-0.111, 0.987), vec2(0.987, -0.234), vec2(-0.234, -0.555),
-    vec2(0.345, 0.789), vec2(-0.567, -0.234), vec2(0.789, -0.567), vec2(-0.876, 0.789),
-    vec2(0.555, 0.111), vec2(-0.432, -0.321), vec2(0.678, -0.456), vec2(-0.345, 0.123)
+// blender poison disk
+vec2 poissonDisk[32] = vec2[32](
+    vec2( 0.476,  0.854), vec2(-0.659, -0.670),
+    vec2( 0.905, -0.270), vec2( 0.215, -0.133),
+    vec2(-0.595,  0.242), vec2(-0.146,  0.519),
+    vec2( 0.108, -0.930), vec2( 0.807,  0.449),
+    vec2(-0.476, -0.854), vec2( 0.659,  0.670),
+    vec2(-0.905,  0.270), vec2(-0.215,  0.133),
+    vec2( 0.595, -0.242), vec2( 0.146, -0.519),
+    vec2(-0.108,  0.930), vec2(-0.807, -0.449),
+    vec2(-0.854,  0.476), vec2( 0.670, -0.659),
+    vec2( 0.270,  0.905), vec2( 0.133,  0.215),
+    vec2(-0.242, -0.595), vec2(-0.519, -0.146),
+    vec2( 0.930,  0.108), vec2(-0.449,  0.807),
+    vec2( 0.854, -0.476), vec2(-0.670,  0.659),
+    vec2(-0.270, -0.905), vec2(-0.133, -0.215),
+    vec2( 0.242,  0.595), vec2( 0.519,  0.146),
+    vec2(-0.930, -0.108), vec2( 0.449, -0.807)
 );
 
 float rand(vec2 co)
@@ -129,36 +130,49 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
     mat2 rot = getRotation(uv);
 
     vec3 normal = normalize(texture(gNormal, uv).rgb * 2.0 - 1.0);
-    
     float NdotL = dot(normal, normalize(lightDir1));
     
     float bias;
-    if (radiusMultiplier > 0.8) {
-        bias = 0.0001 + 0.0003 * (1.0 - NdotL) + texelSize.x * 0.5;
+    if (radiusMultiplier > 0.5) {
+        bias = 0.00005 + 0.000015 * (1.0 - NdotL) + texelSize.x * 0.5;
     } else {
-        bias = 0.001 + 0.002 * (1.0 - NdotL) + texelSize.x * 3.0;
+        bias = 0.005 + 0.001 * (1.0 - NdotL) + texelSize.x * 3.0;
     }
 
-    float shadow = 0.0;
     float radius = 2.0 * radiusMultiplier;
-    int samples = (radiusMultiplier == 0.5) ? 16 : 32;
+    int totalSamples = (radiusMultiplier > 0.5) ? 32 : 16;
+    int edgeSamples = 4;
+    
+    float shadow = 0.0;
+    int i = 0;
 
-    for (int i = 0; i < samples; i++)
+    // edge tests from some article about "pcf optimizations"
+    for (; i < edgeSamples; i++)
     {
         vec2 offset = rot * poissonDisk[i] * texelSize * radius;
         float closestDepth = texture(shadowMap, proj.xy + offset).r;
         shadow += step(closestDepth + bias, currentDepth);
     }
 
-    return shadow / float(samples);
+    if (shadow == 0.0) return 0.0;
+    if (shadow == float(edgeSamples)) return 1.0;
+
+    for (; i < totalSamples; i++)
+    {
+        vec2 offset = rot * poissonDisk[i] * texelSize * radius;
+        float closestDepth = texture(shadowMap, proj.xy + offset).r;
+        shadow += step(closestDepth + bias, currentDepth);
+    }
+
+    return shadow / float(totalSamples);
 }
 
 float calculateShadow(vec3 worldPos, vec2 uv)
 {
     float dist = length(worldPos - getCameraPos());
     
-    float blendStart = shadowSplitDistance - 16.0;
-    float blendEnd = shadowSplitDistance + 16.0;
+    float blendStart = shadowSplitDistance - 12.0;
+    float blendEnd = shadowSplitDistance + 12.0;
     
     vec4 fragPosLightSpaceNear = light_space_matrix_near * vec4(worldPos, 1.0);
     float shadowNear = pcf(fragPosLightSpaceNear, dShadow1, uv, 1.0);

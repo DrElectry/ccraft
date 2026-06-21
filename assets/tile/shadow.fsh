@@ -5,11 +5,14 @@ in vec3 out_normal;
 in vec3 out_view_pos;
 in float out_light;
 
+uniform uint LOD;
 uniform sampler2D tex;
 
 void main() {
-    vec4 data = texture(tex, out_uv);
-    if (data.a < 0.1) {
-        discard;
+    if (LOD == 1u) {
+        vec4 data = texture(tex, out_uv);
+        if (data.a < 0.1) {
+            discard;
+        }
     }
 }

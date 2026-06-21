@@ -510,11 +510,15 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     program_set_mat4(&shadow, "proj", (float*)light_proj);
     program_set_mat4(&shadow, "view", (float*)light_view);
 
+    program_set_uint(&shadow, "LOD", (unsigned int)cascade);
+
     program_use(&shadow_w);
     texture_bind(&texture_atlas, 0);
     program_set_int(&shadow_w, "tex", 0);
     program_set_mat4(&shadow_w, "proj", (float*)light_proj);
     program_set_mat4(&shadow_w, "view", (float*)light_view);
+
+    program_set_uint(&shadow_w, "LOD", (unsigned int)cascade);
 
     world_render(&world, &shadow, &shadow_w, 0, 0);
 

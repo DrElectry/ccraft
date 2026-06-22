@@ -13,6 +13,7 @@
 
 #define SEA_LEVEL 24
 #define BEACH_HEIGHT 4
+#define SUPERFLAT_DEBUG 1
 
 int lookup_atlas[] = {
     0,0,0,0,0,0,        // AIR
@@ -229,6 +230,38 @@ void chunk_generate(Chunk* chunk, int cx, int cz) {
     chunk->data = (uint16_t*)malloc(CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH * sizeof(uint16_t));
     chunk->sky_light = NULL;
     chunk->block_light = NULL;
+
+    #if SUPERFLAT_DEBUG
+
+        for (int x = 0; x < CHUNK_WIDTH; x++) {
+            for (int z = 0; z < CHUNK_DEPTH; z++) {
+                for (int y = 0; y < CHUNK_HEIGHT; y++) {
+
+                    int idx = x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z);
+
+                    if (y == 0)
+                        chunk->data[idx] = BORDER;
+                    else if (y <= 2)
+                        chunk->data[idx] = DIRT;
+                    else if (y == 3)
+                        chunk->data[idx] = GRASS;
+                    else
+                        chunk->data[idx] = AIR;
+                }
+            }
+        }
+
+        chunk->model = (Render_request){0};
+        chunk->water_model = (Render_request){0};
+
+        #undef RAND
+        #undef RANDF
+        #define RAND(min, max) rng_int((min), (max))
+        #define RANDF() rng_float()
+
+        return;
+
+    #endif
 
     for (int x = 0; x < CHUNK_WIDTH; x++) {
         for (int z = 0; z < CHUNK_DEPTH; z++) {

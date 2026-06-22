@@ -18,6 +18,7 @@
 #include <time.h>
 
 uint64_t __servseed;
+uint8_t __worldtype;
 
 char __servip[256] = "127.0.0.1";
 int __onserv;

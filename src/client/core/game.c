@@ -21,7 +21,6 @@
 #include "core/main.h"
 #include "utils/obj.h"
 #include "sound/sound_pack.h"
-#include "core/main.h"
 #include "network/network.h"
 #include "gui/chat.h"
 #include "utils/gltf.h"
@@ -467,7 +466,7 @@ void game_tick(float dt_p) {
                 int variant = RAND(0, 3);
                 sound_t* s = pick_pack_sound(below, variant);
 
-                while (!s) { // searching for a sound
+                while (!s) {
                     int variant = RAND(0, 3);
                     sound_t* s = pick_pack_sound(below, variant);
                 }
@@ -848,6 +847,8 @@ void game_draw_misc() {
     vao_bind(&cursor.cache.vao);
     glDrawElements(GL_LINES, cursor.tri_count * 2, GL_UNSIGNED_INT, NULL);
     glPolygonMode(GL_FRONT_AND_BACK, current_polygon_mode[0]);
+
+    glEnable(GL_CULL_FACE);
 }
 
 static void project_point_to_screen(vec3 world_pos, float* out_x, float* out_y) {

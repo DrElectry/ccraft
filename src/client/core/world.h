@@ -62,7 +62,7 @@ void world_process_rebuild_queue(World* world);
 void world_queue_block_change(World* world, int x, int y, int z, uint16_t block);
 
 void world_render(World* world, void* active_program, void* water_program, int cull, int render_water);
-void world_render_water(World* world, void* program, int cull, void* background_tex);
+void world_render_water(World* world, void* program, int cull, void* background_tex); // nice
 void world_render_water_only(World* world, void* program, int cull);
 void world_tick(World* world, vec3 ppos);
 

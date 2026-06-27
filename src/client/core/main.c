@@ -143,7 +143,6 @@ int main(int argc, char* argv[]) {
     FBO ppfb;
     FBO prev_frame;
     FBO ssrfb;
-    FBO ssrfb_water;
     FBO bloomfb;
     FBO blurfb;
     FBO ffb;
@@ -212,7 +211,6 @@ int main(int argc, char* argv[]) {
     fbo_create(&prev_frame, WIDTH, HEIGHT, 1);
     fbo_create(&ppfb, WIDTH, HEIGHT, 1);
     fbo_create(&ssrfb, WIDTH/2, HEIGHT/2, 1);
-    fbo_create(&ssrfb_water, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&bloomfb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&blurfb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&ffb, WIDTH, HEIGHT, 1);
@@ -223,6 +221,7 @@ int main(int argc, char* argv[]) {
     gbuffer.color_formats[3] = FBO_COLOR_RG16F;
 
     fbo_create(&gbuffer, WIDTH, HEIGHT, 4);
+    
     water_gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
     water_gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
     water_gbuffer.color_formats[2] = FBO_COLOR_RGBA16F;
@@ -281,23 +280,17 @@ int main(int argc, char* argv[]) {
 
         fbo_bind(&gbuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         window_update();
         window_draw();
-
         game_draw_terrain_gbuffer(current_time);
         game_draw_misc();
-
         fbo_unbind();
 
         fbo_bind(&water_gbuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         window_update();
         window_draw();
-
         game_draw_water_gbuffer(current_time);
-
         fbo_unbind();
 
         fbo_bind(&shadow1);
@@ -313,227 +306,151 @@ int main(int argc, char* argv[]) {
         fbo_unbind();
 
         fbo_bind(&ssaofb);
-
         window_draw();
-
         program_use(&ssao);
-
         fbo_bind_depth_texture(&gbuffer, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
-
         program_set_int(&ssao, "gDepth", 0);
         program_set_int(&ssao, "gNormal", 1);
-
         program_set_mat4(&ssao, "inverseProjection", (float*)inv_projection);
         program_set_mat4(&ssao, "proj", (float*)projection);
-
         program_set_vec2(&ssao, "ssao_ratio", ssao_ratio);
-
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
-
         gfx_draw_fullscreen_quad();
-
         fbo_unbind();
 
         fbo_bind(&ssaoblurfb);
-
         program_use(&blur);
-
         fbo_bind_texture(&ssaofb, 0, 0);
-
         program_set_int(&blur, "image", 0);
         program_set_vec2(&blur, "direction", (float[]){1.0f, 0.0f});
         program_set_vec2(&blur, "blur_ratio", ssao_ratio);
         program_set_float(&blur, "blurScale", 1.0f);
-
         gfx_draw_fullscreen_quad();
-
         fbo_unbind();
 
         fbo_bind(&ssaofb);
-
         program_use(&blur);
-
         fbo_bind_texture(&ssaoblurfb, 0, 0);
-
         program_set_int(&blur, "image", 0);
         program_set_vec2(&blur, "direction", (float[]){0.0f, 1.0f});
         program_set_float(&blur, "blurScale", 1.0f);
         program_set_vec2(&blur, "blur_ratio", ssao_ratio);
-
         gfx_draw_fullscreen_quad();
-
         fbo_unbind();
 
         fbo_bind(&ssrfb);
-
         program_use(&ssr);
 
         fbo_bind_texture(&prev_frame, 0, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
-        fbo_bind_texture(&gbuffer, 2, 3);
-        fbo_bind_texture(&gbuffer, 3, 4);
-        fbo_bind_depth_texture(&gbuffer, 5);
+        fbo_bind_texture(&gbuffer, 2, 2);
+        fbo_bind_texture(&gbuffer, 3, 3);
+        fbo_bind_depth_texture(&gbuffer, 4);
+        fbo_bind_texture(&water_gbuffer, 1, 5);
+        fbo_bind_texture(&water_gbuffer, 2, 6);
+        fbo_bind_texture(&water_gbuffer, 3, 7);
+        fbo_bind_depth_texture(&water_gbuffer, 8);
 
         program_set_int(&ssr, "gAlbedo", 0);
-        program_set_int(&ssr, "gNormal", 1);
-        program_set_int(&ssr, "gPosition", 3);
-        program_set_int(&ssr, "gRoughness", 4);
-        program_set_int(&ssr, "gDepth", 5);
-
+        program_set_int(&ssr, "gNormal1", 1);
+        program_set_int(&ssr, "gPosition1", 2);
+        program_set_int(&ssr, "gRoughness1", 3);
+        program_set_int(&ssr, "gDepth1", 4);
+        program_set_int(&ssr, "gNormal2", 5);
+        program_set_int(&ssr, "gPosition2", 6);
+        program_set_int(&ssr, "gRoughness2", 7);
+        program_set_int(&ssr, "gDepth2", 8);
         program_set_mat4(&ssr, "projection", (float*)projection);
         program_set_mat4(&ssr, "view", (float*)view);
-
         program_set_vec2(&ssr, "ssr_ratio", ssr_ratio);
 
         gfx_draw_fullscreen_quad();
-
-        fbo_unbind();
-
-        fbo_bind(&ssrfb_water);
-
-        program_use(&ssr);
-
-        fbo_bind_texture(&prev_frame, 0, 0);
-        fbo_bind_texture(&water_gbuffer, 1, 1);
-        fbo_bind_texture(&water_gbuffer, 2, 3);
-        fbo_bind_texture(&water_gbuffer, 3, 4);
-        fbo_bind_depth_texture(&water_gbuffer, 5);
-
-        program_set_int(&ssr, "gAlbedo", 0);
-        program_set_int(&ssr, "gNormal", 1);
-        program_set_int(&ssr, "gPosition", 3);
-        program_set_int(&ssr, "gRoughness", 4);
-        program_set_int(&ssr, "gDepth", 5);
-
-        program_set_mat4(&ssr, "projection", (float*)projection);
-        program_set_mat4(&ssr, "view", (float*)view);
-
-        program_set_vec2(&ssr, "ssr_ratio", ssr_ratio);
-
-        gfx_draw_fullscreen_quad();
-
         fbo_unbind();
 
         fbo_bind(&ppfb);
-
         program_use(&main);
-
         fbo_bind_texture(&gbuffer, 0, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
         fbo_bind_depth_texture(&gbuffer, 2);
-        fbo_bind_depth_texture(&shadow1, 3);
-        fbo_bind_depth_texture(&shadow2, 4);
-        fbo_bind_texture(&ssaofb, 0, 5);
-        fbo_bind_texture(&ssrfb, 0, 6);
-        fbo_bind_texture(&ssrfb_water, 0, 7);
-        fbo_bind_texture(&water_gbuffer, 0, 8);
-        fbo_bind_texture(&water_gbuffer, 1, 9);
-        fbo_bind_depth_texture(&water_gbuffer, 10);
-
+        fbo_bind_texture(&water_gbuffer, 0, 3);
+        fbo_bind_texture(&water_gbuffer, 1, 4);
+        fbo_bind_depth_texture(&water_gbuffer, 5);
+        fbo_bind_depth_texture(&shadow1, 6);
+        fbo_bind_depth_texture(&shadow2, 7);
+        fbo_bind_texture(&ssaofb, 0, 8);
+        fbo_bind_texture(&ssrfb, 0, 9);
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
         program_set_int(&main, "gDepth", 2);
-        program_set_int(&main, "dShadow1", 3);
-        program_set_int(&main, "dShadow2", 4);
-        program_set_int(&main, "dSSAO", 5);
-        program_set_int(&main, "dSSR", 6);
-        program_set_int(&main, "dSSRWater", 7);
-        program_set_int(&main, "gWaterAlbedo", 8);
-        program_set_int(&main, "gWaterNormal", 9);
-        program_set_int(&main, "gWaterDepth", 10);
-
+        program_set_int(&main, "gWaterAlbedo", 3);
+        program_set_int(&main, "gWaterNormal", 4);
+        program_set_int(&main, "gWaterDepth", 5);
+        program_set_int(&main, "dShadow1", 6);
+        program_set_int(&main, "dShadow2", 7);
+        program_set_int(&main, "dSSAO", 8);
+        program_set_int(&main, "dSSR", 9);
         program_set_float(&main, "time", time);
-
         program_set_mat4(&main, "light_space_matrix_far", (float*)light_space_matrix_far);
         program_set_mat4(&main, "light_space_matrix_near", (float*)light_space_matrix_near);
-
         program_set_mat4(&main, "inv_projection", (float*)inv_projection);
         program_set_mat4(&main, "inv_view", (float*)inv_view);
-
         program_set_vec3(&main, "lightDir1", (float*)light_dir_near);
         program_set_vec3(&main, "lightDir2", (float*)light_dir_far);
         program_set_vec3(&main, "lightColor", (float[]){1.0f, 1.0f, 1.0f});
-        
-        float shadow_split_distance = 11.0f;
-        program_set_float(&main, "shadowSplitDistance", shadow_split_distance);
-
+        program_set_float(&main, "shadowSplitDistance", 11.0f);
+        program_set_float(&main, "waterHeight", 0.0f);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
-
         gfx_draw_fullscreen_quad();
-
         fbo_unbind();
 
         fbo_bind(&bloomfb);
-
         program_use(&bloom);
-
         fbo_bind_texture(&ppfb, 0, 0);
-
         program_set_int(&bloom, "image", 0);
         program_set_vec2(&bloom, "bloom_ratio", bloom_ratio);
-
         gfx_draw_fullscreen_quad();
-
         fbo_unbind();
 
         fbo_bind(&blurfb);
-
         program_use(&blur);
-
         fbo_bind_texture(&bloomfb, 0, 0);
-
         program_set_int(&blur, "image", 0);
         program_set_vec2(&blur, "direction", (float[]){1.0f, 0.0f});
         program_set_float(&blur, "blurScale", 2.0f);
         program_set_vec2(&blur, "blur_ratio", bloom_ratio);
-
         gfx_draw_fullscreen_quad();
-
         fbo_unbind();
 
         fbo_bind(&bloomfb);
-
         program_use(&blur);
-
         fbo_bind_texture(&blurfb, 0, 0);
-
         program_set_int(&blur, "image", 0);
         program_set_vec2(&blur, "direction", (float[]){0.0f, 1.0f});
         program_set_float(&blur, "blurScale", 2.0f);
         program_set_vec2(&blur, "blur_ratio", bloom_ratio);
-
         gfx_draw_fullscreen_quad();
-
         fbo_unbind();
 
         fbo_bind(&ffb);
-
         program_use(&pp);
-
         fbo_bind_texture(&ppfb, 0, 0);
         fbo_bind_depth_texture(&gbuffer, 1);
         fbo_bind_texture(&bloomfb, 0, 2);
-
         program_set_int(&pp, "colorTexture", 0);
         program_set_int(&pp, "depthTexture", 1);
         program_set_int(&pp, "bloomTexture", 2);
-
         gfx_draw_fullscreen_quad();
-
         fbo_unbind();
 
         program_use(&cross);
-
         fbo_bind_texture(&ffb, 0, 0);
         texture_bind(&crosshair, 1);
-
         program_set_int(&cross, "crosshair", 1);
         program_set_float(&cross, "width", (float)WIDTH);
         program_set_float(&cross, "height", (float)HEIGHT);
-
         gfx_draw_fullscreen_quad();
 
         game_draw_hud();

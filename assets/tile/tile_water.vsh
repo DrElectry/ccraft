@@ -11,9 +11,8 @@ uniform mat4 model;
 uniform float time;
 
 out vec2 out_uv;
+out vec3 out_world_pos;
 out vec3 out_normal;
-out vec3 out_view_pos;
-out vec3 out_pos;
 out float out_light;
 
 float hash(vec2 p)
@@ -42,12 +41,12 @@ float fbm(vec2 p)
 {
     float value = 0.0;
     float amp = 0.5;
+    float freq = 1.0;
 
-    for(int i = 0; i < 4; i++)
+    for(int i = 0; i < 2; i++)
     {
-        value += noise(p) * amp;
-
-        p *= 2.0;
+        value += noise(p * freq) * amp;
+        freq *= 2.0;
         amp *= 0.5;
     }
 
@@ -56,15 +55,11 @@ float fbm(vec2 p)
 
 float wave(vec3 p)
 {
-    vec2 uv = p.xz * 0.8;
-
-    uv += vec2(time * 0.15, time * 0.1);
-
-    float n = fbm(uv);
-
-    n += sin(p.x * 3.0 + time * 2.0) * 0.03;
-    n += sin(p.z * 4.0 + time * 1.7) * 0.02;
-
+    vec2 uv1 = p.xz * 0.7 + vec2(1.0, 0.3) * time * 0.5;
+    vec2 uv2 = p.xz * 0.8 + vec2(-0.3, 1.0) * time * 0.4;
+    
+    float n = fbm(uv1) * 0.6 + fbm(uv2) * 0.4;
+    
     return n * 0.08;
 }
 
@@ -75,28 +70,31 @@ void main()
 
     vec3 world_pos = (model * vec4(in_vert, 1.0)).xyz;
 
-    float h = wave(world_pos);
     float eps = 0.001;
-
+    float h = wave(world_pos);
     float hx = wave(world_pos + vec3(eps, 0.0, 0.0));
     float hz = wave(world_pos + vec3(0.0, 0.0, eps));
 
-    float wave_height = h - 0.1;
-
     vec3 displaced = world_pos;
-    displaced.y += wave_height;
+    displaced.y += h;
 
-    vec3 dx = vec3(eps, hx - h, 0.0);
-    vec3 dz = vec3(0.0, hz - h, eps);
+    vec3 original_normal = normalize((model * vec4(in_normal, 0.0)).xyz);
+    
+    if (abs(original_normal.x) < 0.01 && abs(original_normal.z) < 0.01 && original_normal.y > 0.99)
+    {
+        displaced.y -= 0.1;
+        
+        vec2 noise_uv = world_pos.xz * 0.5 + vec2(1.7, 3.2) * time * 0.3;
+        float noise_offset = fbm(noise_uv) * 0.05;
+        displaced.y += noise_offset;
+    }
 
-    vec3 normal_world = normalize(cross(dz, dx));
+    vec3 tangent = normalize(vec3(eps, hx - h, 0.0));
+    vec3 bitangent = normalize(vec3(0.0, hz - h, eps));
+    vec3 normal = normalize(cross(bitangent, tangent));
 
-    out_normal = normal_world;
+    out_world_pos = displaced;
+    out_normal = normalize((model * vec4(normal, 0.0)).xyz);
 
-    vec4 view_pos = view * vec4(displaced, 1.0);
-    out_view_pos = view_pos.xyz;
-
-    out_pos = displaced;
-
-    gl_Position = proj * view_pos;
+    gl_Position = proj * view * vec4(displaced, 1.0);
 }

@@ -13,8 +13,8 @@ out vec4 fragColor;
 void main() {
     vec3 color = texture(frame, out_uv).rgb;
 
-    // convert 32x32 pixels into UV space
-    vec2 texSize = vec2(32.0 / width, 32.0 / height);
+    // convert 16x16 pixels into UV space
+    vec2 texSize = vec2(4.0 / width, 4.0 / height);
     vec2 center = vec2(0.5);
 
     vec2 localUV = (out_uv - center) / texSize + 0.5;
@@ -27,7 +27,7 @@ void main() {
         vec4 cross = texture(crosshair, localUV);
 
         if (cross.rgb == vec3(1.0)) {
-            color = vec3(1.0) - color;
+            color = mix(color, cross.rgb, 0.5);
         }
     }
 

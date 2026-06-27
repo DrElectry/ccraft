@@ -4,7 +4,7 @@
 #include <cglm/cglm.h>
 #include <math.h>
 
-#define BOB_AMPLITUDE 0.015f
+#define BOB_AMPLITUDE 0.025f
 #define BOB_FREQUENCY 2.5f
 #define IDLE_AMPLITUDE 0.013f
 #define MOVEMENT_SPEED_THRESHOLD 0.1f

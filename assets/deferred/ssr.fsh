@@ -1,10 +1,14 @@
 #version 330 core
 
 uniform sampler2D gAlbedo;
-uniform sampler2D gPosition;
-uniform sampler2D gNormal;
-uniform sampler2D gRoughness;
-uniform sampler2D gDepth;
+uniform sampler2D gPosition1;
+uniform sampler2D gPosition2;
+uniform sampler2D gNormal1;
+uniform sampler2D gNormal2;
+uniform sampler2D gRoughness1;
+uniform sampler2D gRoughness2;
+uniform sampler2D gDepth1;
+uniform sampler2D gDepth2;
 uniform vec2 ssr_ratio;
 
 uniform mat4 invView;
@@ -33,20 +37,42 @@ void main()
 {
     vec2 scaled_uv = out_uv * ssr_ratio;
     
-    float d0 = texture(gDepth, scaled_uv).r;
-    Metallic = texture(gRoughness, scaled_uv).r;
+    float d0_opaque = texture(gDepth1, scaled_uv).r;
+    float d0_water = texture(gDepth2, scaled_uv).r;
+    
+    int bufferIndex = 0;
+    if (d0_water < 0.999999 && d0_water < d0_opaque) {
+        bufferIndex = 1;
+    }
+    
+    float d0 = (bufferIndex == 0) ? d0_opaque : d0_water;
+    
+    if (bufferIndex == 0) {
+        Metallic = texture(gRoughness1, scaled_uv).r;
+    } else {
+        Metallic = texture(gRoughness2, scaled_uv).r;
+    }
+    
     if (d0 >= 0.999999 || Metallic == 0.0) {
         fragColor = vec4(0.0);
         return;
     }
 
-    vec3 worldNormal = normalize(texture(gNormal, scaled_uv).rgb);
-    vec3 viewNormal  = normalize(vec3(view * vec4(worldNormal, 0.0)));
+    vec3 worldNormal;
+    vec3 viewPos;
+    
+    if (bufferIndex == 0) {
+        worldNormal = normalize(texture(gNormal1, scaled_uv).rgb);
+        viewPos = textureLod(gPosition1, scaled_uv, 2).xyz;
+    } else {
+        worldNormal = normalize(texture(gNormal2, scaled_uv).rgb);
+        viewPos = textureLod(gPosition2, scaled_uv, 2).xyz;
+    }
+    
+    vec3 viewNormal = normalize(vec3(view * vec4(worldNormal, 0.0)));
+    vec3 albedo = texture(gAlbedo, scaled_uv).rgb;
 
-    vec3 viewPos = textureLod(gPosition, scaled_uv, 2).xyz;
-    vec3 albedo  = texture(gAlbedo, scaled_uv).rgb;
-
-    vec3 F0      = mix(vec3(0.04), albedo, Metallic);
+    vec3 F0 = mix(vec3(0.04), albedo, Metallic);
     vec3 Fresnel = fresnelSchlick(
         max(dot(normalize(viewNormal), normalize(viewPos)), 0.0),
         F0
@@ -84,7 +110,20 @@ vec3 BinarySearch(inout vec3 dir, inout vec3 hitCoord, inout float dDepth)
         projectedCoord.xy /= projectedCoord.w;
         projectedCoord.xy = projectedCoord.xy * 0.5 + 0.5;
 
-        depth  = textureLod(gPosition, projectedCoord.xy, 2).z;
+        float depth_opaque = texture(gDepth1, projectedCoord.xy).r;
+        float depth_water = texture(gDepth2, projectedCoord.xy).r;
+        
+        int hitBufferIndex = 0;
+        if (depth_water < 0.999999 && depth_water < depth_opaque) {
+            hitBufferIndex = 1;
+        }
+        
+        if (hitBufferIndex == 0) {
+            depth = textureLod(gPosition1, projectedCoord.xy, 2).z;
+        } else {
+            depth = textureLod(gPosition2, projectedCoord.xy, 2).z;
+        }
+        
         dDepth = hitCoord.z - depth;
 
         dir *= 0.5;
@@ -116,7 +155,19 @@ vec4 RayMarch(vec3 dir, inout vec3 hitCoord, out float dDepth)
         projectedCoord.xy /= projectedCoord.w;
         projectedCoord.xy = projectedCoord.xy * 0.5 + 0.5;
 
-        depth = textureLod(gPosition, projectedCoord.xy, 2).z;
+        float depth_opaque = texture(gDepth1, projectedCoord.xy).r;
+        float depth_water = texture(gDepth2, projectedCoord.xy).r;
+        
+        int hitBufferIndex = 0;
+        if (depth_water < 0.999999 && depth_water < depth_opaque) {
+            hitBufferIndex = 1;
+        }
+        
+        if (hitBufferIndex == 0) {
+            depth = textureLod(gPosition1, projectedCoord.xy, 2).z;
+        } else {
+            depth = textureLod(gPosition2, projectedCoord.xy, 2).z;
+        }
 
         if (depth > 1000.0)
             continue;

@@ -83,7 +83,7 @@ int ff[36] = {0};
 int cc, dd, gg, hh; // for block in our hand
 
 Input input_manager;
-Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess;
+Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, water_ripples;
 
 Render_request block, cursor; // in your hand
 

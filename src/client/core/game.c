@@ -646,7 +646,11 @@ void game_draw_water_gbuffer(float time) {
     program_set_mat4(&water_prog, "view", (float*)view);
     program_set_float(&water_prog, "time", time);
 
+    glDisable(GL_CULL_FACE);
+
     world_render_water_only(&world, &water_prog, 1);
+
+    glEnable(GL_CULL_FACE);
 }
 
 void game_draw(float time) {

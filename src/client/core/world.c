@@ -432,8 +432,9 @@ void world_render_water(World* world, void* program, int cull, void* background_
 
             if (max_dot < 0.0f) continue;
         }
-
+        glDisable(GL_CULL_FACE);
         gfx_render(&world->chunks_map[i].water_model, prog);
+        glEnable(GL_CULL_FACE);
     }
 }
 

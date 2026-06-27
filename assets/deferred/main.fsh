@@ -285,7 +285,7 @@ void main()
         float terrainFogFactor = clamp((FOG_END - terrainDist) / (FOG_END - FOG_START), 0.0, 1.0);
         vec3 terrainFogged = mix(FOG_COLOR, terrainColor, terrainFogFactor);
 
-        color = mix(waterFogged, terrainFogged, terrainVisibility);
+        color = mix(waterFogged, terrainFogged, 0.5);
         isSky = terrainIsSky && terrainVisibility > 0.5;
 
         worldPos = waterWorldPos;

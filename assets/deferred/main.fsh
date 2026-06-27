@@ -12,6 +12,8 @@ uniform sampler2D gWaterAlbedo;
 uniform sampler2D gWaterDepth;
 uniform sampler2D gWaterNormal;
 
+uniform sampler2D caustics;
+
 uniform mat4 inv_projection;
 uniform mat4 inv_view;
 uniform mat4 light_space_matrix_near;
@@ -24,7 +26,7 @@ uniform vec3 lightColor;
 uniform float shadowSplitDistance;
 
 uniform float time;
-uniform float waterHeight;
+uniform int underwater;
 
 in vec2 out_uv;
 out vec4 fragColor;
@@ -33,8 +35,19 @@ const vec3 FOG_COLOR = vec3(0.6, 0.7, 0.8);
 const float FOG_START = 110.0;
 const float FOG_END = 120.0;
 
+const float UW_FOG_START = 5.0;
+const float UW_FOG_END = 30.0;
+
 const vec3 SUN_COLOR = vec3(1.0, 0.95, 0.85);
 const float SUN_INTENSITY = 512.0;
+
+const float CAUSTICS_SCALE = 0.25;
+const float CAUSTICS_SPEED = 0.08;
+const float CAUSTICS_STRENGTH = 0.25;
+const float CAUSTICS_MAX_DEPTH = 24.0;
+const float CAUSTICS_CHROMATIC_ABERRATION = 0.04;
+
+const float CHROMATIC_ABERRATION_UNDERWATER = 0.002;
 
 vec2 poissonDisk[32] = vec2[32](
     vec2( 0.476,  0.854), vec2(-0.659, -0.670),
@@ -57,7 +70,7 @@ vec2 poissonDisk[32] = vec2[32](
 
 float rand(vec2 co)
 {
-    return fract(sin(dot(co, vec2(12.9898,78.233))) * 43758.5453);
+    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
 mat2 getRotation(vec2 uv)
@@ -119,10 +132,10 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
     vec3 proj = fragPosLightSpace.xyz / fragPosLightSpace.w;
     proj = proj * 0.5 + 0.5;
 
-    if( proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0 )
+    if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0)
         return 0.0;
 
-    if(proj.z > 1.0)
+    if (proj.z > 1.0)
         return 0.0;
 
     float currentDepth = proj.z;
@@ -197,6 +210,85 @@ vec3 lightDirAtDist(float dist)
     return normalize(mix(lightDir1, lightDir2, clamp((dist - (shadowSplitDistance - 8.0)) / 16.0, 0.0, 1.0)));
 }
 
+float sampleCausticsTriplanar(vec3 worldPos, vec3 normal, vec3 lightDir)
+{
+    vec2 offset = vec2(time * CAUSTICS_SPEED, time * CAUSTICS_SPEED * 0.7);
+
+    vec2 uvX = worldPos.yz * CAUSTICS_SCALE + offset;
+    vec2 uvY = worldPos.xz * CAUSTICS_SCALE + offset;
+    vec2 uvZ = worldPos.xy * CAUSTICS_SCALE + offset;
+
+    float cx = texture(caustics, uvX).r;
+    float cy = texture(caustics, uvY).r;
+    float cz = texture(caustics, uvZ).r;
+
+    vec3 weights = abs(normal);
+    weights = weights / (weights.x + weights.y + weights.z + 0.0001);
+
+    return cx * weights.x + cy * weights.y + cz * weights.z;
+}
+
+float sampleCausticsAtPos(vec3 pos, vec3 normal, float timeVal)
+{
+    vec2 offset = vec2(timeVal * CAUSTICS_SPEED, timeVal * CAUSTICS_SPEED * 0.7);
+    vec2 uvX = pos.yz * CAUSTICS_SCALE + offset;
+    vec2 uvY = pos.xz * CAUSTICS_SCALE + offset;
+    vec2 uvZ = pos.xy * CAUSTICS_SCALE + offset;
+    float cx = texture(caustics, uvX).r;
+    float cy = texture(caustics, uvY).r;
+    float cz = texture(caustics, uvZ).r;
+    vec3 weights = abs(normal);
+    weights = weights / (weights.x + weights.y + weights.z + 0.0001);
+    return cx * weights.x + cy * weights.y + cz * weights.z;
+}
+
+vec3 sampleCausticsTriplanarChromatic(vec3 worldPos, vec3 normal, vec3 viewDir, float timeVal)
+{
+    vec3 up = abs(normal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent = normalize(cross(normal, up));
+    float scale = CAUSTICS_CHROMATIC_ABERRATION;
+    float r = sampleCausticsAtPos(worldPos + tangent * scale, normal, timeVal);
+    float g = sampleCausticsAtPos(worldPos, normal, timeVal);
+    float b = sampleCausticsAtPos(worldPos - tangent * scale, normal, timeVal);
+    return vec3(r, g, b);
+}
+
+vec3 getUnderwaterFogColor()
+{
+    vec2 texelSize = 1.0 / vec2(textureSize(gWaterAlbedo, 0));
+    vec3 waterColor = texture(gWaterAlbedo, out_uv).rgb;
+    float waterPresent = dot(waterColor, vec3(0.333));
+    
+    if (waterPresent > 0.01) {
+        return waterColor;
+    }
+    
+    vec3 accumulatedColor = vec3(0.0);
+    float totalWeight = 0.0;
+    
+    for (int x = -2; x <= 2; x++) {
+        for (int y = -2; y <= 2; y++) {
+            vec2 sampleUV = out_uv + vec2(x, y) * texelSize * 4.0;
+            sampleUV = clamp(sampleUV, 0.001, 0.999);
+            vec3 sampleColor = texture(gWaterAlbedo, sampleUV).rgb;
+            float weight = dot(sampleColor, vec3(0.333)) > 0.01 ? 1.0 : 0.0;
+            accumulatedColor += sampleColor * weight;
+            totalWeight += weight;
+        }
+    }
+    
+    if (totalWeight > 0.0) {
+        return accumulatedColor / totalWeight;
+    }
+    
+    vec3 centerColor = texture(gWaterAlbedo, vec2(0.5, 0.5)).rgb;
+    if (dot(centerColor, vec3(0.333)) > 0.01) {
+        return centerColor;
+    }
+    
+    return vec3(0.1, 0.3, 0.6);
+}
+
 void main()
 {
     float terrainDepth = texture(gDepth, out_uv).r;
@@ -225,18 +317,32 @@ void main()
     bool isSky = false;
 
     vec3 cameraPos = getCameraPos();
-    bool underwater = cameraPos.y < waterHeight;
+    bool isUnderwater = (underwater != 0);
+
+    vec3 fogColor;
+    float fogStart;
+    float fogEnd;
+
+    if (isUnderwater) {
+        fogColor = getUnderwaterFogColor();
+        fogStart = UW_FOG_START;
+        fogEnd = UW_FOG_END;
+    } else {
+        fogColor = FOG_COLOR;
+        fogStart = FOG_START;
+        fogEnd = FOG_END;
+    }
 
     if (isWater)
     {
         vec3 waterWorldPos = reconstructWorldPosition(waterDepth);
         vec4 waterSSR = texture(dSSR, out_uv);
-        
+
         float shadow = calculateShadow(waterWorldPos, out_uv);
         vec3 lightDir = lightDirAtDist(length(waterWorldPos - cameraPos));
         float NdotL = max(dot(waterNormal, lightDir), 0.0);
         float ao = texture(dSSAO, out_uv).r;
-        
+
         vec3 ambient = waterAlbedo * ao * 0.25;
         vec3 diffuse = waterAlbedo * lightColor * NdotL * (1.0 - shadow);
         vec3 waterColor = ambient + diffuse + waterSSR.rgb * waterSSR.a;
@@ -256,21 +362,42 @@ void main()
 
         vec3 terrainColor;
         if (terrainIsSky) {
-            terrainColor = FOG_COLOR;
+            terrainColor = fogColor;
         } else {
-            vec3 terrainAlbedoAtWater = texture(gAlbedo, refractUV).rgb;
-            vec3 terrainNormalAtWater = normalize(texture(gNormal, refractUV).rgb * 2.0 - 1.0);
+            float distanceFromCenter = length(refractUV - 0.5) * 2.0;
+            float aberrationStrength = CHROMATIC_ABERRATION_UNDERWATER * (1.0 + distanceFromCenter * 3.0);
+            vec2 chromaticOffset = normalize(refractUV - 0.5 + 0.001) * aberrationStrength * 0.5;
             
+            vec2 refractUV_r = clamp(refractUV + chromaticOffset * 2.0, 0.001, 0.999);
+            vec2 refractUV_b = clamp(refractUV - chromaticOffset * 2.0, 0.001, 0.999);
+            
+            float r = texture(gAlbedo, refractUV_r).r;
+            float g = texture(gAlbedo, refractUV).g;
+            float b = texture(gAlbedo, refractUV_b).b;
+            vec3 terrainAlbedoAtWater = vec3(r, g, b);
+            vec3 terrainNormalAtWater = normalize(texture(gNormal, refractUV).rgb * 2.0 - 1.0);
+
             float terrainShadow = calculateShadow(terrainWorldPosRefract, refractUV);
             vec3 terrainLightDir = lightDirAtDist(length(terrainWorldPosRefract - cameraPos));
             float terrainNdotL = max(dot(terrainNormalAtWater, terrainLightDir), 0.0);
             float terrainAO = texture(dSSAO, refractUV).r;
-            
+
             vec3 terrainAmbient = terrainAlbedoAtWater * terrainAO * 0.25;
             vec3 terrainDiffuse = terrainAlbedoAtWater * lightColor * terrainNdotL * (1.0 - terrainShadow);
             terrainColor = terrainAmbient + terrainDiffuse;
             vec4 terrainSSR = texture(dSSR, refractUV);
             terrainColor += terrainSSR.rgb * terrainSSR.a;
+
+            float waterDepthHere = abs(terrainWorldPosRefract.y - waterWorldPos.y);
+            float causticFactor = smoothstep(CAUSTICS_MAX_DEPTH, 0.0, waterDepthHere);
+
+            if (causticFactor > 0.001) {
+                vec3 causticColor = sampleCausticsTriplanarChromatic(terrainWorldPosRefract, terrainNormalAtWater, normalize(cameraPos - terrainWorldPosRefract), time);
+                causticColor = pow(causticColor, vec3(0.7));
+                causticColor = smoothstep(vec3(0.1), vec3(0.9), causticColor);
+                vec3 causticLight = causticColor * lightColor * CAUSTICS_STRENGTH * causticFactor;
+                terrainColor += causticLight;
+            }
         }
 
         float distToTerrain = abs(terrainWorldPosRefract.y - waterWorldPos.y);
@@ -278,12 +405,12 @@ void main()
         float terrainVisibility = depthFactor * 0.5;
 
         float waterDist = length(waterWorldPos - cameraPos);
-        float waterFogFactor = clamp((FOG_END - waterDist) / (FOG_END - FOG_START), 0.0, 1.0);
-        vec3 waterFogged = mix(FOG_COLOR, waterColor, waterFogFactor);
+        float waterFogFactor = clamp((fogEnd - waterDist) / (fogEnd - fogStart), 0.0, 1.0);
+        vec3 waterFogged = mix(fogColor, waterColor, waterFogFactor);
 
         float terrainDist = length(terrainWorldPosRefract - cameraPos);
-        float terrainFogFactor = clamp((FOG_END - terrainDist) / (FOG_END - FOG_START), 0.0, 1.0);
-        vec3 terrainFogged = mix(FOG_COLOR, terrainColor, terrainFogFactor);
+        float terrainFogFactor = clamp((fogEnd - terrainDist) / (fogEnd - fogStart), 0.0, 1.0);
+        vec3 terrainFogged = mix(fogColor, terrainColor, terrainFogFactor);
 
         color = mix(waterFogged, terrainFogged, 0.5);
         isSky = terrainIsSky && terrainVisibility > 0.5;
@@ -298,7 +425,22 @@ void main()
     else
     {
         depth = terrainDepth;
-        albedo = terrainAlbedo;
+        
+        if (isUnderwater) {
+            vec2 centerOffset = out_uv - 0.5;
+            float distanceFromCenter = length(centerOffset) * 2.0;
+            float aberrationStrength = CHROMATIC_ABERRATION_UNDERWATER * (1.0 + distanceFromCenter * 3.0);
+            vec2 offset = normalize(centerOffset + 0.001) * aberrationStrength * 0.5;
+            vec2 uv_r = clamp(out_uv + offset * 2.0, 0.001, 0.999);
+            vec2 uv_b = clamp(out_uv - offset * 2.0, 0.001, 0.999);
+            float r = texture(gAlbedo, uv_r).r;
+            float g = texture(gAlbedo, out_uv).g;
+            float b = texture(gAlbedo, uv_b).b;
+            terrainAlbedo = vec3(r, g, b);
+        } else {
+            terrainAlbedo = texture(gAlbedo, out_uv).rgb;
+        }
+        
         normal = terrainNormal;
         roughness = terrainRoughness;
         metallic = terrainMetallic;
@@ -312,23 +454,23 @@ void main()
         float ao = texture(dSSAO, out_uv).r;
         vec4 ssr = texture(dSSR, out_uv);
 
-        vec3 ambient = albedo * ao * 0.25;
-        vec3 diffuse = albedo * lightColor * NdotL * (1.0 - shadow);
+        vec3 ambient = terrainAlbedo * ao * 0.25;
+        vec3 diffuse = terrainAlbedo * lightColor * NdotL * (1.0 - shadow);
         color = ambient + diffuse;
 
         if (!isSky)
             color += ssr.rgb * ssr.a;
 
         float dist = length(worldPos - cameraPos);
-        float fogFactor = clamp((FOG_END - dist) / (FOG_END - FOG_START), 0.0, 1.0);
-        color = mix(FOG_COLOR, color, fogFactor);
+        float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
+        color = mix(fogColor, color, fogFactor);
     }
 
     vec3 rd = getRd(worldPos, cameraPos);
     float dist = length(worldPos - cameraPos);
     vec3 lightDir = lightDirAtDist(dist);
-    
-    if (isSky && !(underwater && depth > 0.99999))
+
+    if (isSky && !(isUnderwater && depth > 0.99999))
     {
         color += getSun(rd, lightDir);
     }

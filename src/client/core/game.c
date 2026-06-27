@@ -36,6 +36,8 @@ uint16_t blockih = IRON_BLOCK;
 
 File world_file;
 
+int underwater = 0;
+
 Program c, water_prog, bc, shadow, shadow_w, cursora;
 
 static Skinned_render_request* player_walk_model;
@@ -83,7 +85,7 @@ int ff[36] = {0};
 int cc, dd, gg, hh; // for block in our hand
 
 Input input_manager;
-Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, water_ripples;
+Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess;
 
 Render_request block, cursor; // in your hand
 
@@ -139,6 +141,7 @@ void game_init() {
 
     texture_create(&texture_atlas, "assets/textures/terrain.png");
     texture_create(&roughness, "assets/textures/shiny.png");
+
 
     player_tex.mag_filter = GL_NEAREST;
     player_tex.min_filter = GL_NEAREST;
@@ -377,6 +380,8 @@ void game_tick(float dt_p) {
     break_delay -= dt;
     place_delay -= dt;
     g_footstep_delay -= dt;
+
+    underwater = player_under_water(&world, &player);
 
     if (hit.hit && break_delay <= 0.0f) {
         if (glfwGetMouseButton(input_manager.win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {

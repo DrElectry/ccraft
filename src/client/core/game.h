@@ -14,6 +14,8 @@ extern int wireframe;
 extern int potato_mode;
 extern int noclip;
 
+extern int underwater;
+
 extern Player player;
 
 void game_init();

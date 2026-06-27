@@ -56,6 +56,13 @@ static int player_on_ground(World* world, Player* p) {
     return grounded;
 }
 
+int player_under_water(World* world, Player* p) {
+    vec3 eye;
+    player_get_eye(p, eye);
+    eye[1] -= 0.1f; // epsilon to prevent little flashing
+    return world_get_block_at(world, eye) == WATER;
+}
+
 void player_jump(World* world, Player* p) {
     if (player_on_ground(world, p))
         p->camera.vel[1] = JUMP_SPEED;

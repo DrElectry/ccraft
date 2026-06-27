@@ -156,14 +156,20 @@ int main(int argc, char* argv[]) {
     Program main, ssao, pp, ssr, blur, bloom, cross;
     File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, crossff;
 
-    Texture crosshair;
+    Texture crosshair, caustics;
 
     crosshair.mag_filter = GL_NEAREST;
     crosshair.min_filter = GL_NEAREST;
     crosshair.wrap_s = GL_REPEAT;
     crosshair.wrap_t = GL_REPEAT;
 
+    caustics.mag_filter = GL_NEAREST;
+    caustics.min_filter = GL_NEAREST;
+    caustics.wrap_s = GL_REPEAT;
+    caustics.wrap_t = GL_REPEAT;
+
     texture_create(&crosshair, "assets/textures/crosshair.png");
+    texture_create(&caustics, "assets/textures/caustics.jpg");
 
     mainv.type = GL_VERTEX_SHADER;
     mainf.type = GL_FRAGMENT_SHADER;
@@ -381,6 +387,7 @@ int main(int argc, char* argv[]) {
         fbo_bind_depth_texture(&shadow2, 7);
         fbo_bind_texture(&ssaofb, 0, 8);
         fbo_bind_texture(&ssrfb, 0, 9);
+        texture_bind(&caustics, 10);
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
         program_set_int(&main, "gDepth", 2);
@@ -391,6 +398,7 @@ int main(int argc, char* argv[]) {
         program_set_int(&main, "dShadow2", 7);
         program_set_int(&main, "dSSAO", 8);
         program_set_int(&main, "dSSR", 9);
+        program_set_int(&main, "caustics", 10);
         program_set_float(&main, "time", time);
         program_set_mat4(&main, "light_space_matrix_far", (float*)light_space_matrix_far);
         program_set_mat4(&main, "light_space_matrix_near", (float*)light_space_matrix_near);
@@ -398,9 +406,9 @@ int main(int argc, char* argv[]) {
         program_set_mat4(&main, "inv_view", (float*)inv_view);
         program_set_vec3(&main, "lightDir1", (float*)light_dir_near);
         program_set_vec3(&main, "lightDir2", (float*)light_dir_far);
-        program_set_vec3(&main, "lightColor", (float[]){1.0f, 1.0f, 1.0f});
+        program_set_vec3(&main, "lightColor", (float[]){1.0f, 0.95f, 0.85f});
         program_set_float(&main, "shadowSplitDistance", 11.0f);
-        program_set_float(&main, "waterHeight", 0.0f);
+        program_set_int(&main, "underwater", underwater);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         gfx_draw_fullscreen_quad();

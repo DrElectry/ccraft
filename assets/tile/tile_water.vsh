@@ -71,7 +71,7 @@ void main()
     vec3 original_normal = normalize((model * vec4(in_normal, 0.0)).xyz);
 
     vec3 world_pos = (model * vec4(in_vert, 1.0)).xyz;
-    world_pos -= original_normal * 0.01;
+    world_pos -= original_normal * 0.001;
 
     vec3 displaced = world_pos;
 
@@ -79,7 +79,7 @@ void main()
 
     if (dot(original_normal, vec3(0.0, 1.0, 0.0)) > 0.999)
     {
-        float eps = 0.00001;
+        float eps = 0.001;
 
         float h  = wave(world_pos);
         float hx = wave(world_pos + vec3(eps, 0.0, 0.0));

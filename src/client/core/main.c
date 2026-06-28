@@ -146,15 +146,16 @@ int main(int argc, char* argv[]) {
     FBO bloomfb;
     FBO blurfb;
     FBO ffb;
+    FBO underwaterfb;
 
     float light_dir_near[3];
     float light_dir_far[3];
     mat4 light_space_matrix_near;
     mat4 light_space_matrix_far;
 
-    Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, crossf;
-    Program main, ssao, pp, ssr, blur, bloom, cross;
-    File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, crossff;
+    Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, crossf, underwf;
+    Program main, ssao, pp, ssr, blur, bloom, cross, underwater_prog;
+    File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, crossff, underwff;
 
     Texture crosshair, caustics;
 
@@ -179,6 +180,7 @@ int main(int argc, char* argv[]) {
     bloomf.type = GL_FRAGMENT_SHADER;
     blurf.type = GL_FRAGMENT_SHADER;
     crossf.type = GL_FRAGMENT_SHADER;
+    underwf.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
     mainff = file_open("assets/deferred/main.fsh");
@@ -188,6 +190,7 @@ int main(int argc, char* argv[]) {
     bloomff = file_open("assets/deferred/bloom.fsh");
     blurff = file_open("assets/deferred/blur.fsh");
     crossff = file_open("assets/gui/crosshair.fsh");
+    underwff = file_open("assets/deferred/underwater.fsh");
 
     shader_create(&mainv, mainfv.data);
     shader_create(&mainf, mainff.data);
@@ -197,6 +200,7 @@ int main(int argc, char* argv[]) {
     shader_create(&bloomf, bloomff.data);
     shader_create(&blurf, blurff.data);
     shader_create(&crossf, crossff.data);
+    shader_create(&underwf, underwff.data);
 
     program_create(&main, &mainv, &mainf);
     program_create(&ssao, &mainv, &ssaof);
@@ -205,12 +209,14 @@ int main(int argc, char* argv[]) {
     program_create(&blur, &mainv, &blurf);
     program_create(&bloom, &mainv, &bloomf);
     program_create(&cross, &mainv, &crossf);
+    program_create(&underwater_prog, &mainv, &underwf);
 
     ssrfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloomfb.color_formats[0] = FBO_COLOR_RGBA16F;
     blurfb.color_formats[0] = FBO_COLOR_RGBA16F;
     ssaoblurfb.color_formats[0] = FBO_COLOR_RGBA16F;
     ffb.color_formats[1] = FBO_COLOR_RGBA16F;
+    underwaterfb.color_formats[0] = FBO_COLOR_RGBA16F;
 
     fbo_create(&ssaofb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&ssaoblurfb, WIDTH/2, HEIGHT/2, 1);
@@ -220,6 +226,7 @@ int main(int argc, char* argv[]) {
     fbo_create(&bloomfb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&blurfb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&ffb, WIDTH, HEIGHT, 1);
+    fbo_create(&underwaterfb, WIDTH, HEIGHT, 1);
 
     gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
@@ -453,8 +460,24 @@ int main(int argc, char* argv[]) {
         gfx_draw_fullscreen_quad();
         fbo_unbind();
 
+        FBO* scene_for_crosshair = &ffb;
+
+        if (underwater) {
+            fbo_bind(&underwaterfb);
+            glClear(GL_COLOR_BUFFER_BIT);
+            program_use(&underwater_prog);
+            fbo_bind_texture(&ffb, 0, 0);
+            program_set_int(&underwater_prog, "colorTexture", 0);
+            program_set_float(&underwater_prog, "time", time);
+            glDisable(GL_DEPTH_TEST);
+            glDisable(GL_CULL_FACE);
+            gfx_draw_fullscreen_quad();
+            fbo_unbind();
+            scene_for_crosshair = &underwaterfb;
+        }
+
         program_use(&cross);
-        fbo_bind_texture(&ffb, 0, 0);
+        fbo_bind_texture(scene_for_crosshair, 0, 0);
         texture_bind(&crosshair, 1);
         program_set_int(&cross, "crosshair", 1);
         program_set_float(&cross, "width", (float)WIDTH);

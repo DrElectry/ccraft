@@ -35,9 +35,6 @@ const vec3 FOG_COLOR = vec3(0.6, 0.7, 0.8);
 const float FOG_START = 110.0;
 const float FOG_END = 120.0;
 
-const float UW_FOG_START = 5.0;
-const float UW_FOG_END = 30.0;
-
 const vec3 SUN_COLOR = vec3(1.0, 0.95, 0.85);
 const float SUN_INTENSITY = 512.0;
 
@@ -45,9 +42,9 @@ const float CAUSTICS_SCALE = 0.25;
 const float CAUSTICS_SPEED = 0.08;
 const float CAUSTICS_STRENGTH = 0.25;
 const float CAUSTICS_MAX_DEPTH = 24.0;
-const float CAUSTICS_CHROMATIC_ABERRATION = 0.04;
+const float CAUSTICS_CHROMATIC_ABERRATION = 0.08;
 
-const float CHROMATIC_ABERRATION_UNDERWATER = 0.002;
+const float CHROMATIC_ABERRATION_UNDERWATER = 0.0008;
 
 vec2 poissonDisk[32] = vec2[32](
     vec2( 0.476,  0.854), vec2(-0.659, -0.670),
@@ -322,16 +319,18 @@ void main()
     vec3 fogColor;
     float fogStart;
     float fogEnd;
-
     if (isUnderwater) {
-        fogColor = getUnderwaterFogColor();
-        fogStart = UW_FOG_START;
-        fogEnd = UW_FOG_END;
+        fogColor = vec3(0.20, 0.40, 0.44);
+        fogStart = 4.0;
+        fogEnd   = 22.0;
     } else {
         fogColor = FOG_COLOR;
         fogStart = FOG_START;
-        fogEnd = FOG_END;
+        fogEnd   = FOG_END;
     }
+
+    vec3 light = lightColor;
+    if (isUnderwater) { light*=2.0; }
 
     if (isWater)
     {
@@ -344,7 +343,7 @@ void main()
         float ao = texture(dSSAO, out_uv).r;
 
         vec3 ambient = waterAlbedo * ao * 0.25;
-        vec3 diffuse = waterAlbedo * lightColor * NdotL * (1.0 - shadow);
+        vec3 diffuse = waterAlbedo * light * NdotL * (1.0 - shadow);
         vec3 waterColor = ambient + diffuse + waterSSR.rgb * waterSSR.a;
 
         float distToCamera = length(waterWorldPos - cameraPos);
@@ -383,7 +382,7 @@ void main()
             float terrainAO = texture(dSSAO, refractUV).r;
 
             vec3 terrainAmbient = terrainAlbedoAtWater * terrainAO * 0.25;
-            vec3 terrainDiffuse = terrainAlbedoAtWater * lightColor * terrainNdotL * (1.0 - terrainShadow);
+            vec3 terrainDiffuse = terrainAlbedoAtWater * light * terrainNdotL * (1.0 - terrainShadow);
             terrainColor = terrainAmbient + terrainDiffuse;
             vec4 terrainSSR = texture(dSSR, refractUV);
             terrainColor += terrainSSR.rgb * terrainSSR.a;
@@ -395,7 +394,7 @@ void main()
                 vec3 causticColor = sampleCausticsTriplanarChromatic(terrainWorldPosRefract, terrainNormalAtWater, normalize(cameraPos - terrainWorldPosRefract), time);
                 causticColor = pow(causticColor, vec3(0.7));
                 causticColor = smoothstep(vec3(0.1), vec3(0.9), causticColor);
-                vec3 causticLight = causticColor * lightColor * CAUSTICS_STRENGTH * causticFactor;
+                vec3 causticLight = causticColor * light * CAUSTICS_STRENGTH * causticFactor;
                 terrainColor += causticLight;
             }
         }
@@ -454,8 +453,10 @@ void main()
         float ao = texture(dSSAO, out_uv).r;
         vec4 ssr = texture(dSSR, out_uv);
 
-        vec3 ambient = terrainAlbedo * ao * 0.25;
-        vec3 diffuse = terrainAlbedo * lightColor * NdotL * (1.0 - shadow);
+        float ambientStrength = isUnderwater ? 0.45 : 0.25;
+        vec3 ambient = terrainAlbedo * ao * ambientStrength;
+        vec3 diffuse = terrainAlbedo * light * NdotL * (1.0 - shadow);
+        
         color = ambient + diffuse;
 
         if (!isSky)

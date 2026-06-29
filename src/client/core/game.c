@@ -85,7 +85,7 @@ int ff[36] = {0};
 int cc, dd, gg, hh; // for block in our hand
 
 Input input_manager;
-Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess;
+Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, normal;
 
 Render_request block, cursor; // in your hand
 
@@ -152,12 +152,19 @@ void game_init() {
     player_shininess.min_filter = GL_NEAREST;
     player_shininess.wrap_s = GL_REPEAT;
     player_shininess.wrap_t = GL_REPEAT;
+
+    normal.mag_filter = GL_NEAREST;
+    normal.min_filter = GL_NEAREST;
+    normal.wrap_s = GL_REPEAT;
+    normal.wrap_t = GL_REPEAT;
     
     texture_create(&player_tex, "assets/textures/player.png");
     texture_create(&player_shininess, "assets/textures/txt_shininess.png");
 
     texture_create(&brightt, "assets/textures/txt_shininess.png");
     texture_create(&textt, "assets/textures/txt.png");
+
+    texture_create(&normal, "assets/textures/normal.png");
 
     player_init(&player);
 
@@ -633,8 +640,10 @@ void game_draw_terrain_gbuffer(float time) {
     program_use(&c);
     texture_bind(&texture_atlas, 0);
     texture_bind(&roughness, 1);
+    texture_bind(&normal, 2);
     program_set_int(&c, "tex", 0);
     program_set_int(&c, "roug", 1);
+    program_set_int(&c, "normal", 2);
     program_set_mat4(&c, "proj", (float*)projection);
     program_set_mat4(&c, "view", (float*)view);
 

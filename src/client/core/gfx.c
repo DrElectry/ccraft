@@ -40,12 +40,15 @@ void gfx_chunk_packet_static_request(Render_request* r) {
     vbo_create(&vbo, r->data, r->data_size);
     ebo_create(&ebo, r->triangles, r->tri_count * 3 * sizeof(int));
 
-    // vertex format (see CHUNK_VERT_FLOATS=9 in chunk.h / tile.c):
-    // pos (3) uv (2) norm (3) light(1)
-    vbo_attr(0, 3, 9 * sizeof(float), 0);
-    vbo_attr(1, 2, 9 * sizeof(float), 3);
-    vbo_attr(2, 3, 9 * sizeof(float), 5);
-    vbo_attr(3, 1, 9 * sizeof(float), 8);
+    // vertex format (tangent space packed by chunk builder):
+    // pos (3) uv (2) norm (3) light(1) tangent(3) bitangent(3) => 15 floats
+    vbo_attr(0, 3, 15 * sizeof(float), 0);
+    vbo_attr(1, 2, 15 * sizeof(float), 3);
+    vbo_attr(2, 3, 15 * sizeof(float), 5);
+    vbo_attr(3, 1, 15 * sizeof(float), 8);
+    vbo_attr(4, 3, 15 * sizeof(float), 9);
+    vbo_attr(5, 3, 15 * sizeof(float), 12);
+
 
 
     r->cache.vbo = vbo;

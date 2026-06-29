@@ -654,6 +654,26 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
                                   const ChunkNeighbors* n, int wx, int wy, int wz,
                                   float* model_verts, int* model_inds, int* v_cur, int* i_cur,
                                   float* water_verts, int* water_inds, int* w_v_cur, int* w_i_cur) {
+    (void)tile_id;
+    (void)pos;
+    (void)sky_light;
+    (void)block_light;
+    (void)lx;
+    (void)ly;
+    (void)lz;
+    (void)n;
+    (void)wx;
+    (void)wy;
+    (void)wz;
+    (void)model_verts;
+    (void)model_inds;
+    (void)v_cur;
+    (void)i_cur;
+    (void)water_verts;
+    (void)water_inds;
+    (void)w_v_cur;
+    (void)w_i_cur;
+
     uint16_t front = chunk_neighbors_get(n, wx, wy, wz + 1);
     uint16_t back  = chunk_neighbors_get(n, wx, wy, wz - 1);
     uint16_t left  = chunk_neighbors_get(n, wx - 1, wy, wz);
@@ -811,7 +831,7 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                             {0.0f, 1.0f, 0.0f}
                         };
                         
-                        int v_start = v_cursor / CHUNK_VERT_FLOATS;
+int v_start = v_cursor / CHUNK_VERT_FLOATS;
                         for (int i2 = 0; i2 < 4; i2++) {
                             int base = v_cursor;
                             model_vertices[base + 0] = verts1[i2][0] + pos[0];
@@ -823,9 +843,15 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = 0.707f;
                             model_vertices[base + 8] = light;
+                            model_vertices[base + 9] = 1.0f;
+                            model_vertices[base + 10] = 0.0f;
+                            model_vertices[base + 11] = 0.0f;
+                            model_vertices[base + 12] = 0.0f;
+                            model_vertices[base + 13] = 1.0f;
+                            model_vertices[base + 14] = 0.0f;
                             v_cursor += CHUNK_VERT_FLOATS;
                         }
-                        
+
                         model_indices[i_cursor + 0] = v_start + 0;
                         model_indices[i_cursor + 1] = v_start + 1;
                         model_indices[i_cursor + 2] = v_start + 2;
@@ -833,7 +859,7 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                         model_indices[i_cursor + 4] = v_start + 3;
                         model_indices[i_cursor + 5] = v_start + 0;
                         i_cursor += 6;
-                        
+
                         v_start = v_cursor / CHUNK_VERT_FLOATS;
                         for (int i2 = 0; i2 < 4; i2++) {
                             int base = v_cursor;
@@ -846,9 +872,15 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = -0.707f;
                             model_vertices[base + 8] = light;
+                            model_vertices[base + 9] = 1.0f;
+                            model_vertices[base + 10] = 0.0f;
+                            model_vertices[base + 11] = 0.0f;
+                            model_vertices[base + 12] = 0.0f;
+                            model_vertices[base + 13] = 1.0f;
+                            model_vertices[base + 14] = 0.0f;
                             v_cursor += CHUNK_VERT_FLOATS;
                         }
-                        
+
                         model_indices[i_cursor + 0] = v_start + 0;
                         model_indices[i_cursor + 1] = v_start + 2;
                         model_indices[i_cursor + 2] = v_start + 1;
@@ -856,17 +888,17 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                         model_indices[i_cursor + 4] = v_start + 0;
                         model_indices[i_cursor + 5] = v_start + 3;
                         i_cursor += 6;
-                        
+
                         int atlas_tex2 = atlas_lookup(tile_id, BACK);
                         tile_atlas_getuv(atlas_tex2, uv);
-                        
+
                         float verts2[4][3] = {
                             {1.0f, 0.0f, 0.0f},
                             {0.0f, 0.0f, 1.0f},
                             {0.0f, 1.0f, 1.0f},
                             {1.0f, 1.0f, 0.0f}
                         };
-                        
+
                         v_start = v_cursor / CHUNK_VERT_FLOATS;
                         for (int i2 = 0; i2 < 4; i2++) {
                             int base = v_cursor;
@@ -879,9 +911,15 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = 0.707f;
                             model_vertices[base + 8] = light;
+                            model_vertices[base + 9] = 1.0f;
+                            model_vertices[base + 10] = 0.0f;
+                            model_vertices[base + 11] = 0.0f;
+                            model_vertices[base + 12] = 0.0f;
+                            model_vertices[base + 13] = 1.0f;
+                            model_vertices[base + 14] = 0.0f;
                             v_cursor += CHUNK_VERT_FLOATS;
                         }
-                        
+
                         model_indices[i_cursor + 0] = v_start + 0;
                         model_indices[i_cursor + 1] = v_start + 1;
                         model_indices[i_cursor + 2] = v_start + 2;
@@ -889,7 +927,7 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                         model_indices[i_cursor + 4] = v_start + 3;
                         model_indices[i_cursor + 5] = v_start + 0;
                         i_cursor += 6;
-                        
+
                         v_start = v_cursor / CHUNK_VERT_FLOATS;
                         for (int i2 = 0; i2 < 4; i2++) {
                             int base = v_cursor;
@@ -902,16 +940,23 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = -0.707f;
                             model_vertices[base + 8] = light;
+                            model_vertices[base + 9] = 1.0f;
+                            model_vertices[base + 10] = 0.0f;
+                            model_vertices[base + 11] = 0.0f;
+                            model_vertices[base + 12] = 0.0f;
+                            model_vertices[base + 13] = 1.0f;
+                            model_vertices[base + 14] = 0.0f;
                             v_cursor += CHUNK_VERT_FLOATS;
                         }
-                        
+
                         model_indices[i_cursor + 0] = v_start + 0;
                         model_indices[i_cursor + 1] = v_start + 2;
                         model_indices[i_cursor + 2] = v_start + 1;
                         model_indices[i_cursor + 3] = v_start + 2;
                         model_indices[i_cursor + 4] = v_start + 0;
-                        model_indices[i_cursor + 5] = v_start + 3; // that was hell to write
+                        model_indices[i_cursor + 5] = v_start + 3;
                         i_cursor += 6;
+
                     }
                 } else {
                     push_face_to_buffer(tile_id, pos, sky_light, block_light, x, y, z, n, wx, wy, wz,

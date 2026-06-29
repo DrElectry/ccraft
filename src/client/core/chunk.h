@@ -46,7 +46,7 @@ typedef struct {
 } Chunk;
 
 #define CHUNK_BLOCK_COUNT (CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH)
-#define CHUNK_VERT_FLOATS 9
+#define CHUNK_VERT_FLOATS 15
 
 typedef struct {
     int cx;

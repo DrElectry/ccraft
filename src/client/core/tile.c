@@ -64,6 +64,29 @@ void tile_push_face(float* vertices,
     float ny = face_normals[face * 3 + 1];
     float nz = face_normals[face * 3 + 2];
 
+    float tx = 0.0f, ty = 0.0f, tz = 0.0f;
+    float bx = 0.0f, by = 0.0f, bz = 0.0f;
+
+    if (face == FRONT) {
+        tx = 1.0f; ty = 0.0f; tz = 0.0f;
+        bx = 0.0f; by = 1.0f; bz = 0.0f;
+    } else if (face == BACK) {
+        tx = -1.0f; ty = 0.0f; tz = 0.0f;
+        bx = 0.0f; by = 1.0f; bz = 0.0f;
+    } else if (face == RIGHT) {
+        tx = 0.0f; ty = 0.0f; tz = -1.0f;
+        bx = 0.0f; by = 1.0f; bz = 0.0f;
+    } else if (face == LEFT) {
+        tx = 0.0f; ty = 0.0f; tz = 1.0f;
+        bx = 0.0f; by = 1.0f; bz = 0.0f;
+    } else if (face == UP) {
+        tx = 1.0f; ty = 0.0f; tz = 0.0f;
+        bx = 0.0f; by = 0.0f; bz = -1.0f;
+    } else {
+        tx = 1.0f; ty = 0.0f; tz = 0.0f;
+        bx = 0.0f; by = 0.0f; bz = 1.0f;
+    }
+
     int v_start = *v_cursor / CHUNK_VERT_FLOATS;
     int offset = face * 12;
 
@@ -83,6 +106,14 @@ void tile_push_face(float* vertices,
         vertices[base + 7] = nz;
         vertices[base + 8] = light;
 
+        vertices[base + 9] = tx;
+        vertices[base + 10] = ty;
+        vertices[base + 11] = tz;
+
+        vertices[base + 12] = bx;
+        vertices[base + 13] = by;
+        vertices[base + 14] = bz;
+
         *v_cursor += CHUNK_VERT_FLOATS;
     }
 
@@ -95,6 +126,7 @@ void tile_push_face(float* vertices,
 
     *i_cursor += 6;
 }
+
 
 void tile_push_cube(float* vertices, unsigned int* indices, float* pos, int* v_cursor, int* i_cursor) {
     tile_push_face(vertices, indices, pos, v_cursor, i_cursor, FRONT, 0, 15);

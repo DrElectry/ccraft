@@ -106,6 +106,10 @@ static HText debug_texts[7];
 static int debug_texts_ready = 0;
 static float debug_current_fps = 0.0f;
 
+// Shadow caching state
+static vec3 shadow_last_pos = {0.0f, 0.0f, 0.0f};
+static int shadow_dirty = 1; // force first update
+
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86) // i have to move this out lmao
 static const char* get_cpu_model(void) {
     static char cpu_brand[49] = "Unknown CPU";
@@ -194,8 +198,13 @@ static void update_sun_direction() {
     light_dir[0] = cosf(angle);
     light_dir[1] = sinf(angle);
     light_dir[2] = 0.0f;
-
+    shadow_dirty = 1;
 }
+
+void game_mark_shadow_dirty(void) {
+    shadow_dirty = 1;
+}
+
 void game_init() {
     noclip = 0;
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
@@ -526,6 +535,7 @@ void game_tick(float dt_p) {
             } else {
                 network_send_block_change(network_get_local_client_id(), hit.bx, hit.by, hit.bz, AIR);
             }
+            game_mark_shadow_dirty(); // block changed, need new shadows
             break_delay = 0.2f;
         }
     }
@@ -576,6 +586,7 @@ void game_tick(float dt_p) {
                 } else {
                     network_send_block_change(network_get_local_client_id(), px, py, pz, blockih);
                 }
+                game_mark_shadow_dirty(); // block changed, need new shadows
                 place_delay = 0.2f;
             }
         }
@@ -615,7 +626,8 @@ void game_tick(float dt_p) {
     update_debug_texts();
 }
 
-void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 out_light_dir, int cascade)  {
+void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 out_light_dir, int cascade)
+{
     if (__onserv) {
         network_pump();
     }
@@ -625,12 +637,31 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     float orthoSize = dist;
     float texelSize = (orthoSize * 2.0f) / scale;
 
-    vec3 snapped_player_pos;
-    float lodSnap = 8.0f;
+    int cascade_idx = (cascade == 1) ? 0 : 1;
+    float lodSnap = (cascade == 1) ? 1.0f : 8.0f;
 
+    vec3 snapped_player_pos;
     snapped_player_pos[0] = floorf(player.camera.pos[0] / lodSnap) * lodSnap;
     snapped_player_pos[1] = floorf((player.camera.pos[1] + 0.01f) / lodSnap) * lodSnap;
     snapped_player_pos[2] = floorf(player.camera.pos[2] / lodSnap) * lodSnap;
+
+    static vec3 last_snapped_pos[2] = {{0,0,0},{0,0,0}};
+    static int first_call = 1;
+    if (first_call) {
+        glm_vec3_copy(snapped_player_pos, last_snapped_pos[0]);
+        glm_vec3_copy(snapped_player_pos, last_snapped_pos[1]);
+        first_call = 0;
+    }
+
+    float dist_snapped = glm_vec3_distance(snapped_player_pos, last_snapped_pos[cascade_idx]);
+    if (dist_snapped > 0.001f) {
+        shadow_dirty = 1;
+        glm_vec3_copy(snapped_player_pos, last_snapped_pos[cascade_idx]);
+    }
+
+    if (!shadow_dirty) {
+        return;
+    }
 
     float light_distance = 100.0f;
     vec3 light_pos;
@@ -658,12 +689,10 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     glm_lookat(light_pos, snapped_player_pos, up, light_view);
 
     glm_mat4_mul(light_proj, light_view, out_light_space_matrix);
-
     glm_vec3_copy(light_dir, out_light_dir);
     glm_vec3_normalize(out_light_dir);
 
     glViewport(0, 0, scale, scale);
-
     glEnable(GL_DEPTH_TEST);
     glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -672,7 +701,6 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     program_set_int(&shadow, "tex", 0);
     program_set_mat4(&shadow, "proj", (float*)light_proj);
     program_set_mat4(&shadow, "view", (float*)light_view);
-
     program_set_uint(&shadow, "LOD", (unsigned int)cascade);
 
     program_use(&shadow_w);
@@ -680,13 +708,11 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     program_set_int(&shadow_w, "tex", 0);
     program_set_mat4(&shadow_w, "proj", (float*)light_proj);
     program_set_mat4(&shadow_w, "view", (float*)light_view);
-
     program_set_uint(&shadow_w, "LOD", (unsigned int)cascade);
 
     world_render(&world, &shadow, &shadow_w, 0, 0);
 
     program_use(&shadow);
-
     texture_bind(&textt, 0);
     texture_bind(&brightt, 1);
     gfx_render(text, &shadow);
@@ -732,7 +758,6 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     rot[2][2] = fwd[2];
 
     glm_mat4_mul(hand_model, rot, hand_model);
-
     glm_scale(hand_model, block.scale);
 
     program_use(&bc);
@@ -743,17 +768,18 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     program_set_mat4(&bc, "proj", (float*)projection);
     program_set_mat4(&bc, "view", (float*)view);
     program_set_mat4(&bc, "model", (float*)hand_model);
-
     program_set_uint(&bc, "id", lookup_atlas[blockih*6]);
 
     glDisable(GL_CULL_FACE);
-
     vao_bind(&block.cache.vao);
     glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
-
     glEnable(GL_CULL_FACE);
 
     glViewport(0, 0, WIDTH, HEIGHT);
+
+    if (cascade == 2) {
+        shadow_dirty = 0;
+    }
 }
 
 void game_draw_terrain_gbuffer(float time) {

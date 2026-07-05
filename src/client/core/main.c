@@ -20,6 +20,8 @@
 uint64_t __servseed;
 uint8_t __worldtype;
 
+#define DEBUG_PERF
+
 char __servip[256] = "127.0.0.1";
 int __onserv;
 int __servport;
@@ -290,6 +292,9 @@ int main(int argc, char* argv[]) {
     float time = 0.0f;
 
     while (!window_shouldclose()) {
+#ifdef DEBUG_PERF
+        printf("\n\n\n\n\n\n");
+#endif
         double current_time = glfwGetTime();
         float delta_time = (float)(current_time - last_time);
         last_time = current_time;
@@ -328,6 +333,9 @@ int main(int argc, char* argv[]) {
         glBlitFramebuffer(0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_LINEAR);
         fbo_unbind();
 
+#ifdef DEBUG_PERF
+        double t_start_gbuffer = glfwGetTime();
+#endif
         fbo_bind(&gbuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         window_update();
@@ -335,26 +343,52 @@ int main(int argc, char* argv[]) {
         game_draw_terrain_gbuffer(current_time);
         game_draw_misc();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_gbuffer = glfwGetTime();
+        printf("gbuffer: %.3f ms\n", (t_end_gbuffer - t_start_gbuffer) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_water = glfwGetTime();
+#endif
         fbo_bind(&water_gbuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         window_update();
         window_draw();
         game_draw_water_gbuffer(current_time);
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_water = glfwGetTime();
+        printf("water_gbuffer: %.3f ms\n", (t_end_water - t_start_water) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_shadow1 = glfwGetTime();
+#endif
         fbo_bind(&shadow1);
-        glClear(GL_DEPTH_BUFFER_BIT);
-        window_draw();
         game_shadow_pass(2048, 16.0f, light_space_matrix_near, light_dir_near, 1);
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_shadow1 = glfwGetTime();
+        printf("shadow1: %.3f ms\n", (t_end_shadow1 - t_start_shadow1) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_shadow2 = glfwGetTime();
+#endif
         fbo_bind(&shadow2);
-        glClear(GL_DEPTH_BUFFER_BIT);
-        window_draw();
         game_shadow_pass(1024, 128.0f, light_space_matrix_far, light_dir_far, 2);
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_shadow2 = glfwGetTime();
+        printf("shadow2: %.3f ms\n", (t_end_shadow2 - t_start_shadow2) * 1000.0);
+#endif
 
+        glFinish(); 
+
+#ifdef DEBUG_PERF
+        double t_start_ssao = glfwGetTime();
+#endif
         fbo_bind(&ssaofb);
         window_draw();
         program_use(&ssao);
@@ -369,7 +403,14 @@ int main(int argc, char* argv[]) {
         glDisable(GL_CULL_FACE);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_ssao = glfwGetTime();
+        printf("ssao: %.3f ms\n", (t_end_ssao - t_start_ssao) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_ssao_blur_h = glfwGetTime();
+#endif
         fbo_bind(&ssaoblurfb);
         program_use(&blur);
         fbo_bind_texture(&ssaofb, 0, 0);
@@ -379,7 +420,14 @@ int main(int argc, char* argv[]) {
         program_set_float(&blur, "blurScale", 1.0f);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_ssao_blur_h = glfwGetTime();
+        printf("ssao_blur_h: %.3f ms\n", (t_end_ssao_blur_h - t_start_ssao_blur_h) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_ssao_blur_v = glfwGetTime();
+#endif
         fbo_bind(&ssaofb);
         program_use(&blur);
         fbo_bind_texture(&ssaoblurfb, 0, 0);
@@ -389,7 +437,14 @@ int main(int argc, char* argv[]) {
         program_set_vec2(&blur, "blur_ratio", ssao_ratio);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_ssao_blur_v = glfwGetTime();
+        printf("ssao_blur_v: %.3f ms\n", (t_end_ssao_blur_v - t_start_ssao_blur_v) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_ssr = glfwGetTime();
+#endif
         fbo_bind(&ssrfb);
         program_use(&ssr);
 
@@ -419,7 +474,14 @@ int main(int argc, char* argv[]) {
 
         gfx_draw_fullscreen_quad();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_ssr = glfwGetTime();
+        printf("ssr: %.3f ms\n", (t_end_ssr - t_start_ssr) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_main = glfwGetTime();
+#endif
         fbo_bind(&ppfb);
         program_use(&main);
         fbo_bind_texture(&gbuffer, 0, 0);
@@ -458,7 +520,14 @@ int main(int argc, char* argv[]) {
         glDisable(GL_CULL_FACE);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_main = glfwGetTime();
+        printf("main_lighting: %.3f ms\n", (t_end_main - t_start_main) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_bloom_extract = glfwGetTime();
+#endif
         fbo_bind(&bloomfb);
         program_use(&bloom);
         fbo_bind_texture(&ppfb, 0, 0);
@@ -466,7 +535,14 @@ int main(int argc, char* argv[]) {
         program_set_vec2(&bloom, "bloom_ratio", bloom_ratio);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_bloom_extract = glfwGetTime();
+        printf("bloom_extract: %.3f ms\n", (t_end_bloom_extract - t_start_bloom_extract) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_bloom_blur_h = glfwGetTime();
+#endif
         fbo_bind(&blurfb);
         program_use(&blur);
         fbo_bind_texture(&bloomfb, 0, 0);
@@ -476,7 +552,14 @@ int main(int argc, char* argv[]) {
         program_set_vec2(&blur, "blur_ratio", bloom_ratio);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_bloom_blur_h = glfwGetTime();
+        printf("bloom_blur_h: %.3f ms\n", (t_end_bloom_blur_h - t_start_bloom_blur_h) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_bloom_blur_v = glfwGetTime();
+#endif
         fbo_bind(&bloomfb);
         program_use(&blur);
         fbo_bind_texture(&blurfb, 0, 0);
@@ -486,7 +569,14 @@ int main(int argc, char* argv[]) {
         program_set_vec2(&blur, "blur_ratio", bloom_ratio);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_bloom_blur_v = glfwGetTime();
+        printf("bloom_blur_v: %.3f ms\n", (t_end_bloom_blur_v - t_start_bloom_blur_v) * 1000.0);
+#endif
 
+#ifdef DEBUG_PERF
+        double t_start_final = glfwGetTime();
+#endif
         fbo_bind(&ffb);
         program_use(&pp);
         fbo_bind_texture(&ppfb, 0, 0);
@@ -497,10 +587,17 @@ int main(int argc, char* argv[]) {
         program_set_int(&pp, "bloomTexture", 2);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_final = glfwGetTime();
+        printf("final_composite: %.3f ms\n", (t_end_final - t_start_final) * 1000.0);
+#endif
 
         FBO* scene_for_crosshair = &ffb;
 
         if (underwater) {
+#ifdef DEBUG_PERF
+            double t_start_underwater = glfwGetTime();
+#endif
             fbo_bind(&underwaterfb);
             glClear(GL_COLOR_BUFFER_BIT);
             program_use(&underwater_prog);
@@ -513,6 +610,10 @@ int main(int argc, char* argv[]) {
             glDisable(GL_CULL_FACE);
             gfx_draw_fullscreen_quad();
             fbo_unbind();
+#ifdef DEBUG_PERF
+            double t_end_underwater = glfwGetTime();
+            printf("underwater: %.3f ms\n", (t_end_underwater - t_start_underwater) * 1000.0);
+#endif
             scene_for_crosshair = &underwaterfb;
         }
 

@@ -76,7 +76,7 @@ void main()
     
     float viewReflectionDot = dot(viewDir, reflected);
     
-    if (viewReflectionDot > 0.9995 || viewReflectionDot < 0.0) {
+    if (viewReflectionDot > 0.995 || viewReflectionDot < 0.0) {
         fragColor = vec4(0.0);
         return;
     }

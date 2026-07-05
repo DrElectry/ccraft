@@ -93,7 +93,7 @@ static void chat_sync_compose_hud(void) {
     }
 
     snprintf(display, sizeof(display), "> %s", chat_compose);
-    text_create(&chat_compose_hud, display, 0x0Fu, CHAT_MARGIN_X, chat_compose_screen_y());
+    text_create(&chat_compose_hud, display, 0x0Fu, 1.0f, CHAT_MARGIN_X, chat_compose_screen_y());
     chat_compose_hud_active = 1;
 }
 
@@ -105,7 +105,7 @@ static void chat_layout_and_sync(void) {
 
         chat_lines[i].hud.x = CHAT_MARGIN_X;
         chat_lines[i].hud.y = y;
-        text_create(&chat_lines[i].hud, chat_lines[i].text, chat_lines[i].color,
+        text_create(&chat_lines[i].hud, chat_lines[i].text, chat_lines[i].color, 1.0f,
                     chat_lines[i].hud.x, chat_lines[i].hud.y);
 
         y -= CHAR_HEIGHT + CHAT_LINE_GAP;
@@ -210,7 +210,7 @@ void chat_push_line(const char* line, uint16_t color) {
     slot->active = 1;
 
     int y = (int)HEIGHT - CHAT_MARGIN_Y - CHAR_HEIGHT;
-    text_create(&slot->hud, slot->text, slot->color, CHAT_MARGIN_X, y);
+    text_create(&slot->hud, slot->text, slot->color, 1.0f, CHAT_MARGIN_X, y);
 }
 
 void chat_push(const char* nickname, const char* message) {

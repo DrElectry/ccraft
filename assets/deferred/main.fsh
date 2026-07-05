@@ -40,9 +40,9 @@ const float SUN_INTENSITY = 512.0;
 
 const float CAUSTICS_SCALE = 0.25;
 const float CAUSTICS_SPEED = 0.08;
-const float CAUSTICS_STRENGTH = 0.25;
+const float CAUSTICS_STRENGTH = 0.45;
 const float CAUSTICS_MAX_DEPTH = 24.0;
-const float CAUSTICS_CHROMATIC_ABERRATION = 0.08;
+const float CAUSTICS_CHROMATIC_ABERRATION = 0.008;
 
 const float CHROMATIC_ABERRATION_UNDERWATER = 0.0008;
 
@@ -350,7 +350,6 @@ void main()
     }
 
     vec3 light = lightColor;
-    if (isUnderwater) { light*=2.0; }
 
     if (isWater)
     {

@@ -78,10 +78,10 @@ float ndelay = 0.0f;
 int sun_time = 0;
 float sun_delay = 0.0f;
 
-float aa[24 * 10] = {0};
-float ee[24 * 10] = {0};
-int bb[36] = {0};
-int ff[36] = {0};
+float aa[24 * 15] = {0};
+float ee[24 * 15] = {0};
+int bb[24 * 15] = {0};
+int ff[24 * 15] = {0};
 
 // shitcode
 
@@ -295,7 +295,7 @@ void game_init() {
         bone_neck
     );
 
-    sun_time = 0; // idk it initializes as garbage so
+    sun_time = 11000; // idk it initializes as garbage so
     update_sun_direction();
 }
 

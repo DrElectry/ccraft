@@ -7,7 +7,7 @@
 
 #define CHUNK_WIDTH 16
 #define CHUNK_HEIGHT 256
-#define CHUNK_DEPTH 16
+#define CHUNK_DEPTH 16 // no cube chunks angry face emoji
 
 typedef enum : uint16_t {
     AIR = 0,

@@ -189,8 +189,8 @@ int main(int argc, char* argv[]) {
     crosshair.wrap_s = GL_REPEAT;
     crosshair.wrap_t = GL_REPEAT;
 
-    caustics.mag_filter = GL_NEAREST;
-    caustics.min_filter = GL_NEAREST;
+    caustics.mag_filter = GL_LINEAR;
+    caustics.min_filter = GL_LINEAR_MIPMAP_LINEAR;
     caustics.wrap_s = GL_REPEAT;
     caustics.wrap_t = GL_REPEAT;
 

@@ -74,7 +74,8 @@ static void compute_sky_light_full(uint8_t* sky_out, const ChunkNeighbors* n, in
     int q_head = 0, q_tail = 0;
 
     // vertical pass: full sky (15) from world top down through transparent blocks.
-    // a single top seed + BFS cannot reach the surface (15 block limit).
+    // a single top seed + BFS cannot reach the surface (15 block limit
+    // AND STILL NO ambient occlusion
     for (int wx = min_wx; wx <= max_wx; wx++) {
         for (int wz = min_wz; wz <= max_wz; wz++) {
             int column_open = 1;

@@ -13,35 +13,38 @@ uniform mat4 model;
 
 out vec2 out_uv;
 out vec3 out_normal;
-out vec3 out_view_pos;
 out vec3 out_tangent;
 out vec3 out_bitangent;
+out vec3 out_view_pos;
 out float out_light;
+out vec3 TangentViewDir;
 
 void main()
 {
-	out_uv = in_uv;
-	out_light = in_light;
+    out_uv = in_uv;
+    out_light = in_light;
 
-	vec4 world_pos = model * vec4(in_vert, 1.0);
-	vec4 view_pos  = view * world_pos;
-	out_view_pos = view_pos.xyz;
+    vec4 world_pos = model * vec4(in_vert, 1.0);
+    vec4 view_pos = view * world_pos;
+    out_view_pos = view_pos.xyz;
 
-	mat3 normal_matrix = mat3(transpose(inverse(model)));
-	vec3 world_normal = normalize(normal_matrix * in_normal);
-	vec3 world_tangent = normalize(normal_matrix * in_tangent);
-	vec3 world_bitangent = normalize(normal_matrix * in_bitangent);
+    mat3 normalMatrix = transpose(inverse(mat3(model)));
+    vec3 N = normalize(normalMatrix * in_normal);
+    vec3 T = normalize(normalMatrix * in_tangent);
+    vec3 B = normalize(normalMatrix * in_bitangent);
 
-	vec3 N_view = normalize(mat3(view) * world_normal);
-	vec3 T_view = normalize(mat3(view) * world_tangent);
-	vec3 B_view = normalize(mat3(view) * world_bitangent);
+    T = normalize(T - dot(T, N) * N);
+    B = normalize(cross(N, T));
 
-	T_view = normalize(T_view - dot(T_view, N_view) * N_view);
-	B_view = normalize(cross(N_view, T_view));
+    out_normal = N;
+    out_tangent = T;
+    out_bitangent = B;
 
-	out_normal = N_view;
-	out_tangent = T_view;
-	out_bitangent = B_view;
+    vec3 viewDirView = normalize(-view_pos.xyz);
+    mat3 viewToWorld = transpose(mat3(view));
+    vec3 viewDirWorld = viewToWorld * viewDirView;
+    mat3 TBN = mat3(T, B, N);
+    TangentViewDir = transpose(TBN) * viewDirWorld;
 
-	gl_Position = proj * view_pos;
+    gl_Position = proj * view_pos;
 }

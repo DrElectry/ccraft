@@ -261,14 +261,14 @@ int main(int argc, char* argv[]) {
     fbo_create(&ffb, WIDTH, HEIGHT, 1);
     fbo_create(&underwaterfb, WIDTH, HEIGHT, 1);
 
-    gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
+    gbuffer.color_formats[0] = FBO_COLOR_RGBA16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[2] = FBO_COLOR_RGBA16F;
     gbuffer.color_formats[3] = FBO_COLOR_RG16F;
 
     fbo_create(&gbuffer, WIDTH, HEIGHT, 4);
     
-    water_gbuffer.color_formats[0] = FBO_COLOR_RGB16F;
+    water_gbuffer.color_formats[0] = FBO_COLOR_RGBA16F;
     water_gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
     water_gbuffer.color_formats[2] = FBO_COLOR_RGBA16F;
     water_gbuffer.color_formats[3] = FBO_COLOR_RG16F;
@@ -307,7 +307,11 @@ int main(int argc, char* argv[]) {
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_CULL_FACE);
 
+            glEnable(GL_BLEND);
+
             game_draw(current_time);
+
+            glDisable(GL_BLEND);
 
             game_draw_hud();
 

@@ -1,6 +1,6 @@
 #version 330 core
 
-layout(location = 0) out vec3 gAlbedo;
+layout(location = 0) out vec4 gAlbedo;
 layout(location = 1) out vec3 gNormal;
 layout(location = 2) out vec4 gViewPosition;
 layout(location = 3) out vec2 gRoughness;
@@ -43,9 +43,9 @@ void main()
     float lit = 0.12 + 0.88 * clamp(out_light, 0.0, 1.0);
 
     if (out_uv.x < tile_size) {
-        gAlbedo = data.rgb * lit;
+        gAlbedo = vec4(data.rgb * lit, 0.5);
     } else {
-        gAlbedo = data.rgb * 4.0 * lit;
+        gAlbedo = vec4(data.rgb * 4.0 * lit, 0.5);
     }
 
     gNormal = normalize(out_normal);

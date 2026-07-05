@@ -29,6 +29,11 @@ typedef struct BlockChange {
     uint16_t block;
 } BlockChange;
 
+typedef struct {
+    int idx;
+    float dist2;
+} WaterSortEntry; // for sorting in potato mode
+
 typedef struct World {
     Chunk* chunks_map;
     vec2* positions_map;

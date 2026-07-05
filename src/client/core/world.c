@@ -330,6 +330,50 @@ void world_render(World* world, void* active_program, void* water_program, int c
         forward[2] *= inv;
     }
 
+    if (!potato_mode) {
+        for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
+            if (world->index_map[i] == -1) continue;
+
+            if (cull) {
+                vec3 box_min = {
+                    world->chunks_map[i].model.pos[0],
+                    0.0f,
+                    world->chunks_map[i].model.pos[2]
+                };
+                vec3 box_max = {
+                    world->chunks_map[i].model.pos[0] + CHUNK_WIDTH,
+                    (float)CHUNK_HEIGHT,
+                    world->chunks_map[i].model.pos[2] + CHUNK_DEPTH
+                };
+
+                float max_dot = -1e30f;
+                for (int ix = 0; ix < 2; ix++) {
+                    for (int iy = 0; iy < 2; iy++) {
+                        for (int iz = 0; iz < 2; iz++) {
+                            vec3 corner = {
+                                ix ? box_max[0] : box_min[0],
+                                iy ? box_max[1] : box_min[1],
+                                iz ? box_max[2] : box_min[2]
+                            };
+                            float dx = corner[0] - cam_pos[0];
+                            float dy = corner[1] - cam_pos[1];
+                            float dz = corner[2] - cam_pos[2];
+                            float d = forward[0] * dx + forward[1] * dy + forward[2] * dz;
+                            if (d > max_dot) max_dot = d;
+                        }
+                    }
+                }
+                if (max_dot < 0.0f) continue;
+            }
+
+            gfx_render(&world->chunks_map[i].model, (Program*)active_program);
+            if (render_water) {
+                gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
+            }
+        }
+        return;
+    }
+
     for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
         if (world->index_map[i] == -1) continue;
 
@@ -346,7 +390,6 @@ void world_render(World* world, void* active_program, void* water_program, int c
             };
 
             float max_dot = -1e30f;
-
             for (int ix = 0; ix < 2; ix++) {
                 for (int iy = 0; iy < 2; iy++) {
                     for (int iz = 0; iz < 2; iz++) {
@@ -355,7 +398,6 @@ void world_render(World* world, void* active_program, void* water_program, int c
                             iy ? box_max[1] : box_min[1],
                             iz ? box_max[2] : box_min[2]
                         };
-
                         float dx = corner[0] - cam_pos[0];
                         float dy = corner[1] - cam_pos[1];
                         float dz = corner[2] - cam_pos[2];
@@ -364,14 +406,83 @@ void world_render(World* world, void* active_program, void* water_program, int c
                     }
                 }
             }
-
             if (max_dot < 0.0f) continue;
         }
 
         gfx_render(&world->chunks_map[i].model, (Program*)active_program);
-        if (render_water) {
-            gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
+    }
+
+    if (!render_water) return;
+
+    WaterSortEntry water_buf[MAX_LOADED_CHUNKS];
+    int water_count = 0;
+
+    for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
+        if (world->index_map[i] == -1) continue;
+
+        Chunk* chunk = &world->chunks_map[i];
+
+        if (cull) {
+            vec3 box_min = {
+                chunk->water_model.pos[0],
+                0.0f,
+                chunk->water_model.pos[2]
+            };
+            vec3 box_max = {
+                chunk->water_model.pos[0] + CHUNK_WIDTH,
+                (float)CHUNK_HEIGHT,
+                chunk->water_model.pos[2] + CHUNK_DEPTH
+            };
+
+            float max_dot = -1e30f;
+            for (int ix = 0; ix < 2; ix++) {
+                for (int iy = 0; iy < 2; iy++) {
+                    for (int iz = 0; iz < 2; iz++) {
+                        vec3 corner = {
+                            ix ? box_max[0] : box_min[0],
+                            iy ? box_max[1] : box_min[1],
+                            iz ? box_max[2] : box_min[2]
+                        };
+                        float dx = corner[0] - cam_pos[0];
+                        float dy = corner[1] - cam_pos[1];
+                        float dz = corner[2] - cam_pos[2];
+                        float d = forward[0] * dx + forward[1] * dy + forward[2] * dz;
+                        if (d > max_dot) max_dot = d;
+                    }
+                }
+            }
+            if (max_dot < 0.0f) continue;
         }
+
+        float cx = chunk->water_model.pos[0] + CHUNK_WIDTH * 0.5f;
+        float cy = CHUNK_HEIGHT * 0.5f;
+        float cz = chunk->water_model.pos[2] + CHUNK_DEPTH * 0.5f;
+        float dx = cx - cam_pos[0];
+        float dy = cy - cam_pos[1];
+        float dz = cz - cam_pos[2];
+        float dist2 = dx*dx + dy*dy + dz*dz;
+
+        water_buf[water_count].idx = i;
+        water_buf[water_count].dist2 = dist2;
+        water_count++;
+    }
+
+    for (int i = 0; i < water_count - 1; i++) {
+        int max_idx = i;
+        for (int j = i + 1; j < water_count; j++) {
+            if (water_buf[j].dist2 > water_buf[max_idx].dist2)
+                max_idx = j;
+        }
+        if (max_idx != i) {
+            WaterSortEntry tmp = water_buf[i];
+            water_buf[i] = water_buf[max_idx];
+            water_buf[max_idx] = tmp;
+        }
+    }
+
+    for (int k = 0; k < water_count; k++) {
+        int i = water_buf[k].idx;
+        gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
     }
 }
 

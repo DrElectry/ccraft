@@ -10,6 +10,7 @@ uniform sampler2D gRoughness2;
 uniform sampler2D gDepth1;
 uniform sampler2D gDepth2;
 uniform vec2 ssr_ratio;
+uniform int underwater;
 
 uniform mat4 invView;
 uniform mat4 projection;
@@ -53,7 +54,7 @@ void main()
         Metallic = texture(gRoughness2, scaled_uv).r;
     }
     
-    if (d0 >= 0.999999 || Metallic == 0.0) {
+    if (d0 >= 0.999999 || Metallic == 0.0 || underwater == 1) {
         fragColor = vec4(0.0);
         return;
     }

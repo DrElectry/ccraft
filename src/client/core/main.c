@@ -400,6 +400,7 @@ int main(int argc, char* argv[]) {
         program_set_int(&ssr, "gPosition2", 6);
         program_set_int(&ssr, "gRoughness2", 7);
         program_set_int(&ssr, "gDepth2", 8);
+        program_set_int(&ssr, "underwater", underwater);
         program_set_mat4(&ssr, "projection", (float*)projection);
         program_set_mat4(&ssr, "view", (float*)view);
         program_set_vec2(&ssr, "ssr_ratio", ssr_ratio);

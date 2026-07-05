@@ -71,15 +71,22 @@ void main()
     }
     
     vec3 viewNormal = normalize(vec3(view * vec4(worldNormal, 0.0)));
-    vec3 albedo = texture(gAlbedo, scaled_uv).rgb;
+    vec3 viewDir = normalize(viewPos);
+    vec3 reflected = normalize(reflect(viewDir, viewNormal));
+    
+    float viewReflectionDot = dot(viewDir, reflected);
+    
+    if (viewReflectionDot > 0.9995 || viewReflectionDot < 0.0) {
+        fragColor = vec4(0.0);
+        return;
+    }
 
+    vec3 albedo = texture(gAlbedo, scaled_uv).rgb;
     vec3 F0 = mix(vec3(0.04), albedo, Metallic);
     vec3 Fresnel = fresnelSchlick(
-        max(dot(normalize(viewNormal), normalize(viewPos)), 0.0),
+        max(dot(viewNormal, viewDir), 0.0),
         F0
     );
-
-    vec3 reflected = normalize(reflect(normalize(viewPos), normalize(viewNormal)));
 
     vec3 hitPos = viewPos;
     float dDepth;

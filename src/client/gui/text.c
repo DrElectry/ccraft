@@ -15,7 +15,7 @@
 #include <stdbool.h>
 
 static const char CHARSET[] =
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ!/<>:+1234567890&=().? ";
+"ABCDEFGHIJKLMNOPQRSTUVWXYZ!/<>:+1234567890&=().?- ";
 
 static int char_index(unsigned char c) {
     for (int i = 0; CHARSET[i] != '\0'; i++) {
@@ -31,6 +31,13 @@ static VAO global_vao;
 static VBO global_vbo;
 static EBO global_ebo;
 static bool gpu_resources_initialized = false;
+
+static char to_upper(char c) {
+    if (c >= 'a' && c <= 'z') {
+        return c - ('a' - 'A');
+    }
+    return c;
+}
 
 typedef struct TextCache {
     HText* owner;
@@ -101,6 +108,8 @@ static void rebuild_text_geometry(TextCache* cache, const char* str, uint16_t co
 
     for (int i = 0; i < len; i++) {
         unsigned char c = (unsigned char)str[i];
+        // Convert to uppercase before looking up in charset
+        c = (unsigned char)to_upper((char)c);
         int idx = char_index(c);
         if (idx == -1) idx = 0;
 
@@ -187,7 +196,7 @@ void text_init(const char* vsrc, const char* fsrc, const char* asrc) {
     ensure_global_resources();
 }
 
-void text_create(HText* text, char* string, uint16_t color, int x, int y) {
+void text_create(HText* text, char* string, uint8_t color, float alpha, int x, int y) {
     if (!text) return;
 
     TextCache* cache = get_cache(text);
@@ -195,7 +204,8 @@ void text_create(HText* text, char* string, uint16_t color, int x, int y) {
         cache->dirty = true;
         rebuild_text_geometry(cache, string, color, x, y);
         text->data = string;
-        text->color = (uint8_t)(color & 0xFF);
+        text->color = color;
+        text->alpha = alpha;
         text->x = x;
         text->y = y;
         text->index_count = cache->index_count;
@@ -206,7 +216,8 @@ void text_create(HText* text, char* string, uint16_t color, int x, int y) {
     if (!cache) return;
 
     text->data = string;
-    text->color = (uint8_t)(color & 0xFF);
+    text->color = color;
+    text->alpha = alpha;
     text->x = x;
     text->y = y;
     text->index_count = 0;
@@ -277,6 +288,7 @@ void text_draw(HText* text) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // shadow pass (0x08)
+    program_set_float(&text_program, "alpha", text->alpha);
 
     if (cache->vertex_count > 0) {
         float* tmp_vertices = malloc(cache->vertex_count * 4 * sizeof(float));

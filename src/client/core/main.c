@@ -60,6 +60,8 @@ void on_window_resize(int width, int height)
     fbo_resize(&blurfb, width/2, height/2);
     fbo_resize(&ffb, width, height);
     fbo_resize(&underwaterfb, width, height);
+
+    update_debug_texts();
 }
 
 int main(int argc, char* argv[]) {
@@ -518,7 +520,11 @@ int main(int argc, char* argv[]) {
         program_set_float(&cross, "height", (float)HEIGHT);
         gfx_draw_fullscreen_quad();
 
+        glEnable(GL_BLEND);
+
         game_draw_hud();
+
+        glDisable(GL_BLEND);
 
         glfwSwapBuffers(_win->glwin);
     }

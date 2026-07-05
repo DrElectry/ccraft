@@ -5,6 +5,7 @@ out vec4 frag_color;
 
 uniform sampler2D tex_atlas;
 uniform uint color_data;
+uniform float alpha;
 
 vec3 vga_color(uint i) {
     i = i & 15u;
@@ -44,5 +45,5 @@ void main() {
        if (bg == 0u) { discard; }
        color = vga_color(fg);
 
-    frag_color = vec4(color, 1.0);
+    frag_color = vec4(color, alpha);
 }

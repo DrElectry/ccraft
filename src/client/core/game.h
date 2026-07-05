@@ -28,5 +28,7 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
 void game_draw_hud();
 void game_destroy();
 
+void update_debug_texts(void);
+
 
 #endif

@@ -15,6 +15,7 @@
 typedef struct {
     char* data;
     uint8_t color; // 4 bits color 4 bits foreground
+    float alpha;   // transparency
 
     int x, y;
     int index_count;
@@ -23,7 +24,7 @@ typedef struct {
 } HText; // HUD TEXT
 
 void text_init(const char* vsrc, const char* fsrc, const char* asrc);
-void text_create(HText* text, char* string, uint16_t color, int x, int y);
+void text_create(HText* text, char* string, uint8_t color, float alpha, int x, int y);
 void text_draw(HText* text);
 void text_free(HText* text);
 

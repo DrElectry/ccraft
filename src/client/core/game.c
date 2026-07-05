@@ -27,6 +27,7 @@
 #include "network/remote.h"
 #include <GLFW/glfw3.h>
 #include <string.h>
+#include <stdio.h>
 
 Player player;
 HText name, fps;
@@ -100,6 +101,90 @@ static float g_footstep_delay = 0.0f;
 static uint8_t remote_names_active[CLIENT_MAX_REMOTES] = {0};
 static char remote_nick_buf[CLIENT_MAX_REMOTES][MAX_NICKNAME_LEN];
 static HText remote_names[CLIENT_MAX_REMOTES];
+
+static HText debug_texts[7];
+static int debug_texts_ready = 0;
+static float debug_current_fps = 0.0f;
+
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86) // i have to move this out lmao
+static const char* get_cpu_model(void) {
+    static char cpu_brand[49] = "Unknown CPU";
+    int cpu_info[4] = {0};
+    __asm__ __volatile__ (
+        "cpuid"
+        : "=a"(cpu_info[0]), "=b"(cpu_info[1]), "=c"(cpu_info[2]), "=d"(cpu_info[3])
+        : "a"(0x80000002), "c"(0)
+    );
+    memcpy(cpu_brand, cpu_info, sizeof(cpu_info));
+    __asm__ __volatile__ (
+        "cpuid"
+        : "=a"(cpu_info[0]), "=b"(cpu_info[1]), "=c"(cpu_info[2]), "=d"(cpu_info[3])
+        : "a"(0x80000003), "c"(0)
+    );
+    memcpy(cpu_brand + 16, cpu_info, sizeof(cpu_info));
+    __asm__ __volatile__ (
+        "cpuid"
+        : "=a"(cpu_info[0]), "=b"(cpu_info[1]), "=c"(cpu_info[2]), "=d"(cpu_info[3])
+        : "a"(0x80000004), "c"(0)
+    );
+    memcpy(cpu_brand + 32, cpu_info, sizeof(cpu_info));
+    cpu_brand[48] = '\0';
+    char* start = cpu_brand;
+    while (*start == ' ') start++;
+    return start;
+}
+#else
+static const char* get_cpu_model(void) {
+    return "Unknown CPU";
+}
+#endif
+
+void update_debug_texts(void) {
+    char buf[256];
+    
+    const int global_x = 10;
+    const int global_y = 600;
+    const int line_height = 16;
+    const float font_scale = 0.5f;
+    
+    snprintf(buf, sizeof(buf), "%s", get_cpu_model());
+    text_free(&debug_texts[0]);
+    text_create(&debug_texts[0], buf, 0x0F, font_scale, global_x + 0, global_y + 0);
+
+    static char gpu_str[256] = "";
+    if (gpu_str[0] == '\0') {
+        const char* renderer = (const char*)glGetString(GL_RENDERER);
+        snprintf(gpu_str, sizeof(gpu_str), "%s", renderer ? renderer : "Unknown");
+    }
+    text_free(&debug_texts[1]);
+    text_create(&debug_texts[1], gpu_str, 0x0F, font_scale, global_x + 0, global_y + (1 * line_height));
+
+    snprintf(buf, sizeof(buf), "FPS: %.0f", debug_current_fps);
+    text_free(&debug_texts[2]);
+    text_create(&debug_texts[2], buf, 0x0F, font_scale, global_x + 0, global_y + (2 * line_height));
+
+    snprintf(buf, sizeof(buf), "X: %.2f Y: %.2f Z: %.2f",
+             player.camera.pos[0], player.camera.pos[1], player.camera.pos[2]);
+    text_free(&debug_texts[3]);
+    text_create(&debug_texts[3], buf, 0x0F, font_scale, global_x + 0, global_y + (3 * line_height));
+
+    snprintf(buf, sizeof(buf), "%.2f %.2f %.2f",
+             player.camera.rot[0], player.camera.rot[1], player.camera.rot[2]);
+    text_free(&debug_texts[4]);
+    text_create(&debug_texts[4], buf, 0x0F, font_scale, global_x + 0, global_y + (4 * line_height));
+
+    int line_index = 5;
+    if (__onserv) {
+        snprintf(buf, sizeof(buf), "CONNECTED TO %s:%d", __servip, __servport);
+        text_free(&debug_texts[5]);
+        text_create(&debug_texts[5], buf, 0x0F, font_scale, global_x + 0, global_y + (line_index++ * line_height));
+    }
+    snprintf(buf, sizeof(buf), "PLAYING AS %s", __nickname);
+    text_free(&debug_texts[6]);
+    text_create(&debug_texts[6], buf, 0x0F, font_scale, global_x + 0, global_y + (line_index * line_height));
+
+    debug_texts_ready = 1;
+}
 
 static void update_sun_direction() {
     float dayTime = sun_time / 24000.0f;
@@ -223,8 +308,8 @@ void game_init() {
 
     text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/textures/text.png");
     chat_init();
-    text_create(&name, "0.30", 0x0F, 0, 0);
-    text_create(&fps, "FPS: 0", 0x0F, 0, 16);
+    text_create(&name, "0.30", 0x0F, 1.0f, 0, 0);
+    text_create(&fps, "FPS: 0", 0x0F, 1.0f, 0, 16);
 
     player_get_pos(&player, body_pos);
 
@@ -297,6 +382,8 @@ void game_init() {
 
     sun_time = 11000; // idk it initializes as garbage so
     update_sun_direction();
+
+    update_debug_texts();
 }
 
 void game_tick(float dt_p) {
@@ -316,21 +403,20 @@ void game_tick(float dt_p) {
 
     static double fps_accum_time = 0.0;
     static int fps_frames = 0;
-    static float current_fps = 0.0f;
 
     fps_accum_time += (double)dt;
     fps_frames++;
     if (fps_accum_time >= 0.25) {
-        current_fps = (float)fps_frames / (float)fps_accum_time;
+        debug_current_fps = (float)fps_frames / (float)fps_accum_time;
         fps_accum_time = 0.0;
         fps_frames = 0;
     }
 
     static char fps_text[32];
-    snprintf(fps_text, sizeof(fps_text), "FPS: %.0f", current_fps);
+    snprintf(fps_text, sizeof(fps_text), "FPS: %.0f", debug_current_fps);
     text_free(&fps);
-    text_create(&fps, fps_text, 0x0F, 0, 16);
-    text_create(&name, "0.30", 0x0F, 0, 0);
+    text_create(&fps, fps_text, 0x0F, 1.0f, 0, 16);
+    text_create(&name, "0.30", 0x0F, 1.0f, 0, 0);
 
     if (__onserv) {
         chat_update(dt);
@@ -392,6 +478,7 @@ void game_tick(float dt_p) {
 
     if (chat_is_typing()) {
         network_update_remotes(dt);
+        update_debug_texts();
         return;
     }
 
@@ -524,6 +611,8 @@ void game_tick(float dt_p) {
 
     remote_update(dt);
     network_update_remotes(dt);
+
+    update_debug_texts();
 }
 
 void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 out_light_dir, int cascade)  {
@@ -938,6 +1027,12 @@ void game_draw_hud() {
         chat_draw();
     }
 
+    if (debug_texts_ready) {
+        for (int i = 0; i < 7; i++) {
+            text_draw(&debug_texts[i]);
+        }
+    }
+
     if (!__onserv) return;
 
     RemotePlayer* remotes = network_get_remote_players();
@@ -953,7 +1048,7 @@ void game_draw_hud() {
             }
             remote_nick_buf[i][MAX_NICKNAME_LEN - 1] = '\0';
             
-            text_create(&remote_names[i], remote_nick_buf[i], 0x0F, 0, 0);
+            text_create(&remote_names[i], remote_nick_buf[i], 0x0F, 1.0, 0, 0);
             remote_names_active[i] = 1;
         }
 
@@ -968,7 +1063,7 @@ void game_draw_hud() {
         remote_names[i].x = (int)sx - (text_width / 2);
         remote_names[i].y = (int)sy - text_height - 4;
 
-        text_create(&remote_names[i], remote_nick_buf[i], 0x0F, remote_names[i].x, remote_names[i].y);
+        text_create(&remote_names[i], remote_nick_buf[i], 0x0F, 1.0f, remote_names[i].x, remote_names[i].y);
         text_draw(&remote_names[i]);
     }
 }
@@ -996,5 +1091,9 @@ void game_destroy() {
     if (player_jump_model) {
         gltf_free_skinned_request(player_jump_model);
         player_jump_model = NULL;
+    }
+
+    for (int i = 0; i < 7; i++) {
+        text_free(&debug_texts[i]);
     }
 }

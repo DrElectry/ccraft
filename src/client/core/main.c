@@ -398,6 +398,7 @@ int main(int argc, char* argv[]) {
         program_set_int(&ssao, "gNormal", 1);
         program_set_mat4(&ssao, "inverseProjection", (float*)inv_projection);
         program_set_mat4(&ssao, "proj", (float*)projection);
+        program_set_mat4(&ssao, "view", (float*)view);
         program_set_vec2(&ssao, "ssao_ratio", ssao_ratio);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);

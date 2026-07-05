@@ -5,13 +5,14 @@ uniform sampler2D gNormal;
 uniform sampler2D gNoise;
 uniform mat4 inverseProjection;
 uniform mat4 proj;
+uniform mat4 view;
 uniform vec2 ssao_ratio;
 
 in vec2 out_uv;
 out float fragColor;
 
-const float ssaoRadius = 4.0;
-const float bias = 0.05;
+const float ssaoRadius = 1.0;
+const float bias = 0.005;
 const int samples = 32;
 
 // pregenerated offline kernel
@@ -69,8 +70,10 @@ void main()
         return;
     }
 
-    vec3 p0 = clipToView(scaled_uv, d0);
-    vec3 n0 = normalize(texture(gNormal, scaled_uv).rgb * 2.0 - 1.0);
+    vec3 p0 = clipToView(scaled_uv, d0); 
+
+    vec3 n0_world = normalize(texture(gNormal, scaled_uv).rgb * 2.0 - 1.0);
+    vec3 n0 = normalize(mat3(view) * n0_world); // finally did that conversion to view space
 
     vec3 r = texture(gNoise, out_uv * 8.0).rgb;
 
@@ -111,7 +114,7 @@ void main()
         occ += range * ndot;
     }
 
-    occ /= 64;
+    occ /= 32;
 
     fragColor = 1.0 - clamp(occ, 0.0, 1.0);
 }

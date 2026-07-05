@@ -4,12 +4,14 @@ in vec2 out_uv;
 out vec4 fragColor;
 
 uniform sampler2D colorTexture;
-uniform float strength = 0.01;
 uniform int samples = 20;
 uniform float time;
 
+uniform sampler2D dirt;
+
 void main() {
     vec2 center = vec2(0.5 + cos(time) * 0.05, 0.5 + sin(time * 1.3) * 0.05);
+    float strength = abs(sin(time))*0.025;
 
     float bulgeRadius = 1.0;
     float bulgeStrength = -0.15;
@@ -30,7 +32,14 @@ void main() {
     vec2 dir = bulgedUv - center;
     float dist = length(dir);
     if (dist < 0.0001) {
-        fragColor = originalColor;
+        vec4 dirta = texture(dirt, out_uv);
+        float dirtIntensity = dot(dirta.rgb, vec3(0.299, 0.587, 0.114));
+        if (dirtIntensity > 0.01) {
+            vec3 finalColor = mix(originalColor.rgb, dirta.rgb, dirtIntensity * 0.5);
+            fragColor = vec4(finalColor, 1.0);
+        } else {
+            fragColor = vec4(originalColor.rgb, 1.0);
+        }
         return;
     }
     dir /= dist;
@@ -45,5 +54,15 @@ void main() {
     blurred /= float(samples);
     
     float blurFactor = smoothstep(0.0, 1.0, dist * 1.5);
-    fragColor = mix(originalColor, blurred, blurFactor);
+
+    vec3 col = mix(originalColor, blurred, blurFactor).rgb;
+
+    vec4 dirta = texture(dirt, bulgedUv);
+    float dirtIntensity = dot(dirta.rgb, vec3(0.299, 0.587, 0.114));
+    if (dirtIntensity > 0.01) {
+        vec3 finalColor = mix(col, dirta.rgb, dirtIntensity * 0.5);
+        fragColor = vec4(finalColor, 1.0);
+    } else {
+        fragColor = vec4(col, 1.0);
+    }
 }

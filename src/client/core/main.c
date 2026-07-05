@@ -182,7 +182,7 @@ int main(int argc, char* argv[]) {
     Program main, ssao, pp, ssr, blur, bloom, cross, underwater_prog;
     File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, crossff, underwff;
 
-    Texture crosshair, caustics;
+    Texture crosshair, caustics, dirt;
 
     crosshair.mag_filter = GL_NEAREST;
     crosshair.min_filter = GL_NEAREST;
@@ -194,8 +194,14 @@ int main(int argc, char* argv[]) {
     caustics.wrap_s = GL_REPEAT;
     caustics.wrap_t = GL_REPEAT;
 
+    dirt.mag_filter = GL_LINEAR;
+    dirt.min_filter = GL_LINEAR_MIPMAP_LINEAR;
+    dirt.wrap_s = GL_REPEAT;
+    dirt.wrap_t = GL_REPEAT;
+
     texture_create(&crosshair, "assets/textures/crosshair.png");
     texture_create(&caustics, "assets/textures/caustics.jpg");
+    texture_create(&dirt, "assets/textures/water_dirt.png");
 
     mainv.type = GL_VERTEX_SHADER;
     mainf.type = GL_FRAGMENT_SHADER;
@@ -493,7 +499,9 @@ int main(int argc, char* argv[]) {
             glClear(GL_COLOR_BUFFER_BIT);
             program_use(&underwater_prog);
             fbo_bind_texture(&ffb, 0, 0);
+            texture_bind(&dirt, 1);
             program_set_int(&underwater_prog, "colorTexture", 0);
+            program_set_int(&underwater_prog, "dirt", 1);
             program_set_float(&underwater_prog, "time", time);
             glDisable(GL_DEPTH_TEST);
             glDisable(GL_CULL_FACE);

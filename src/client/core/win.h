@@ -13,10 +13,13 @@ typedef struct {
     GLFWwindow* glwin;
 } Window;
 
+typedef void (*ResizeCallback)(int width, int height);
+
 void window_create(Window* packet);
 int window_shouldclose();
 void window_update();
 void window_draw();
+void window_hook_resize_call(ResizeCallback callback);
 
 extern Window* _win;
 

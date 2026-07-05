@@ -13,7 +13,7 @@
 
 #define SEA_LEVEL 24
 #define BEACH_HEIGHT 4
-#define SUPERFLAT_DEBUG 0
+#define SUPERFLAT_DEBUG 1
 
 int lookup_atlas[] = {
     0,0,0,0,0,0,        // AIR

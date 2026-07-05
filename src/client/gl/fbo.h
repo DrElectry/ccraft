@@ -24,6 +24,7 @@ typedef struct {
 void fbo_create(FBO* fbo, int width, int height, int color_count);
 void fbo_bind(FBO* fbo);
 void fbo_unbind();
+void fbo_resize(FBO* fbo, int width, int height);
 
 void fbo_bind_texture(FBO* fbo, int attachment_index, unsigned int unit);
 void fbo_bind_depth_texture(FBO* fbo, unsigned int unit);

@@ -1,5 +1,6 @@
 #include "gl/fbo.h"
 #include "glad.h"
+#include "utils/log.h"
 
 #include <stdio.h>
 
@@ -168,6 +169,112 @@ void fbo_bind_depth_texture(FBO* fbo, unsigned int unit)
 {
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_2D, fbo->depth_attachment);
+}
+
+void fbo_resize(FBO* fbo, int width, int height)
+{
+    ASSERT(fbo && fbo->id != 0, "FBO is NULL or has invalid ID");
+
+    int color_formats[MAX_FBO_ATTACHMENTS];
+    for (int i = 0; i < fbo->color_count; i++)
+    {
+        color_formats[i] = fbo->color_formats[i];
+    }
+
+    for (int i = 0; i < fbo->color_count; i++)
+    {
+        glDeleteTextures(1, &fbo->color_attachments[i]);
+        fbo->color_attachments[i] = 0;
+    }
+    glDeleteTextures(1, &fbo->depth_attachment);
+    fbo->depth_attachment = 0;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo->id);
+
+    for (int i = 0; i < fbo->color_count; i++)
+    {
+        int format, channels;
+        
+        if (color_formats[i] == FBO_COLOR_RG16F) {
+            format = GL_RG16F;
+            channels = GL_RG;
+        } else if (color_formats[i] == FBO_COLOR_RGBA16F) {
+            format = GL_RGBA16F;
+            channels = GL_RGBA;
+        } else {
+            format = GL_RGB16F;
+            channels = GL_RGB;
+        }
+
+        glGenTextures(1, &fbo->color_attachments[i]);
+        glBindTexture(GL_TEXTURE_2D, fbo->color_attachments[i]);
+
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            format,
+            width,
+            height,
+            0,
+            channels,
+            GL_FLOAT,
+            NULL
+        );
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0 + i,
+            GL_TEXTURE_2D,
+            fbo->color_attachments[i],
+            0
+        );
+    }
+
+    glGenTextures(1, &fbo->depth_attachment);
+    glBindTexture(GL_TEXTURE_2D, fbo->depth_attachment);
+
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_DEPTH_COMPONENT24,
+        width,
+        height,
+        0,
+        GL_DEPTH_COMPONENT,
+        GL_FLOAT,
+        NULL
+    );
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glFramebufferTexture2D(
+        GL_FRAMEBUFFER,
+        GL_DEPTH_ATTACHMENT,
+        GL_TEXTURE_2D,
+        fbo->depth_attachment,
+        0
+    );
+
+    unsigned int attachments[MAX_FBO_ATTACHMENTS];
+    for (int i = 0; i < fbo->color_count; i++)
+    {
+        attachments[i] = GL_COLOR_ATTACHMENT0 + i;
+    }
+
+    glDrawBuffers(fbo->color_count, attachments);
+
+    ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE, 
+           "Framebuffer not complete during resize");
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void fbo_free(FBO* fbo)

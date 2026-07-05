@@ -11,6 +11,7 @@ in vec3 out_tangent;
 in vec3 out_bitangent;
 in vec3 out_view_pos;
 in float out_light;
+in vec3 TangentViewDir;
 
 uniform sampler2D tex;
 uniform sampler2D roug;
@@ -18,24 +19,23 @@ uniform sampler2D normal;
 
 void main()
 {
-    vec4 data = texture(tex, out_uv);
-    if (data.a < 0.1)
-        discard;
+    vec3 T = normalize(out_tangent);
+    vec3 B = normalize(out_bitangent);
+    vec3 N = normalize(out_normal);
+    mat3 TBN = mat3(T, B, N);
+
+    vec2 texCoords = out_uv;
+
+    vec4 albedo = texture(tex, texCoords);
+    if(albedo.a < 0.1) discard;
+
+    vec3 nSample = texture(normal, texCoords).rgb;
+    vec3 tangentNorm = normalize(nSample * 2.0 - 1.0);
+
+    gRoughness = texture(roug, texCoords).bb;
 
     float lit = 0.12 + 0.88 * clamp(out_light, 0.0, 1.0);
-    gAlbedo = data.rgb * lit;
-
-    vec3 n = texture(normal, out_uv).rgb;
-    vec3 tangentNormal = normalize(n * 2.0 - 1.0);
-
-    mat3 TBN = mat3(
-        normalize(out_tangent),
-        normalize(out_bitangent),
-        normalize(out_normal)
-    );
-
-    gNormal = normalize(TBN * tangentNormal);
-
-    gRoughness = texture(roug, out_uv).bb;
+    gAlbedo = albedo.rgb * lit;
+    gNormal = normalize(TBN * tangentNorm);
     gViewPosition = vec4(out_view_pos, 1.0);
 }

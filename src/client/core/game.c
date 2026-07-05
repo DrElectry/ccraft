@@ -75,6 +75,9 @@ float wdelay = 0.0f;
 float pdelay = 0.0f;
 float ndelay = 0.0f;
 
+int sun_time = 0;
+float sun_delay = 0.0f;
+
 float aa[24 * 10] = {0};
 float ee[24 * 10] = {0};
 int bb[36] = {0};
@@ -98,7 +101,18 @@ static uint8_t remote_names_active[CLIENT_MAX_REMOTES] = {0};
 static char remote_nick_buf[CLIENT_MAX_REMOTES][MAX_NICKNAME_LEN];
 static HText remote_names[CLIENT_MAX_REMOTES];
 
+static void update_sun_direction() {
+    float dayTime = sun_time / 24000.0f;
+
+    float angle = dayTime * 2.0f * 3.14159265f - 3.14159265f / 2.0f;
+
+    light_dir[0] = cosf(angle);
+    light_dir[1] = sinf(angle);
+    light_dir[2] = 0.0f;
+
+}
 void game_init() {
+    noclip = 0;
     glm_ortho(-64.0f, 64.0f, -64.0f, 64.0f, 1.0f, 200.0f, light_proj);
     glm_lookat(light_pos, target, up, light_view);
     
@@ -141,7 +155,6 @@ void game_init() {
 
     texture_create(&texture_atlas, "assets/textures/terrain.png");
     texture_create(&roughness, "assets/textures/shiny.png");
-
 
     player_tex.mag_filter = GL_NEAREST;
     player_tex.min_filter = GL_NEAREST;
@@ -281,6 +294,9 @@ void game_init() {
         bone_head,
         bone_neck
     );
+
+    sun_time = 0; // idk it initializes as garbage so
+    update_sun_direction();
 }
 
 void game_tick(float dt_p) {
@@ -350,6 +366,22 @@ void game_tick(float dt_p) {
     wdelay -= dt;
     pdelay -= dt;
     ndelay -= dt;
+
+    sun_delay -= dt;
+    if (sun_delay <= 0.0f) {
+        if (input_down(&input_manager, GLFW_KEY_C)) {
+            sun_time+=10;
+            if (sun_time > 24000) sun_time = 0;
+            sun_delay = 0.01f;
+            update_sun_direction();
+        }
+        if (input_down(&input_manager, GLFW_KEY_V)) {
+            sun_time-=10;
+            if (sun_time < 0) sun_time = 24000;
+            sun_delay = 0.01f;
+            update_sun_direction();
+        }
+    }
 
     vec3 eye;
     player_get_eye(&player, eye);
@@ -501,8 +533,6 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
 
     glm_ortho(-dist, dist, -dist, dist, 0.01f, 400.0f, light_proj);
 
-    vec3 light_offset = { 20.0f*cascade, 40.0f*cascade, -30.0f*cascade };
-    
     float orthoSize = dist;
     float texelSize = (orthoSize * 2.0f) / scale;
 
@@ -513,8 +543,10 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     snapped_player_pos[1] = floorf((player.camera.pos[1] + 0.01f) / lodSnap) * lodSnap;
     snapped_player_pos[2] = floorf(player.camera.pos[2] / lodSnap) * lodSnap;
 
+    float light_distance = 100.0f;
     vec3 light_pos;
-    glm_vec3_add(snapped_player_pos, light_offset, light_pos);
+    glm_vec3_scale(light_dir, light_distance, light_pos);
+    glm_vec3_add(snapped_player_pos, light_pos, light_pos);
 
     glm_lookat(light_pos, snapped_player_pos, up, light_view);
 
@@ -532,12 +564,13 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     glm_mat4_inv(light_view_tmp, inv_light_view);
     glm_mat4_mulv(inv_light_view, centerLS, snapped_world);
 
-    glm_vec3_add((vec3){ snapped_world[0], snapped_world[1], snapped_world[2] }, light_offset, light_pos);
+    glm_vec3_scale(light_dir, light_distance, light_pos);
+    glm_vec3_add((vec3){ snapped_world[0], snapped_world[1], snapped_world[2] }, light_pos, light_pos);
     glm_lookat(light_pos, snapped_player_pos, up, light_view);
 
     glm_mat4_mul(light_proj, light_view, out_light_space_matrix);
 
-    glm_vec3_copy(light_offset, out_light_dir);
+    glm_vec3_copy(light_dir, out_light_dir);
     glm_vec3_normalize(out_light_dir);
 
     glViewport(0, 0, scale, scale);

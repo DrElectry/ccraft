@@ -286,6 +286,26 @@ vec3 getUnderwaterFogColor()
     return vec3(0.1, 0.3, 0.6);
 }
 
+vec3 calculateSpecular(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 albedo, float roughness, float metallic, float NdotL)
+{
+    if (NdotL <= 0.0) return vec3(0.0);
+    
+    vec3 halfDir = normalize(lightDir + viewDir);
+    float NdotH = max(dot(normal, halfDir), 0.0);
+    
+    float shininess = mix(4.0, 256.0, 1.0 - roughness);
+    float spec = pow(NdotH, shininess);
+    
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    
+    float HdotV = max(dot(halfDir, viewDir), 0.0);
+    vec3 fresnel = F0 + (1.0 - F0) * pow(1.0 - HdotV, 5.0);
+    
+    float specIntensity = (1.0 - roughness * 0.7);
+    
+    return fresnel * spec * specIntensity * 0.5;
+}
+
 void main()
 {
     float terrainDepth = texture(gDepth, out_uv).r;
@@ -342,9 +362,13 @@ void main()
         float NdotL = max(dot(waterNormal, lightDir), 0.0);
         float ao = texture(dSSAO, out_uv).r;
 
+        vec3 viewDir = normalize(cameraPos - waterWorldPos);
+        vec3 specular = calculateSpecular(lightDir, waterNormal, viewDir, waterAlbedo, waterRoughness, waterMetallic, NdotL);
+        specular *= (1.0 - shadow);
+
         vec3 ambient = waterAlbedo * ao * 0.25;
         vec3 diffuse = waterAlbedo * light * NdotL * (1.0 - shadow);
-        vec3 waterColor = ambient + diffuse + waterSSR.rgb * waterSSR.a;
+        vec3 waterColor = ambient + diffuse + specular + waterSSR.rgb * waterSSR.a;
 
         float distToCamera = length(waterWorldPos - cameraPos);
         float depthStrength = clamp(1.0 - (distToCamera - 10.0) / 40.0, 0.0, 1.0);
@@ -381,9 +405,13 @@ void main()
             float terrainNdotL = max(dot(terrainNormalAtWater, terrainLightDir), 0.0);
             float terrainAO = texture(dSSAO, refractUV).r;
 
+            vec3 terrainViewDir = normalize(cameraPos - terrainWorldPosRefract);
+            vec3 terrainSpecular = calculateSpecular(terrainLightDir, terrainNormalAtWater, terrainViewDir, terrainAlbedoAtWater, terrainRoughness, terrainMetallic, terrainNdotL);
+            terrainSpecular *= (1.0 - terrainShadow);
+
             vec3 terrainAmbient = terrainAlbedoAtWater * terrainAO * 0.25;
             vec3 terrainDiffuse = terrainAlbedoAtWater * light * terrainNdotL * (1.0 - terrainShadow);
-            terrainColor = terrainAmbient + terrainDiffuse;
+            terrainColor = terrainAmbient + terrainDiffuse + terrainSpecular;
             vec4 terrainSSR = texture(dSSR, refractUV);
             terrainColor += terrainSSR.rgb * terrainSSR.a;
 
@@ -453,11 +481,15 @@ void main()
         float ao = texture(dSSAO, out_uv).r;
         vec4 ssr = texture(dSSR, out_uv);
 
+        vec3 viewDir = normalize(cameraPos - worldPos);
+        vec3 specular = calculateSpecular(lightDir, normal, viewDir, terrainAlbedo, roughness, metallic, NdotL);
+        specular *= (1.0 - shadow);
+
         float ambientStrength = isUnderwater ? 0.45 : 0.25;
         vec3 ambient = terrainAlbedo * ao * ambientStrength;
         vec3 diffuse = terrainAlbedo * light * NdotL * (1.0 - shadow);
         
-        color = ambient + diffuse;
+        color = ambient + diffuse + specular;
 
         if (!isSky)
             color += ssr.rgb * ssr.a;

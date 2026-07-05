@@ -25,6 +25,43 @@ int __onserv;
 int __servport;
 char __nickname[32];
 
+int WIDTH = 1280;
+int HEIGHT = 720;
+
+FBO gbuffer;
+FBO water_gbuffer;
+FBO shadow1;
+FBO shadow2;
+FBO ssaofb;
+FBO ssaoblurfb;
+FBO ppfb;
+FBO prev_frame;
+FBO ssrfb;
+FBO bloomfb;
+FBO blurfb;
+FBO ffb;
+FBO underwaterfb;
+
+void on_window_resize(int width, int height)
+{
+    glViewport(0, 0, width, height);
+    WIDTH = width;
+    HEIGHT = height;
+    fbo_resize(&gbuffer, width, height);
+    fbo_resize(&water_gbuffer, width, height);
+    fbo_resize(&shadow1, 2048, 2048);
+    fbo_resize(&shadow2, 1024, 1024);
+    fbo_resize(&ssaofb, width/2, height/2);
+    fbo_resize(&ssaoblurfb, width/2, height/2);
+    fbo_resize(&ppfb, width, height);
+    fbo_resize(&prev_frame, width, height);
+    fbo_resize(&ssrfb, width/2, height/2);
+    fbo_resize(&bloomfb, width/2, height/2);
+    fbo_resize(&blurfb, width/2, height/2);
+    fbo_resize(&ffb, width, height);
+    fbo_resize(&underwaterfb, width, height);
+}
+
 int main(int argc, char* argv[]) {
     if (net_init() != 0) {
         fprintf(stderr, "Failed to initialize Winsock\n");
@@ -121,6 +158,8 @@ int main(int argc, char* argv[]) {
     packet.title = "ccraft";
 
     window_create(&packet);
+    
+    window_hook_resize_call((ResizeCallback)on_window_resize);
 
     ASSERT(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress), "no glad");
 
@@ -133,20 +172,6 @@ int main(int argc, char* argv[]) {
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
-
-    FBO gbuffer;
-    FBO water_gbuffer;
-    FBO shadow1;
-    FBO shadow2;
-    FBO ssaofb;
-    FBO ssaoblurfb;
-    FBO ppfb;
-    FBO prev_frame;
-    FBO ssrfb;
-    FBO bloomfb;
-    FBO blurfb;
-    FBO ffb;
-    FBO underwaterfb;
 
     float light_dir_near[3];
     float light_dir_far[3];
@@ -215,7 +240,7 @@ int main(int argc, char* argv[]) {
     bloomfb.color_formats[0] = FBO_COLOR_RGBA16F;
     blurfb.color_formats[0] = FBO_COLOR_RGBA16F;
     ssaoblurfb.color_formats[0] = FBO_COLOR_RGBA16F;
-    ffb.color_formats[1] = FBO_COLOR_RGBA16F;
+    ffb.color_formats[0] = FBO_COLOR_RGBA16F;
     underwaterfb.color_formats[0] = FBO_COLOR_RGBA16F;
 
     fbo_create(&ssaofb, WIDTH/2, HEIGHT/2, 1);
@@ -413,7 +438,7 @@ int main(int argc, char* argv[]) {
         program_set_mat4(&main, "inv_view", (float*)inv_view);
         program_set_vec3(&main, "lightDir1", (float*)light_dir_near);
         program_set_vec3(&main, "lightDir2", (float*)light_dir_far);
-        program_set_vec3(&main, "lightColor", (float[]){1.0f, 0.95f, 0.85f});
+        program_set_vec3(&main, "lightColor", (float[]){1.0f, 0.975f, 0.95f});
         program_set_float(&main, "shadowSplitDistance", 11.0f);
         program_set_int(&main, "underwater", underwater);
         glDisable(GL_DEPTH_TEST);

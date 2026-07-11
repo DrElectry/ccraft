@@ -6,6 +6,7 @@
 #include "core/world.h"
 #include "utils/rand.h"
 #include "utils/noise.h"
+#include "core/game.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -975,4 +976,6 @@ int v_start = v_cursor / CHUNK_VERT_FLOATS;
     out->water_inds = water_indices;
     out->water_v = w_v_cursor;
     out->water_i = w_i_cursor;
+
+    shadow_dirty = 1;
 }

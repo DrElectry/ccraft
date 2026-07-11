@@ -106,9 +106,9 @@ static HText debug_texts[7];
 static int debug_texts_ready = 0;
 static float debug_current_fps = 0.0f;
 
-// Shadow caching state
+// shadow caching state
 static vec3 shadow_last_pos = {0.0f, 0.0f, 0.0f};
-static int shadow_dirty = 1; // force first update
+int shadow_dirty = 1; // force first update
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86) // i have to move this out lmao
 static const char* get_cpu_model(void) {

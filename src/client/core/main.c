@@ -20,8 +20,6 @@
 uint64_t __servseed;
 uint8_t __worldtype;
 
-#define DEBUG_PERF
-
 char __servip[256] = "127.0.0.1";
 int __onserv;
 int __servport;

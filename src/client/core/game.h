@@ -18,6 +18,8 @@ extern int underwater;
 
 extern Player player;
 
+extern int shadow_dirty;
+
 void game_init();
 void game_draw(float time);
 void game_draw_terrain_gbuffer(float time);

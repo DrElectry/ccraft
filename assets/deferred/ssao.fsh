@@ -11,8 +11,8 @@ uniform vec2 ssao_ratio;
 in vec2 out_uv;
 out float fragColor;
 
-const float ssaoRadius = 1.0;
-const float bias = 0.005;
+const float ssaoRadius = 0.5;
+const float bias = 0.00005;
 const int samples = 32;
 
 // pregenerated offline kernel

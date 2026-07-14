@@ -20,6 +20,15 @@ extern Player player;
 
 extern int shadow_dirty;
 
+float clamp(float value, float min,  float max)
+{
+    if (value < min)
+        return min;
+    if (value > max)
+        return max;
+    return value;
+} // ???
+
 void game_init();
 void game_draw(float time);
 void game_draw_terrain_gbuffer(float time);

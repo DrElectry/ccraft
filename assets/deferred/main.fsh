@@ -3,6 +3,7 @@
 uniform sampler2D gAlbedo;
 uniform sampler2D gDepth;
 uniform sampler2D gNormal;
+uniform sampler2D gRoughness;
 uniform sampler2D dShadow1;
 uniform sampler2D dShadow2;
 uniform sampler2D dSSAO;
@@ -11,6 +12,7 @@ uniform sampler2D dSSR;
 uniform sampler2D gWaterAlbedo;
 uniform sampler2D gWaterDepth;
 uniform sampler2D gWaterNormal;
+uniform sampler2D gWaterRoughness;
 
 uniform sampler2D caustics;
 
@@ -321,13 +323,13 @@ void main()
 
     vec3 waterAlbedo = texture(gWaterAlbedo, out_uv).rgb;
     vec3 waterNormal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
-    float waterRoughness = texture(dSSR, out_uv).g;
-    float waterMetallic = texture(dSSR, out_uv).b;
+    float waterRoughness = 0.2+texture(gWaterRoughness, out_uv).r*0.0001;
+    float waterMetallic = 1.0+texture(gWaterRoughness, out_uv).r*0.0001;
 
     vec3 terrainAlbedo = texture(gAlbedo, out_uv).rgb;
     vec3 terrainNormal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
-    float terrainRoughness = texture(dSSR, out_uv).g;
-    float terrainMetallic = texture(dSSR, out_uv).b;
+    float terrainRoughness = 0.2+texture(gRoughness, out_uv).r*0.0001;
+    float terrainMetallic = 1.0+texture(gRoughness, out_uv).r*0.0001;
 
     vec3 worldPos;
     vec3 color;
@@ -350,6 +352,7 @@ void main()
     }
 
     vec3 light = lightColor;
+    vec3 specular;
 
     if (isWater)
     {
@@ -362,8 +365,8 @@ void main()
         float ao = texture(dSSAO, out_uv).r;
 
         vec3 viewDir = normalize(cameraPos - waterWorldPos);
-        vec3 specular = calculateSpecular(lightDir, waterNormal, viewDir, waterAlbedo, waterRoughness, waterMetallic, NdotL);
-        specular *= (1.0 - shadow);
+        specular = calculateSpecular(lightDir, waterNormal, viewDir, waterAlbedo, waterRoughness, waterMetallic, NdotL);
+        specular *= light * NdotL * (1.0 - shadow);
 
         vec3 ambient = waterAlbedo * ao * 0.25;
         vec3 diffuse = waterAlbedo * light * NdotL * (1.0 - shadow);
@@ -481,8 +484,8 @@ void main()
         vec4 ssr = texture(dSSR, out_uv);
 
         vec3 viewDir = normalize(cameraPos - worldPos);
-        vec3 specular = calculateSpecular(lightDir, normal, viewDir, terrainAlbedo, roughness, metallic, NdotL);
-        specular *= (1.0 - shadow);
+        specular = calculateSpecular(lightDir, normal, viewDir, terrainAlbedo, roughness, metallic, NdotL);
+        specular *= light * NdotL * (1.0 - shadow);
 
         float ambientStrength = isUnderwater ? 0.45 : 0.25;
         vec3 ambient = terrainAlbedo * ao * ambientStrength;

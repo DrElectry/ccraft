@@ -24,6 +24,9 @@ char __servip[256] = "127.0.0.1";
 int __onserv;
 int __servport;
 char __nickname[32];
+float blur_strength = 0.0f;
+float aperture = 0.0f;
+
 
 int WIDTH = 1280;
 int HEIGHT = 720;
@@ -301,6 +304,15 @@ int main(int argc, char* argv[]) {
 
         game_tick(delta_time);
 
+        if (underwater) {
+                blur_strength+=240.0f*delta_time;
+        } else {
+                blur_strength-=60.0f*delta_time;
+        }
+
+        blur_strength = clamp(blur_strength, 16.0f, 128.0f);
+        aperture = clamp(aperture, 1.0f, 3.0f);
+
         if (wireframe==1 || potato_mode==1) {
             fbo_unbind();
 
@@ -392,9 +404,10 @@ int main(int argc, char* argv[]) {
         program_use(&ssao);
         fbo_bind_depth_texture(&gbuffer, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
+        fbo_bind_texture(&gbuffer, 2, 2);
         program_set_int(&ssao, "gDepth", 0);
         program_set_int(&ssao, "gNormal", 1);
-        program_set_mat4(&ssao, "inverseProjection", (float*)inv_projection);
+        program_set_int(&ssao, "gPosition", 2);
         program_set_mat4(&ssao, "proj", (float*)projection);
         program_set_mat4(&ssao, "view", (float*)view);
         program_set_vec2(&ssao, "ssao_ratio", ssao_ratio);
@@ -486,25 +499,29 @@ int main(int argc, char* argv[]) {
         fbo_bind_texture(&gbuffer, 0, 0);
         fbo_bind_texture(&gbuffer, 1, 1);
         fbo_bind_depth_texture(&gbuffer, 2);
-        fbo_bind_texture(&water_gbuffer, 0, 3);
-        fbo_bind_texture(&water_gbuffer, 1, 4);
-        fbo_bind_depth_texture(&water_gbuffer, 5);
-        fbo_bind_depth_texture(&shadow1, 6);
-        fbo_bind_depth_texture(&shadow2, 7);
-        fbo_bind_texture(&ssaofb, 0, 8);
-        fbo_bind_texture(&ssrfb, 0, 9);
-        texture_bind(&caustics, 10);
+        fbo_bind_texture(&gbuffer, 3, 3);
+        fbo_bind_texture(&water_gbuffer, 0, 4);
+        fbo_bind_texture(&water_gbuffer, 1, 5);
+        fbo_bind_depth_texture(&water_gbuffer, 6);
+        fbo_bind_texture(&water_gbuffer, 3, 7);
+        fbo_bind_depth_texture(&shadow1, 8);
+        fbo_bind_depth_texture(&shadow2, 9);
+        fbo_bind_texture(&ssaofb, 0, 10);
+        fbo_bind_texture(&ssrfb, 0, 11);
+        texture_bind(&caustics, 12);
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
         program_set_int(&main, "gDepth", 2);
-        program_set_int(&main, "gWaterAlbedo", 3);
-        program_set_int(&main, "gWaterNormal", 4);
-        program_set_int(&main, "gWaterDepth", 5);
-        program_set_int(&main, "dShadow1", 6);
-        program_set_int(&main, "dShadow2", 7);
-        program_set_int(&main, "dSSAO", 8);
-        program_set_int(&main, "dSSR", 9);
-        program_set_int(&main, "caustics", 10);
+        program_set_int(&main, "gRoughness", 3);
+        program_set_int(&main, "gWaterAlbedo", 4);
+        program_set_int(&main, "gWaterNormal", 5);
+        program_set_int(&main, "gWaterDepth", 6);
+        program_set_int(&main, "gWaterRoughness", 7);
+        program_set_int(&main, "dShadow1", 8);
+        program_set_int(&main, "dShadow2", 9);
+        program_set_int(&main, "dSSAO", 10);
+        program_set_int(&main, "dSSR", 11);
+        program_set_int(&main, "caustics", 12);
         program_set_float(&main, "time", time);
         program_set_mat4(&main, "light_space_matrix_far", (float*)light_space_matrix_far);
         program_set_mat4(&main, "light_space_matrix_near", (float*)light_space_matrix_near);
@@ -584,6 +601,7 @@ int main(int argc, char* argv[]) {
         program_set_int(&pp, "colorTexture", 0);
         program_set_int(&pp, "depthTexture", 1);
         program_set_int(&pp, "bloomTexture", 2);
+        program_set_float(&pp, "blurStrength", blur_strength);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
 #ifdef DEBUG_PERF

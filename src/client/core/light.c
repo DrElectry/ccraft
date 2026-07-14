@@ -58,7 +58,7 @@ void chunk_light_free(Chunk* chunk) {
 
 typedef struct {
     int x, y, z;
-} Pos3;
+} Pos3; // shit
 
 static void compute_sky_light_full(uint8_t* sky_out, const ChunkNeighbors* n, int cx, int cz) {
     int min_wx = (cx - 1) * CHUNK_WIDTH;

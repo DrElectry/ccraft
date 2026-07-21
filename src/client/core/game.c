@@ -319,7 +319,7 @@ void game_init() {
     text_pos[1]-=20.0f;
     text_pos[0]-=28.0f;
     text_pos[2]+=1.0f;
-    glm_vec3_copy((vec3){0.5f, 0.5f, 0.5f}, text->scale);
+    glm_vec3_copy((vec3){0.25f, 0.25f, 0.25f}, text->scale);
 
     player_walk_model = gltf_load_skinned_request("assets/models/player.glb");
     if (!player_walk_model) {
@@ -370,10 +370,12 @@ void game_init() {
     particle_manager_init(&particle_manager);
 
     vec3 gravity = { 0.0f, -9.81f, 0.0f };
-    vec3 start_vel = { 0.0f, 5.0f, 0.0f };
+    vec3 start_vel = {0.0f, 6.0f, 0.0f };
+    vec3 aabb_size = {2.0f, 0.5f, 0.5f};
     test = particle_system_create(&particle_manager, gravity, start_vel, 10.0f, text);
-    particle_system_set_emission(test, 15.0f, text_pos);
-    particle_system_set_vel_spread(test, (vec3){5.0f, 0.0f, 5.0f});
+    particle_system_set_emission(test, 5.0f, text_pos);
+    particle_system_set_vel_spread(test, (vec3){2.5f, 0.0f, 2.5f});
+    particle_system_set_collision(test, aabb_size, 0.6f, 2.0f, 4.0f);
 
     sun_time = 11000; // idk it initializes as garbage so
     update_sun_direction();
@@ -416,7 +418,7 @@ void game_tick(float dt_p) {
     vec3 player_pos;
     player_get_pos(&player, player_pos);
 
-    particle_manager_update(&particle_manager, dt);
+    particle_manager_update(&particle_manager, &world, dt);
 
     if (__onserv) {
         chat_update(dt);
@@ -471,8 +473,6 @@ void game_tick(float dt_p) {
     player_get_eye(&player, eye);
 
     world_tick(&world, eye);
-
-    text->rot[1]+=dt;
 
     if (chat_is_typing()) {
         network_update_remotes(dt);

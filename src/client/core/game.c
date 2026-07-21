@@ -26,6 +26,7 @@
 #include "utils/gltf.h"
 #include "network/remote.h"
 #include "core/particle.h"
+#include "physics/softbody.h"
 #include <GLFW/glfw3.h>
 #include <string.h>
 #include <stdio.h>
@@ -109,6 +110,9 @@ static float break_delay = 0.0f;
 static float place_delay = 0.0f;
 
 static float g_footstep_delay = 0.0f;
+
+/* Softbody test */
+static Softbody* g_test_softbody = NULL;
 
 static uint8_t remote_names_active[CLIENT_MAX_REMOTES] = {0};
 static char remote_nick_buf[CLIENT_MAX_REMOTES][MAX_NICKNAME_LEN];
@@ -377,6 +381,26 @@ void game_init() {
     particle_system_set_vel_spread(test, (vec3){2.5f, 0.0f, 2.5f});
     particle_system_set_collision(test, aabb_size, 0.6f, 2.0f, 4.0f);
 
+    {
+        SoftbodyConfig sb_cfg = {
+            .bone_count = 256,        // adjust based on mesh complexity
+            .spring_k = 500.0f,
+            .damping = 20.0f,
+            .gravity = -9.81f,
+            .bounce_factor = 0.2f
+        };
+        g_test_softbody = softbody_load("assets/models/sphere.obj", &sb_cfg);
+        if (g_test_softbody) {
+            softbody_set_transform(g_test_softbody,
+                (vec3){text_pos[0], text_pos[1]+10.0f, text_pos[2]},
+                (vec3){0.0f, 0.0f, 0.0f},
+                (vec3){1.0f, 1.0f, 1.0f});
+            printf("game_init: Softbody loaded successfully\n");
+        } else {
+            printf("game_init: Failed to load softbody\n");
+        }
+    }
+
     sun_time = 11000; // idk it initializes as garbage so
     update_sun_direction();
 
@@ -612,6 +636,8 @@ void game_tick(float dt_p) {
     remote_update(dt);
     network_update_remotes(dt);
 
+    softbody_update(g_test_softbody, &world, dt);
+
     update_debug_texts();
 }
 
@@ -838,6 +864,16 @@ void game_draw(float time) {
 
     particle_manager_render(&particle_manager, &model_program);
 
+    /* Render softbody (uses skinned_prog for bone UBO) */
+    if (g_test_softbody) {
+        program_use(&skinned_prog);
+        texture_bind(&textt, 0);
+        texture_bind(&brightt, 1);
+        program_set_mat4(&skinned_prog, "projection", (float*)projection);
+        program_set_mat4(&skinned_prog, "view", (float*)view);
+        softbody_render(g_test_softbody, &skinned_prog);
+    }
+
     vec3 eye;
     player_get_eye(&player, eye);
 
@@ -941,6 +977,17 @@ void game_draw_misc() {
     program_set_mat4(&model_program, "view", (float*)view);
 
     particle_manager_render(&particle_manager, &model_program);
+
+    /* Render softbody (uses skinned_prog for bone UBO) */
+    if (g_test_softbody) {
+        program_use(&skinned_prog);
+        texture_bind(&textt, 0);
+        texture_bind(&brightt, 1);
+    
+        program_set_mat4(&skinned_prog, "projection", (float*)projection);
+        program_set_mat4(&skinned_prog, "view", (float*)view);
+        softbody_render(g_test_softbody, &skinned_prog);
+    }
 
     vec3 eye;
     player_get_eye(&player, eye);
@@ -1107,6 +1154,12 @@ void game_destroy() {
     
     sound_pack_destroy();
     world_destroy(&world);
+
+    /* Cleanup softbody */
+    if (g_test_softbody) {
+        softbody_destroy(g_test_softbody);
+        g_test_softbody = NULL;
+    }
 
     (void)walk_anim;
     if (player_walk_model) {

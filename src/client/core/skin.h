@@ -59,7 +59,7 @@ typedef struct {
     int is_playing;
 } AnimState;
 
-#define SKIN_MAX_BONES 64
+#define SKIN_MAX_BONES 256
 
 typedef struct {
     VBO vbo;

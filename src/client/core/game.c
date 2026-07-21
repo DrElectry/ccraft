@@ -25,13 +25,23 @@
 #include "gui/chat.h"
 #include "utils/gltf.h"
 #include "network/remote.h"
+#include "core/particle.h"
 #include <GLFW/glfw3.h>
 #include <string.h>
 #include <stdio.h>
 
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! READ THIS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// If you want to modify the game rendering code, you have to understand that
+// Deferred renderer uses functions game_draw_misc() game_shadow_pass() game_draw_water_gbuffer() game_draw_terrain_gbuffer()
+// Potato mode renderer uses only game_draw(), which is unused in deferred renderer
+// amazing code, i know
+
 Player player;
 HText name, fps;
 World world;
+
+ParticleManager particle_manager;
+ParticleSystem* test;
 
 uint16_t blockih = IRON_BLOCK;
 
@@ -39,7 +49,9 @@ File world_file;
 
 int underwater = 0;
 
-Program c, water_prog, bc, shadow, shadow_w, cursora;
+vec3 text_pos;
+
+Program c, water_prog, bc, shadow, shadow_w, cursora, model_program;
 
 static Skinned_render_request* player_walk_model;
 static Skinned_render_request* player_jump_model;
@@ -243,6 +255,7 @@ void game_init() {
     player_init(&player);
 
     gfx_program_create(&skinned_prog, "assets/misc/skin.vsh", "assets/misc/skin.fsh");
+    gfx_program_create(&model_program, "assets/misc/model.vsh", "assets/misc/model.fsh");
     skinned_program_init(&skinned_prog);
 
     gfx_program_create(&shadow, "assets/tile/tile.vsh", "assets/tile/shadow.fsh");
@@ -301,14 +314,12 @@ void game_init() {
 
     text = obj_load_render_request("assets/models/text.obj");
 
-    player_get_pos(&player, text->pos);
+    player_get_pos(&player, text_pos);
 
-    text->pos[1]-=20.0f;
-    text->pos[0]-=28.0f;
-    text->pos[2]+=1.0f;
-    text->scale[0]=0.5f;
-    text->scale[1]=0.5f;
-    text->scale[2]=0.5f;
+    text_pos[1]-=20.0f;
+    text_pos[0]-=28.0f;
+    text_pos[2]+=1.0f;
+    glm_vec3_copy((vec3){0.5f, 0.5f, 0.5f}, text->scale);
 
     player_walk_model = gltf_load_skinned_request("assets/models/player.glb");
     if (!player_walk_model) {
@@ -356,6 +367,14 @@ void game_init() {
         bone_neck
     );
 
+    particle_manager_init(&particle_manager);
+
+    vec3 gravity = { 0.0f, -9.81f, 0.0f };
+    vec3 start_vel = { 0.0f, 5.0f, 0.0f };
+    test = particle_system_create(&particle_manager, gravity, start_vel, 10.0f, text);
+    particle_system_set_emission(test, 15.0f, text_pos);
+    particle_system_set_vel_spread(test, (vec3){5.0f, 0.0f, 5.0f});
+
     sun_time = 11000; // idk it initializes as garbage so
     update_sun_direction();
 
@@ -394,6 +413,11 @@ void game_tick(float dt_p) {
     text_create(&fps, fps_text, 0x0F, 1.0f, 0, 16);
     text_create(&name, "0.30", 0x0F, 1.0f, 0, 0);
 
+    vec3 player_pos;
+    player_get_pos(&player, player_pos);
+
+    particle_manager_update(&particle_manager, dt);
+
     if (__onserv) {
         chat_update(dt);
     }
@@ -407,8 +431,6 @@ void game_tick(float dt_p) {
         static float last_send = 0.0f;
         float now = (float)glfwGetTime();
         if (now - last_send >= 1.0f / UPDATE_RATE) {
-            vec3 player_pos;
-            player_get_pos(&player, player_pos);
             uint8_t walking = chat_is_typing() ? 0 :
                 ((input_down(&input_manager, GLFW_KEY_W) || input_down(&input_manager, GLFW_KEY_A) ||
                   input_down(&input_manager, GLFW_KEY_S) || input_down(&input_manager, GLFW_KEY_D)) ? 1 : 0);
@@ -802,15 +824,19 @@ void game_draw(float time) {
 
     world_render(&world, &c, &water_prog, 1, 1);
 
-    program_use(&c);
-
     if (__onserv) {
         remote_draw(projection, view, dt, 0);
     }
 
+    program_use(&model_program);
     texture_bind(&textt, 0);
     texture_bind(&brightt, 1);
-    gfx_render(text, &c);
+    program_set_int(&model_program, "tex", 0);
+    program_set_int(&model_program, "roug", 1);
+    program_set_mat4(&model_program, "proj", (float*)projection);
+    program_set_mat4(&model_program, "view", (float*)view);
+
+    particle_manager_render(&particle_manager, &model_program);
 
     vec3 eye;
     player_get_eye(&player, eye);
@@ -905,7 +931,16 @@ void game_draw_misc() {
     program_use(&c);
     texture_bind(&textt, 0);
     texture_bind(&brightt, 1);
-    gfx_render(text, &c);
+
+    program_use(&model_program);
+    texture_bind(&textt, 0);
+    texture_bind(&brightt, 1);
+    program_set_int(&model_program, "tex", 0);
+    program_set_int(&model_program, "roug", 1);
+    program_set_mat4(&model_program, "proj", (float*)projection);
+    program_set_mat4(&model_program, "view", (float*)view);
+
+    particle_manager_render(&particle_manager, &model_program);
 
     vec3 eye;
     player_get_eye(&player, eye);

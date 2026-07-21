@@ -20,7 +20,7 @@ extern Player player;
 
 extern int shadow_dirty;
 
-float clamp(float value, float min,  float max)
+static float clamp(float value, float min,  float max)
 {
     if (value < min)
         return min;

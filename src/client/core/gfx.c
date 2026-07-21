@@ -49,8 +49,6 @@ void gfx_chunk_packet_static_request(Render_request* r) {
     vbo_attr(4, 3, 15 * sizeof(float), 9);
     vbo_attr(5, 3, 15 * sizeof(float), 12);
 
-
-
     r->cache.vbo = vbo;
     r->cache.vao = vao;
     r->cache.ebo = ebo;

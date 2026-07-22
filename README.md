@@ -18,7 +18,7 @@ the goal of this project is to have a flexible, cross platform, easily moddable 
 - sounds, ambience.
 - WIP Multiplayer.
 
-- and other advanced features like skeletal animations or 
+- other advanced features like skeletal animation, PDB softbody physics, particle systems.
 
 ### Planned features
 

@@ -20,6 +20,8 @@
 
 // it is also pretty buggy, but enjoy 8>
 
+// GLB SUPPORT IS W.I.P
+
 #ifdef SOFTBODY_USE_GLTF
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h" // yes, yes, i know that i already have loader for obj and glb

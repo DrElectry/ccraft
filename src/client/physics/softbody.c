@@ -8,6 +8,7 @@
 #include "core/tile.h"
 
 #include <cglm/cglm.h>
+#include <cglm/quat.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -26,6 +27,7 @@ typedef struct {
     vec3 position;
     vec3 velocity;
     int   pinned;
+    versor rotation;
 } SoftbodyBoneNode;
 
 typedef struct {
@@ -486,6 +488,7 @@ Softbody* softbody_load(const char* path, const SoftbodyConfig* cfg) {
         glm_vec3_copy(sb->rest_positions[i], sb->bones[i].position);
         glm_vec3_zero(sb->bones[i].velocity);
         sb->bones[i].pinned = 0;
+        glm_quat_identity(sb->bones[i].rotation);
         glm_vec3_add(center, sb->rest_positions[i], center);
     }
     glm_vec3_scale(center, 1.0f / target_bones, sb->rest_center);
@@ -496,6 +499,7 @@ Softbody* softbody_load(const char* path, const SoftbodyConfig* cfg) {
     glm_vec3_copy(sb->rest_center, sb->bones[center_idx].position);
     glm_vec3_zero(sb->bones[center_idx].velocity);
     sb->bones[center_idx].pinned = 0;
+    glm_quat_identity(sb->bones[center_idx].rotation);
     sb->center_bone_index = center_idx;
 
     float* skin_w = (float*)calloc((size_t)raw_vcount, 8 * sizeof(float));
@@ -605,6 +609,121 @@ static inline void vec3_inv_transform(vec3 dst, const vec3 src, const mat4 inv_m
     dst[2] = res[2];
 }
 
+static void compute_bone_rotations(Softbody* sb) {
+    if (!sb || !sb->bones || !sb->springs) return;
+    
+    int n = sb->bone_count;
+    
+    for (int i = 0; i < n; i++) {
+        vec3 rest_com = {0,0,0};
+        vec3 deformed_com = {0,0,0};
+        int neighbor_count = 0;
+        
+        glm_vec3_add(rest_com, sb->rest_positions[i], rest_com);
+        glm_vec3_add(deformed_com, sb->bones[i].position, deformed_com);
+        neighbor_count = 1;
+        
+        for (int s = 0; s < sb->spring_count; s++) {
+            SoftbodySpring* spring = &sb->springs[s];
+            int neighbor = -1;
+            
+            if (spring->bone_a == i) neighbor = spring->bone_b;
+            else if (spring->bone_b == i) neighbor = spring->bone_a;
+            else continue;
+            
+            glm_vec3_add(rest_com, sb->rest_positions[neighbor], rest_com);
+            glm_vec3_add(deformed_com, sb->bones[neighbor].position, deformed_com);
+            neighbor_count++;
+        }
+        
+        if (neighbor_count < 3) {
+            glm_quat_identity(sb->bones[i].rotation);
+            continue;
+        }
+        
+        glm_vec3_scale(rest_com, 1.0f/neighbor_count, rest_com);
+        glm_vec3_scale(deformed_com, 1.0f/neighbor_count, deformed_com);
+        
+        mat3 Apq = GLM_MAT3_ZERO_INIT;
+        float weight_sum = 0.0f;
+        
+        vec3 rest_rel, deformed_rel;
+        glm_vec3_sub(sb->rest_positions[i], rest_com, rest_rel);
+        glm_vec3_sub(sb->bones[i].position, deformed_com, deformed_rel);
+        
+        float wi = 1.0f;
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 3; col++) {
+                Apq[row][col] += wi * rest_rel[row] * deformed_rel[col];
+            }
+        }
+        weight_sum += wi;
+        
+        for (int s = 0; s < sb->spring_count; s++) {
+            SoftbodySpring* spring = &sb->springs[s];
+            int neighbor = -1;
+            
+            if (spring->bone_a == i) neighbor = spring->bone_b;
+            else if (spring->bone_b == i) neighbor = spring->bone_a;
+            else continue;
+            
+            glm_vec3_sub(sb->rest_positions[neighbor], rest_com, rest_rel);
+            glm_vec3_sub(sb->bones[neighbor].position, deformed_com, deformed_rel);
+            
+            float w = 1.0f;
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 3; col++) {
+                    Apq[row][col] += w * rest_rel[row] * deformed_rel[col];
+                }
+            }
+            weight_sum += w;
+        }
+        
+        if (weight_sum > 0.0f) {
+            float inv_weight = 1.0f / weight_sum;
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 3; col++) {
+                    Apq[row][col] *= inv_weight;
+                }
+            }
+        }
+        
+        mat3 R;
+        glm_mat3_copy(Apq, R);
+        
+        for (int iter = 0; iter < 5; iter++) {
+            mat3 R_inv, R_trans;
+            float det = glm_mat3_det(R);
+            
+            if (fabsf(det) < 0.000001f) {
+                glm_mat3_identity(R);
+                break;
+            }
+            
+            glm_mat3_inv(R, R_inv);
+            glm_mat3_transpose_to(R_inv, R_trans);
+            
+            float diff = 0.0f;
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 3; col++) {
+                    float new_val = 0.5f * (R[row][col] + R_trans[row][col]);
+                    diff += fabsf(new_val - R[row][col]);
+                    R[row][col] = new_val;
+                }
+            }
+            
+            if (diff < 0.0001f) break;
+        }
+        
+        glm_mat3_quat(R, sb->bones[i].rotation);
+        
+        float qlen = glm_quat_norm(sb->bones[i].rotation);
+        if (qlen < 0.0001f || isnan(qlen)) {
+            glm_quat_identity(sb->bones[i].rotation);
+        }
+    }
+}
+
 void softbody_update(Softbody* sb, World* world, float dt) {
     if (!sb || !sb->bones || !sb->springs || !world) return;
 
@@ -630,13 +749,10 @@ void softbody_update(Softbody* sb, World* world, float dt) {
         return;
     }
 
-    // Pre-compute world-space gravity and transform to local space
-    // This ensures gravity always points down in world space regardless of softbody rotation
     vec3 world_gravity = {0.0f, grav, 0.0f};
     vec3 local_gravity;
     vec3_inv_transform(local_gravity, world_gravity, sb->inv_rot_model);
 
-    // Pre-compute reference radius for volume preservation
     vec3 rest_center_world;
     glm_mat4_mulv3(sb->model, sb->rest_center, 1.0f, rest_center_world);
 
@@ -652,7 +768,6 @@ void softbody_update(Softbody* sb, World* world, float dt) {
     if (moving_count > 0) rest_avg_radius /= moving_count;
 
     for (int step = 0; step < SUBSTEPS; step++) {
-        // Reset pinned bones to their rest positions
         for (int i = 0; i < n; i++) {
             if (sb->bones[i].pinned) {
                 glm_vec3_copy(sb->rest_positions[i], sb->bones[i].position);
@@ -660,10 +775,8 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             }
         }
 
-        // Zero out accelerations
         memset(accelerations, 0, (size_t)n * sizeof(vec3));
 
-        // Apply gravity to all non-pinned bones
         for (int i = 0; i < n; i++) {
             if (sb->bones[i].pinned) continue;
             accelerations[i][0] += local_gravity[0];
@@ -671,7 +784,6 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             accelerations[i][2] += local_gravity[2];
         }
 
-        // Compute spring forces
         for (int si = 0; si < sb->spring_count; si++) {
             const SoftbodySpring* s = &sb->springs[si];
             int ba = s->bone_a;
@@ -691,7 +803,6 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             float displacement = dist - rest_len;
             float spring_force_mag = -spring_k * displacement;
 
-            // Spring damping
             vec3 relVel;
             glm_vec3_sub(sb->bones[ba].velocity, sb->bones[bb].velocity, relVel);
             float velAlongSpring = glm_vec3_dot(relVel, dir);
@@ -699,7 +810,6 @@ void softbody_update(Softbody* sb, World* world, float dt) {
 
             float total_force = spring_force_mag + dampForce;
 
-            // Apply forces
             if (!sb->bones[ba].pinned) {
                 accelerations[ba][0] += dir[0] * total_force;
                 accelerations[ba][1] += dir[1] * total_force;
@@ -712,7 +822,6 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             }
         }
 
-        // Apply velocity damping
         for (int i = 0; i < n; i++) {
             if (sb->bones[i].pinned) continue;
             accelerations[i][0] -= damping * sb->bones[i].velocity[0];
@@ -720,16 +829,13 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             accelerations[i][2] -= damping * sb->bones[i].velocity[2];
         }
 
-        // Integrate velocities and positions (semi-implicit Euler)
         for (int i = 0; i < n; i++) {
             if (sb->bones[i].pinned) continue;
 
-            // Update velocity
             sb->bones[i].velocity[0] += accelerations[i][0] * sub_dt;
             sb->bones[i].velocity[1] += accelerations[i][1] * sub_dt;
             sb->bones[i].velocity[2] += accelerations[i][2] * sub_dt;
 
-            // Clamp maximum velocity
             float speed = sqrtf(sb->bones[i].velocity[0] * sb->bones[i].velocity[0] +
                                sb->bones[i].velocity[1] * sb->bones[i].velocity[1] +
                                sb->bones[i].velocity[2] * sb->bones[i].velocity[2]);
@@ -741,13 +847,11 @@ void softbody_update(Softbody* sb, World* world, float dt) {
                 sb->bones[i].velocity[2] *= scl;
             }
 
-            // Update position
             sb->bones[i].position[0] += sb->bones[i].velocity[0] * sub_dt;
             sb->bones[i].position[1] += sb->bones[i].velocity[1] * sub_dt;
             sb->bones[i].position[2] += sb->bones[i].velocity[2] * sub_dt;
         }
 
-        // Transform all bones to world space for collision detection
         for (int i = 0; i < n; i++) {
             vec4 lp = { sb->bones[i].position[0], sb->bones[i].position[1],
                         sb->bones[i].position[2], 1.0f };
@@ -757,7 +861,6 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             world_positions[i][1] = wp[1];
             world_positions[i][2] = wp[2];
 
-            // Transform velocities to world space (direction only, no translation)
             vec4 lv = { sb->bones[i].velocity[0], sb->bones[i].velocity[1],
                         sb->bones[i].velocity[2], 0.0f };
             vec4 wv;
@@ -767,14 +870,12 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             world_velocities[i][2] = wv[2];
         }
 
-        // World-space collision with environment
         for (int i = 0; i < n; i++) {
             if (sb->bones[i].pinned) continue;
             resolve_collision(world, world_positions[i], world_velocities[i],
                               bone_radius, bounce);
         }
 
-        // Self-collision between bones in world space
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
                 if (sb->bones[i].pinned && sb->bones[j].pinned) continue;
@@ -809,7 +910,6 @@ void softbody_update(Softbody* sb, World* world, float dt) {
                         world_positions[j][2] -= nz * corr_b;
                     }
 
-                    // Velocity response for self-collision
                     float relVel_x = world_velocities[i][0] - world_velocities[j][0];
                     float relVel_y = world_velocities[i][1] - world_velocities[j][1];
                     float relVel_z = world_velocities[i][2] - world_velocities[j][2];
@@ -834,7 +934,6 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             }
         }
 
-        // Volume preservation (only if there are unpinned bones)
         if (moving_count > 0) {
             vec3 world_center = {0,0,0};
             for (int i = 0; i < n; i++) {
@@ -872,7 +971,6 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             }
         }
 
-        // Transform back to local space
         for (int i = 0; i < n; i++) {
             vec4 wp = { world_positions[i][0], world_positions[i][1],
                         world_positions[i][2], 1.0f };
@@ -882,10 +980,8 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             sb->bones[i].position[1] = lp[1];
             sb->bones[i].position[2] = lp[2];
 
-            // Transform velocities back to local space
             vec3_inv_transform(sb->bones[i].velocity, world_velocities[i], sb->inv_model);
 
-            // Safety check for NaN
             if (isnan(sb->bones[i].position[0]) || isnan(sb->bones[i].position[1]) || isnan(sb->bones[i].position[2])) {
                 glm_vec3_copy(sb->rest_positions[i], sb->bones[i].position);
                 glm_vec3_zero(sb->bones[i].velocity);
@@ -918,57 +1014,116 @@ static void softbody_update_normals(Softbody* sb) {
     int ic = sb->index_count;
     const float* verts = sb->vertices;
 
+    // Allocate arrays
+    vec3* bind_positions = (vec3*)malloc((size_t)vc * sizeof(vec3));
     vec3* deformed = (vec3*)malloc((size_t)vc * sizeof(vec3));
-    if (!deformed) return;
+    if (!bind_positions || !deformed) {
+        free(bind_positions);
+        free(deformed);
+        return;
+    }
 
+    // Compute deformed positions WITH bone rotation
     for (int i = 0; i < vc; i++) {
         vec3 bind_pos = { verts[i*16+0], verts[i*16+1], verts[i*16+2] };
-        vec3 dpos = { 0.0f, 0.0f, 0.0f };
+        
+        // Store bind-pose position
+        bind_positions[i][0] = bind_pos[0];
+        bind_positions[i][1] = bind_pos[1];
+        bind_positions[i][2] = bind_pos[2];
 
         const float* ids_f = &verts[i*16+8];
         const float* w     = &verts[i*16+12];
 
+        // Compute weighted average of bone transformations
+        vec3 dpos = { 0.0f, 0.0f, 0.0f };
         float wsum = w[0] + w[1] + w[2] + w[3];
+        
         if (wsum >= 0.0001f) {
             for (int j = 0; j < 4; j++) {
                 int bj = (int)ids_f[j];
                 if (bj >= 0 && bj < sb->bone_count && w[j] > 0.0f) {
                     float weight = w[j] / wsum;
-                    dpos[0] += weight * (sb->bones[bj].position[0] - sb->rest_positions[bj][0]);
-                    dpos[1] += weight * (sb->bones[bj].position[1] - sb->rest_positions[bj][1]);
-                    dpos[2] += weight * (sb->bones[bj].position[2] - sb->rest_positions[bj][2]);
+                    
+                    // Get the vertex offset from bone in rest pose
+                    vec3 rest_offset;
+                    glm_vec3_sub(bind_pos, sb->rest_positions[bj], rest_offset);
+                    
+                    // Rotate the offset by the bone's current rotation
+                    vec3 rotated_offset;
+                    glm_quat_rotatev(sb->bones[bj].rotation, rest_offset, rotated_offset);
+                    
+                    // The new position is bone position + rotated offset
+                    vec3 new_pos;
+                    glm_vec3_add(sb->bones[bj].position, rotated_offset, new_pos);
+                    
+                    // Accumulate weighted position
+                    dpos[0] += weight * new_pos[0];
+                    dpos[1] += weight * new_pos[1];
+                    dpos[2] += weight * new_pos[2];
                 }
             }
+            
+            deformed[i][0] = dpos[0];
+            deformed[i][1] = dpos[1];
+            deformed[i][2] = dpos[2];
+        } else {
+            // No bone influence, keep original position
+            deformed[i][0] = bind_pos[0];
+            deformed[i][1] = bind_pos[1];
+            deformed[i][2] = bind_pos[2];
         }
-
-        deformed[i][0] = bind_pos[0] + dpos[0];
-        deformed[i][1] = bind_pos[1] + dpos[1];
-        deformed[i][2] = bind_pos[2] + dpos[2];
     }
 
+    // Initialize normals array to zero
     vec3* normals = (vec3*)calloc((size_t)vc, sizeof(vec3));
-    if (!normals) { free(deformed); return; }
+    if (!normals) {
+        free(bind_positions);
+        free(deformed);
+        return;
+    }
 
+    // Compute face normals with orientation check
     for (int k = 0; k < ic; k += 3) {
         int i0 = sb->indices[k];
         int i1 = sb->indices[k+1];
         int i2 = sb->indices[k+2];
 
+        // Compute original face normal from bind-pose positions
+        vec3 o1, o2, N_orig;
+        glm_vec3_sub(bind_positions[i1], bind_positions[i0], o1);
+        glm_vec3_sub(bind_positions[i2], bind_positions[i0], o2);
+        glm_vec3_cross(o1, o2, N_orig);
+
+        // Compute deformed face normal
         vec3 e1, e2, N;
         glm_vec3_sub(deformed[i1], deformed[i0], e1);
         glm_vec3_sub(deformed[i2], deformed[i0], e2);
         glm_vec3_cross(e1, e2, N);
 
+        // If the deformed normal points opposite to the original, flip it
+        if (glm_vec3_dot(N, N_orig) < 0.0f) {
+            glm_vec3_negate(N);
+        }
+
+        // Accumulate the corrected normal to all three vertices
         glm_vec3_add(normals[i0], N, normals[i0]);
         glm_vec3_add(normals[i1], N, normals[i1]);
         glm_vec3_add(normals[i2], N, normals[i2]);
     }
+
+    free(bind_positions);
     free(deformed);
 
+    // Copy vertex data and update normals in GPU buffer
     float* gpu_data = (float*)malloc((size_t)vc * 16 * sizeof(float));
-    if (!gpu_data) { free(normals); return; }
+    if (!gpu_data) {
+        free(normals);
+        return;
+    }
     memcpy(gpu_data, verts, (size_t)vc * 16 * sizeof(float));
 
+    // Normalize the accumulated normals and store them
     for (int i = 0; i < vc; i++) {
         float len = glm_vec3_norm(normals[i]);
         if (len > 0.0001f) {
@@ -976,9 +1131,11 @@ static void softbody_update_normals(Softbody* sb) {
             gpu_data[i*16+6] = normals[i][1] / len;
             gpu_data[i*16+7] = normals[i][2] / len;
         }
+        // If length is near zero, keep original normals from verts
     }
     free(normals);
 
+    // Upload updated vertex data to GPU
     glBindBuffer(GL_ARRAY_BUFFER, sb->skinned->gpu.vbo.id);
     glBufferSubData(GL_ARRAY_BUFFER, 0, (size_t)vc * 16 * sizeof(float), gpu_data);
     free(gpu_data);
@@ -988,10 +1145,18 @@ void softbody_render(Softbody* sb, Program* prog) {
     if (!sb || !sb->skeleton || !sb->skinned || !prog) return;
     if (sb->index_count < 3) return;
 
+    compute_bone_rotations(sb);
+
     for (int i = 0; i < sb->bone_count; i++) {
         mat4 offset;
+        mat4 rot_matrix;
+        
+        glm_quat_mat4(sb->bones[i].rotation, rot_matrix);
+        
         glm_mat4_identity(offset);
         glm_translate(offset, sb->bones[i].position);
+        glm_mat4_mul(offset, rot_matrix, offset);
+        
         skeleton_set_bone_offset(sb->skeleton, i, offset);
     }
 

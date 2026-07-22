@@ -19,8 +19,8 @@
 #include "cgltf.h"
 #endif
 
-#define SUBSTEPS 32
-#define MAX_BONE_RADIUS 0.05f
+#define SUBSTEPS 16
+#define MAX_BONE_RADIUS 0.15f
 
 typedef struct {
     vec3 position;
@@ -52,6 +52,8 @@ struct Softbody {
     mat4 model;
     mat4 inv_model;
     mat4 inv_rot_model;
+    vec3 rest_center;
+    int center_bone_index;
 };
 
 static float vec3_dist_sq(const vec3 a, const vec3 b) {
@@ -73,12 +75,13 @@ static void resolve_collision(World* world, vec3 pos, vec3 vel, float radius, fl
     int max_y = (int)floorf(pos[1] + radius);
     int min_z = (int)floorf(pos[2] - radius);
     int max_z = (int)floorf(pos[2] + radius);
+    int hit = 0;
     
     for (int cx = min_x; cx <= max_x; cx++) {
         for (int cy = min_y; cy <= max_y; cy++) {
             for (int cz = min_z; cz <= max_z; cz++) {
                 if (!is_solid_block(world, cx, cy, cz)) continue;
-                
+                hit = 1;
                 float half = 0.5f;
                 float block_cx = (float)cx + half;
                 float block_cy = (float)cy + half;
@@ -119,10 +122,6 @@ static void resolve_collision(World* world, vec3 pos, vec3 vel, float radius, fl
                         vel[1] -= (1.0f + bounce) * vel_normal * ny;
                         vel[2] -= (1.0f + bounce) * vel_normal * nz;
                     }
-                    
-                    vel[0] *= 0.95f;
-                    vel[1] *= 0.95f;
-                    vel[2] *= 0.95f;
                 }
                 else if (dist_sq < 0.000001f) {
                     float dx_c = pos[0] - block_cx;
@@ -145,6 +144,11 @@ static void resolve_collision(World* world, vec3 pos, vec3 vel, float radius, fl
                 }
             }
         }
+    }
+    if (hit) {
+        vel[0] *= 0.95f;
+        vel[1] *= 0.95f;
+        vel[2] *= 0.95f;
     }
 }
 
@@ -390,208 +394,6 @@ static void add_spring(SoftbodySpring** springs, int* count,
     s->rest_length = rest;
 }
 
-typedef struct {
-    int a, b, c, d;
-} Tetra;
-
-static float orient3d_det(const vec3 a, const vec3 b, const vec3 c, const vec3 d) {
-    float adx = a[0] - d[0], ady = a[1] - d[1], adz = a[2] - d[2];
-    float bdx = b[0] - d[0], bdy = b[1] - d[1], bdz = b[2] - d[2];
-    float cdx = c[0] - d[0], cdy = c[1] - d[1], cdz = c[2] - d[2];
-    return adx * (bdy * cdz - bdz * cdy)
-         + ady * (bdz * cdx - bdx * cdz)
-         + adz * (bdx * cdy - bdy * cdx);
-}
-
-static int circumsphere_contains(const vec3 a, const vec3 b, const vec3 c, const vec3 d, const vec3 p) {
-    float ax = a[0] - p[0], ay = a[1] - p[1], az = a[2] - p[2];
-    float bx = b[0] - p[0], by = b[1] - p[1], bz = b[2] - p[2];
-    float cx = c[0] - p[0], cy = c[1] - p[1], cz = c[2] - p[2];
-    float dx = d[0] - p[0], dy = d[1] - p[1], dz = d[2] - p[2];
-    float len_a = ax*ax + ay*ay + az*az;
-    float len_b = bx*bx + by*by + bz*bz;
-    float len_c = cx*cx + cy*cy + cz*cz;
-    float len_d = dx*dx + dy*dy + dz*dz;
-    float det = ax * (by * (cz*len_d - dz*len_c) + cy * (dz*len_b - bz*len_d) + dy * (bz*len_c - cz*len_b))
-              - ay * (bx * (cz*len_d - dz*len_c) + cx * (dz*len_b - bz*len_d) + dx * (bz*len_c - cz*len_b))
-              + az * (bx * (cy*len_d - dy*len_c) + cx * (dy*len_b - by*len_d) + dx * (by*len_c - cy*len_b))
-              - len_a * (bx * (cy*dz - dy*cz) + cx * (dy*bz - by*dz) + dx * (by*cz - cy*bz));
-    return det > 0.0f;
-}
-
-typedef struct {
-    int v[3];
-} Face;
-
-static int face_eq(Face f1, Face f2) {
-    int sorted1[3] = {f1.v[0], f1.v[1], f1.v[2]};
-    int sorted2[3] = {f2.v[0], f2.v[1], f2.v[2]};
-    for (int i = 0; i < 3; i++) {
-        for (int j = i+1; j < 3; j++) {
-            if (sorted1[i] > sorted1[j]) { int t = sorted1[i]; sorted1[i] = sorted1[j]; sorted1[j] = t; }
-            if (sorted2[i] > sorted2[j]) { int t = sorted2[i]; sorted2[i] = sorted2[j]; sorted2[j] = t; }
-        }
-    }
-    return sorted1[0]==sorted2[0] && sorted1[1]==sorted2[1] && sorted1[2]==sorted2[2];
-}
-
-static void delaunay_tetrahedralize(const vec3* points, int num_points,
-                                     Tetra** out_tets, int* out_tet_count) {
-    *out_tets = NULL;
-    *out_tet_count = 0;
-    if (num_points < 4) return;
-
-    vec3 bmin, bmax;
-    glm_vec3_copy(points[0], bmin);
-    glm_vec3_copy(points[0], bmax);
-    for (int i = 1; i < num_points; i++) {
-        if (points[i][0] < bmin[0]) bmin[0] = points[i][0];
-        if (points[i][1] < bmin[1]) bmin[1] = points[i][1];
-        if (points[i][2] < bmin[2]) bmin[2] = points[i][2];
-        if (points[i][0] > bmax[0]) bmax[0] = points[i][0];
-        if (points[i][1] > bmax[1]) bmax[1] = points[i][1];
-        if (points[i][2] > bmax[2]) bmax[2] = points[i][2];
-    }
-    float dx = bmax[0] - bmin[0], dy = bmax[1] - bmin[1], dz = bmax[2] - bmin[2];
-    float max_extent = dx;
-    if (dy > max_extent) max_extent = dy;
-    if (dz > max_extent) max_extent = dz;
-    if (max_extent < 0.001f) max_extent = 1.0f;
-    float off = max_extent * 10.0f;
-
-    vec3 super[4];
-    glm_vec3_copy((vec3){bmin[0]-off, bmin[1]-off, bmin[2]-off}, super[0]);
-    glm_vec3_copy((vec3){bmax[0]+off, bmin[1]-off, bmin[2]-off}, super[1]);
-    glm_vec3_copy((vec3){bmin[0]-off, bmax[1]+off, bmin[2]-off}, super[2]);
-    glm_vec3_copy((vec3){bmin[0]-off, bmin[1]-off, bmax[2]+off}, super[3]);
-
-    int tet_cap = 64;
-    int tet_count = 1;
-    Tetra* tets = malloc(tet_cap * sizeof(Tetra));
-    tets[0] = (Tetra){0, 1, 2, 3};
-
-    vec3* all_pts = malloc((num_points + 4) * sizeof(vec3));
-    memcpy(all_pts, super, 4 * sizeof(vec3));
-    memcpy(all_pts + 4, points, num_points * sizeof(vec3));
-
-    for (int pi = 4; pi < num_points + 4; pi++) {
-        int bad_cap = 64, bad_count = 0;
-        int* bad = malloc(bad_cap * sizeof(int));
-        for (int ti = 0; ti < tet_count; ti++) {
-            Tetra t = tets[ti];
-            if (circumsphere_contains(all_pts[t.a], all_pts[t.b], all_pts[t.c], all_pts[t.d], all_pts[pi])) {
-                if (bad_count >= bad_cap) { bad_cap *= 2; bad = realloc(bad, bad_cap * sizeof(int)); }
-                bad[bad_count++] = ti;
-            }
-        }
-
-        Face* faces = NULL;
-        int face_cap = 0, face_count = 0;
-        for (int bi = 0; bi < bad_count; bi++) {
-            Tetra t = tets[bad[bi]];
-            int fv[4][3] = {{t.a,t.b,t.c}, {t.a,t.b,t.d}, {t.a,t.c,t.d}, {t.b,t.c,t.d}};
-            for (int f = 0; f < 4; f++) {
-                Face ft;
-                ft.v[0] = fv[f][0]; ft.v[1] = fv[f][1]; ft.v[2] = fv[f][2];
-                int found = 0;
-                for (int fi = 0; fi < face_count; fi++) {
-                    if (face_eq(faces[fi], ft)) {
-                        for (int k = fi; k < face_count-1; k++) faces[k] = faces[k+1];
-                        face_count--;
-                        found = 1;
-                        break;
-                    }
-                }
-                if (!found) {
-                    if (face_count >= face_cap) {
-                        face_cap = face_cap ? face_cap*2 : 64;
-                        faces = realloc(faces, face_cap * sizeof(Face));
-                    }
-                    faces[face_count++] = ft;
-                }
-            }
-        }
-
-        int new_tet_cap = tet_count + face_count;
-        Tetra* new_tets = malloc(new_tet_cap * sizeof(Tetra));
-        int new_count = 0;
-        for (int ti = 0; ti < tet_count; ti++) {
-            int bad_flag = 0;
-            for (int bi = 0; bi < bad_count; bi++) if (ti == bad[bi]) { bad_flag = 1; break; }
-            if (!bad_flag) new_tets[new_count++] = tets[ti];
-        }
-        for (int fi = 0; fi < face_count; fi++) {
-            Face ft = faces[fi];
-            if (orient3d_det(all_pts[ft.v[0]], all_pts[ft.v[1]], all_pts[ft.v[2]], all_pts[pi]) > 0) {
-                new_tets[new_count++] = (Tetra){ft.v[0], ft.v[1], ft.v[2], pi};
-            } else {
-                new_tets[new_count++] = (Tetra){ft.v[0], ft.v[2], ft.v[1], pi};
-            }
-        }
-
-        free(tets);
-        tets = new_tets;
-        tet_count = new_count;
-        free(bad);
-        free(faces);
-    }
-
-    int final_cap = tet_count;
-    Tetra* final_tets = malloc(final_cap * sizeof(Tetra));
-    int final_count = 0;
-    for (int ti = 0; ti < tet_count; ti++) {
-        Tetra t = tets[ti];
-        if (t.a >= 4 && t.b >= 4 && t.c >= 4 && t.d >= 4) {
-            final_tets[final_count++] = (Tetra){t.a-4, t.b-4, t.c-4, t.d-4};
-        }
-    }
-    free(tets);
-    free(all_pts);
-
-    *out_tets = final_tets;
-    *out_tet_count = final_count;
-}
-
-static void build_nearest_neighbour_springs(Softbody* sb) {
-    int n = sb->bone_count;
-    if (n < 2) return;
-    int k = n < 5 ? n-1 : 4;
-    for (int i = 0; i < n; i++) {
-        typedef struct { int idx; float dist; } Neighbour;
-        Neighbour neigh[256];
-        int nn = 0;
-        for (int j = 0; j < n; j++) {
-            if (i == j) continue;
-            float d = sqrtf(vec3_dist_sq(sb->rest_positions[i], sb->rest_positions[j]));
-            neigh[nn].idx = j;
-            neigh[nn].dist = d;
-            nn++;
-        }
-        for (int a = 0; a < nn-1; a++) {
-            int best = a;
-            for (int b = a+1; b < nn; b++)
-                if (neigh[b].dist < neigh[best].dist) best = b;
-            Neighbour tmp = neigh[a];
-            neigh[a] = neigh[best];
-            neigh[best] = tmp;
-        }
-        int add = k < nn ? k : nn;
-        for (int a = 0; a < add; a++) {
-            int j = neigh[a].idx;
-            int exists = 0;
-            for (int s = 0; s < sb->spring_count; s++) {
-                if ((sb->springs[s].bone_a == i && sb->springs[s].bone_b == j) ||
-                    (sb->springs[s].bone_a == j && sb->springs[s].bone_b == i)) {
-                    exists = 1; break;
-                }
-            }
-            if (!exists) {
-                add_spring(&sb->springs, &sb->spring_count, i, j, neigh[a].dist);
-            }
-        }
-    }
-}
-
 Softbody* softbody_load(const char* path, const SoftbodyConfig* cfg) {
     if (!path) return NULL;
 
@@ -612,10 +414,10 @@ Softbody* softbody_load(const char* path, const SoftbodyConfig* cfg) {
     } else {
         memset(&conf, 0, sizeof(conf));
     }
-    if (conf.bone_count <= 0) conf.bone_count = 16;
-    if (conf.spring_k <= 0.0f) conf.spring_k = 30.0f;
-    if (conf.damping <= 0.0f)  conf.damping = 5.0f;
-    if (conf.gravity == 0.0f)  conf.gravity = -9.81f;
+    if (conf.bone_count <= 0) conf.bone_count = 64;
+    if (conf.spring_k <= 0.0f) conf.spring_k = 300.0f;
+    if (conf.damping <= 0.0f)  conf.damping = 3.0f;
+    if (conf.gravity == 0.0f)  conf.gravity = -20.0f;
     if (conf.bounce_factor <= 0.0f) conf.bounce_factor = 0.15f;
 
     int target_bones = conf.bone_count;
@@ -629,127 +431,108 @@ Softbody* softbody_load(const char* path, const SoftbodyConfig* cfg) {
     sb->scale[0] = sb->scale[1] = sb->scale[2] = 1.0f;
     memcpy(&sb->config, &conf, sizeof(conf));
 
-    vec3* centroids = calloc(target_bones, sizeof(vec3));
+    int* sampled_indices = (int*)malloc((size_t)target_bones * sizeof(int));
+    if (!sampled_indices) { softbody_destroy(sb); free(raw_verts); free(raw_indices); return NULL; }
+
     int first = (int)(RANDF() * raw_vcount);
     if (first >= raw_vcount) first = raw_vcount - 1;
-    glm_vec3_copy((vec3){raw_verts[first*8], raw_verts[first*8+1], raw_verts[first*8+2]}, centroids[0]);
+    sampled_indices[0] = first;
 
-    float* d2 = malloc(raw_vcount * sizeof(float));
+    float* min_dists = (float*)malloc((size_t)raw_vcount * sizeof(float));
+    if (!min_dists) { free(sampled_indices); softbody_destroy(sb); free(raw_verts); free(raw_indices); return NULL; }
+    for (int i = 0; i < raw_vcount; i++) {
+        vec3 v = { raw_verts[i*8+0], raw_verts[i*8+1], raw_verts[i*8+2] };
+        vec3 s = { raw_verts[first*8+0], raw_verts[first*8+1], raw_verts[first*8+2] };
+        min_dists[i] = vec3_dist_sq(v, s);
+    }
+
     for (int j = 1; j < target_bones; j++) {
-        float sum = 0.0f;
+        int best_idx = 0;
+        float best_dist = -1.0f;
         for (int i = 0; i < raw_vcount; i++) {
-            float min_d = FLT_MAX;
-            vec3 vp = {raw_verts[i*8], raw_verts[i*8+1], raw_verts[i*8+2]};
-            for (int k = 0; k < j; k++) {
-                float dd = vec3_dist_sq(vp, centroids[k]);
-                if (dd < min_d) min_d = dd;
+            if (min_dists[i] > best_dist) {
+                best_dist = min_dists[i];
+                best_idx = i;
             }
-            d2[i] = min_d;
-            sum += min_d;
         }
-        float r = RANDF() * sum;
-        int idx = 0;
-        float acc = 0.0f;
-        for (; idx < raw_vcount; idx++) {
-            acc += d2[idx];
-            if (acc >= r) break;
-        }
-        if (idx == raw_vcount) idx = raw_vcount-1;
-        glm_vec3_copy((vec3){raw_verts[idx*8], raw_verts[idx*8+1], raw_verts[idx*8+2]}, centroids[j]);
-    }
-    free(d2);
-
-    int* closest = malloc(raw_vcount * sizeof(int));
-    for (int iter = 0; iter < 10; iter++) {
+        sampled_indices[j] = best_idx;
+        vec3 sp = { raw_verts[best_idx*8+0], raw_verts[best_idx*8+1], raw_verts[best_idx*8+2] };
         for (int i = 0; i < raw_vcount; i++) {
-            float best = FLT_MAX;
-            int best_c = 0;
-            vec3 vp = {raw_verts[i*8], raw_verts[i*8+1], raw_verts[i*8+2]};
-            for (int c = 0; c < target_bones; c++) {
-                float d = vec3_dist_sq(vp, centroids[c]);
-                if (d < best) { best = d; best_c = c; }
-            }
-            closest[i] = best_c;
-        }
-        for (int c = 0; c < target_bones; c++) {
-            vec3 sum = {0,0,0};
-            int cnt = 0;
-            for (int i = 0; i < raw_vcount; i++) {
-                if (closest[i] == c) {
-                    sum[0] += raw_verts[i*8+0]; sum[1] += raw_verts[i*8+1]; sum[2] += raw_verts[i*8+2];
-                    cnt++;
-                }
-            }
-            if (cnt > 0) {
-                sum[0] /= cnt; sum[1] /= cnt; sum[2] /= cnt;
-                glm_vec3_copy(sum, centroids[c]);
-            }
+            vec3 vp = { raw_verts[i*8+0], raw_verts[i*8+1], raw_verts[i*8+2] };
+            float d = vec3_dist_sq(vp, sp);
+            if (d < min_dists[i]) min_dists[i] = d;
         }
     }
-    free(closest);
+    free(min_dists);
 
-    sb->bone_count = target_bones;
-    sb->rest_positions = calloc(target_bones, sizeof(vec3));
-    sb->bones = calloc(target_bones, sizeof(SoftbodyBoneNode));
+    int total_bones = target_bones + 1;
+    sb->bone_count = total_bones;
+    sb->rest_positions = (vec3*)calloc((size_t)total_bones, sizeof(vec3));
+    sb->bones = (SoftbodyBoneNode*)calloc((size_t)total_bones, sizeof(SoftbodyBoneNode));
     if (!sb->rest_positions || !sb->bones) {
-        free(centroids);
+        free(sampled_indices);
         softbody_destroy(sb);
         free(raw_verts);
         free(raw_indices);
         return NULL;
     }
 
+    vec3 center = {0,0,0};
     for (int i = 0; i < target_bones; i++) {
-        glm_vec3_copy(centroids[i], sb->rest_positions[i]);
-        glm_vec3_copy(centroids[i], sb->bones[i].position);
+        int vi = sampled_indices[i];
+        sb->rest_positions[i][0] = raw_verts[vi*8+0];
+        sb->rest_positions[i][1] = raw_verts[vi*8+1];
+        sb->rest_positions[i][2] = raw_verts[vi*8+2];
+        glm_vec3_copy(sb->rest_positions[i], sb->bones[i].position);
         glm_vec3_zero(sb->bones[i].velocity);
         sb->bones[i].pinned = 0;
+        glm_vec3_add(center, sb->rest_positions[i], center);
     }
-    free(centroids);
+    glm_vec3_scale(center, 1.0f / target_bones, sb->rest_center);
+    free(sampled_indices);
 
-    float* skin_w = calloc(raw_vcount, 8 * sizeof(float));
+    int center_idx = target_bones;
+    glm_vec3_copy(sb->rest_center, sb->rest_positions[center_idx]);
+    glm_vec3_copy(sb->rest_center, sb->bones[center_idx].position);
+    glm_vec3_zero(sb->bones[center_idx].velocity);
+    sb->bones[center_idx].pinned = 0;
+    sb->center_bone_index = center_idx;
+
+    float* skin_w = (float*)calloc((size_t)raw_vcount, 8 * sizeof(float));
     if (!skin_w) {
         softbody_destroy(sb);
         free(raw_verts);
         free(raw_indices);
         return NULL;
     }
-    compute_skin_weights(raw_verts, raw_vcount, sb->rest_positions, sb->bone_count, skin_w);
+    compute_skin_weights(raw_verts, raw_vcount, sb->rest_positions, target_bones, skin_w);
     sb->skin_weights = skin_w;
 
     sb->springs = NULL;
     sb->spring_count = 0;
 
-    Tetra* tets = NULL;
-    int tet_count = 0;
-    delaunay_tetrahedralize(sb->rest_positions, sb->bone_count, &tets, &tet_count);
-    int spring_from_delaunay = 0;
-    if (tets && tet_count > 0) {
-        for (int t = 0; t < tet_count; t++) {
-            int ids[4] = {tets[t].a, tets[t].b, tets[t].c, tets[t].d};
-            for (int i = 0; i < 4; i++) {
-                for (int j = i+1; j < 4; j++) {
-                    int ba = ids[i], bb = ids[j];
-                    int already = 0;
-                    for (int s = 0; s < sb->spring_count; s++) {
-                        if ((sb->springs[s].bone_a == ba && sb->springs[s].bone_b == bb) ||
-                            (sb->springs[s].bone_a == bb && sb->springs[s].bone_b == ba)) {
-                            already = 1; break;
-                        }
-                    }
-                    if (!already) {
-                        float rest = sqrtf(vec3_dist_sq(sb->rest_positions[ba], sb->rest_positions[bb]));
-                        add_spring(&sb->springs, &sb->spring_count, ba, bb, rest);
-                        spring_from_delaunay++;
-                    }
-                }
+    float max_dist_sq = 0.0f;
+    for (int i = 0; i < target_bones; i++) {
+        for (int j = i + 1; j < target_bones; j++) {
+            float d = vec3_dist_sq(sb->rest_positions[i], sb->rest_positions[j]);
+            if (d > max_dist_sq) max_dist_sq = d;
+        }
+    }
+    float max_spring_dist = sqrtf(max_dist_sq) * 0.7f;
+    float max_spring_dist_sq = max_spring_dist * max_spring_dist;
+
+    for (int i = 0; i < target_bones; i++) {
+        for (int j = i + 1; j < target_bones; j++) {
+            float dist_sq = vec3_dist_sq(sb->rest_positions[i], sb->rest_positions[j]);
+            if (dist_sq < max_spring_dist_sq) {
+                add_spring(&sb->springs, &sb->spring_count, i, j, sqrtf(dist_sq));
             }
         }
-        free(tets);
     }
 
-    if (spring_from_delaunay < sb->bone_count * 2) {
-        build_nearest_neighbour_springs(sb);
+    for (int i = 0; i < target_bones; i++) {
+        float dist = sqrtf(vec3_dist_sq(sb->rest_positions[i], sb->rest_positions[center_idx]));
+        add_spring(&sb->springs, &sb->spring_count, i, center_idx, dist);
     }
 
     sb->grid_x = sb->bone_count;
@@ -762,7 +545,7 @@ Softbody* softbody_load(const char* path, const SoftbodyConfig* cfg) {
     sb->index_count = raw_icount;
     free(raw_verts);
 
-    sb->skeleton = softbody_build_skeleton(sb->rest_positions, sb->bone_count);
+    sb->skeleton = softbody_build_skeleton(sb->rest_positions, target_bones);
     if (!sb->skeleton) { softbody_destroy(sb); return NULL; }
 
     sb->skinned = (Skinned*)calloc(1, sizeof(Skinned));
@@ -806,6 +589,7 @@ void softbody_destroy(Softbody* sb) {
 
 void softbody_set_transform(Softbody* sb, vec3 pos, vec3 rot, vec3 scale) {
     if (!sb) return;
+
     glm_vec3_copy(pos,   sb->pos);
     glm_vec3_copy(rot,   sb->rot);
     glm_vec3_copy(scale, sb->scale);
@@ -829,7 +613,7 @@ void softbody_update(Softbody* sb, World* world, float dt) {
     float damping  = sb->config.damping;
     float grav     = sb->config.gravity;
     float bounce   = sb->config.bounce_factor;
-    float spring_damp = 2.0f;
+    float spring_damp = 10.0f;
     float max_scale = fmaxf(sb->scale[0], fmaxf(sb->scale[1], sb->scale[2]));
     float bone_radius = MAX_BONE_RADIUS * max_scale;
 
@@ -846,20 +630,48 @@ void softbody_update(Softbody* sb, World* world, float dt) {
         return;
     }
 
+    // Pre-compute world-space gravity and transform to local space
+    // This ensures gravity always points down in world space regardless of softbody rotation
+    vec3 world_gravity = {0.0f, grav, 0.0f};
+    vec3 local_gravity;
+    vec3_inv_transform(local_gravity, world_gravity, sb->inv_rot_model);
+
+    // Pre-compute reference radius for volume preservation
+    vec3 rest_center_world;
+    glm_mat4_mulv3(sb->model, sb->rest_center, 1.0f, rest_center_world);
+
+    float rest_avg_radius = 0.0f;
+    int moving_count = 0;
+    for (int i = 0; i < n; i++) {
+        if (sb->bones[i].pinned) continue;
+        vec3 rest_world;
+        glm_mat4_mulv3(sb->model, sb->rest_positions[i], 1.0f, rest_world);
+        rest_avg_radius += glm_vec3_distance(rest_center_world, rest_world);
+        moving_count++;
+    }
+    if (moving_count > 0) rest_avg_radius /= moving_count;
+
     for (int step = 0; step < SUBSTEPS; step++) {
-        memset(accelerations, 0, (size_t)n * sizeof(vec3));
-
-        vec4 world_grav = { 0.0f, grav, 0.0f, 0.0f };
-        vec4 local_grav;
-        glm_mat4_mulv(sb->inv_rot_model, world_grav, local_grav);
-
+        // Reset pinned bones to their rest positions
         for (int i = 0; i < n; i++) {
-            if (sb->bones[i].pinned) continue;
-            accelerations[i][0] += local_grav[0];
-            accelerations[i][1] += local_grav[1];
-            accelerations[i][2] += local_grav[2];
+            if (sb->bones[i].pinned) {
+                glm_vec3_copy(sb->rest_positions[i], sb->bones[i].position);
+                glm_vec3_zero(sb->bones[i].velocity);
+            }
         }
 
+        // Zero out accelerations
+        memset(accelerations, 0, (size_t)n * sizeof(vec3));
+
+        // Apply gravity to all non-pinned bones
+        for (int i = 0; i < n; i++) {
+            if (sb->bones[i].pinned) continue;
+            accelerations[i][0] += local_gravity[0];
+            accelerations[i][1] += local_gravity[1];
+            accelerations[i][2] += local_gravity[2];
+        }
+
+        // Compute spring forces
         for (int si = 0; si < sb->spring_count; si++) {
             const SoftbodySpring* s = &sb->springs[si];
             int ba = s->bone_a;
@@ -879,6 +691,7 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             float displacement = dist - rest_len;
             float spring_force_mag = -spring_k * displacement;
 
+            // Spring damping
             vec3 relVel;
             glm_vec3_sub(sb->bones[ba].velocity, sb->bones[bb].velocity, relVel);
             float velAlongSpring = glm_vec3_dot(relVel, dir);
@@ -886,6 +699,7 @@ void softbody_update(Softbody* sb, World* world, float dt) {
 
             float total_force = spring_force_mag + dampForce;
 
+            // Apply forces
             if (!sb->bones[ba].pinned) {
                 accelerations[ba][0] += dir[0] * total_force;
                 accelerations[ba][1] += dir[1] * total_force;
@@ -898,6 +712,7 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             }
         }
 
+        // Apply velocity damping
         for (int i = 0; i < n; i++) {
             if (sb->bones[i].pinned) continue;
             accelerations[i][0] -= damping * sb->bones[i].velocity[0];
@@ -905,13 +720,16 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             accelerations[i][2] -= damping * sb->bones[i].velocity[2];
         }
 
+        // Integrate velocities and positions (semi-implicit Euler)
         for (int i = 0; i < n; i++) {
             if (sb->bones[i].pinned) continue;
 
+            // Update velocity
             sb->bones[i].velocity[0] += accelerations[i][0] * sub_dt;
             sb->bones[i].velocity[1] += accelerations[i][1] * sub_dt;
             sb->bones[i].velocity[2] += accelerations[i][2] * sub_dt;
 
+            // Clamp maximum velocity
             float speed = sqrtf(sb->bones[i].velocity[0] * sb->bones[i].velocity[0] +
                                sb->bones[i].velocity[1] * sb->bones[i].velocity[1] +
                                sb->bones[i].velocity[2] * sb->bones[i].velocity[2]);
@@ -923,11 +741,13 @@ void softbody_update(Softbody* sb, World* world, float dt) {
                 sb->bones[i].velocity[2] *= scl;
             }
 
+            // Update position
             sb->bones[i].position[0] += sb->bones[i].velocity[0] * sub_dt;
             sb->bones[i].position[1] += sb->bones[i].velocity[1] * sub_dt;
             sb->bones[i].position[2] += sb->bones[i].velocity[2] * sub_dt;
         }
 
+        // Transform all bones to world space for collision detection
         for (int i = 0; i < n; i++) {
             vec4 lp = { sb->bones[i].position[0], sb->bones[i].position[1],
                         sb->bones[i].position[2], 1.0f };
@@ -937,6 +757,7 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             world_positions[i][1] = wp[1];
             world_positions[i][2] = wp[2];
 
+            // Transform velocities to world space (direction only, no translation)
             vec4 lv = { sb->bones[i].velocity[0], sb->bones[i].velocity[1],
                         sb->bones[i].velocity[2], 0.0f };
             vec4 wv;
@@ -946,14 +767,18 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             world_velocities[i][2] = wv[2];
         }
 
+        // World-space collision with environment
         for (int i = 0; i < n; i++) {
             if (sb->bones[i].pinned) continue;
             resolve_collision(world, world_positions[i], world_velocities[i],
                               bone_radius, bounce);
         }
 
+        // Self-collision between bones in world space
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
+                if (sb->bones[i].pinned && sb->bones[j].pinned) continue;
+
                 float dx = world_positions[i][0] - world_positions[j][0];
                 float dy = world_positions[i][1] - world_positions[j][1];
                 float dz = world_positions[i][2] - world_positions[j][2];
@@ -984,6 +809,7 @@ void softbody_update(Softbody* sb, World* world, float dt) {
                         world_positions[j][2] -= nz * corr_b;
                     }
 
+                    // Velocity response for self-collision
                     float relVel_x = world_velocities[i][0] - world_velocities[j][0];
                     float relVel_y = world_velocities[i][1] - world_velocities[j][1];
                     float relVel_z = world_velocities[i][2] - world_velocities[j][2];
@@ -1008,6 +834,45 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             }
         }
 
+        // Volume preservation (only if there are unpinned bones)
+        if (moving_count > 0) {
+            vec3 world_center = {0,0,0};
+            for (int i = 0; i < n; i++) {
+                if (sb->bones[i].pinned) continue;
+                glm_vec3_add(world_center, world_positions[i], world_center);
+            }
+            glm_vec3_scale(world_center, 1.0f / moving_count, world_center);
+
+            float current_avg_radius = 0.0f;
+            for (int i = 0; i < n; i++) {
+                if (sb->bones[i].pinned) continue;
+                current_avg_radius += glm_vec3_distance(world_center, world_positions[i]);
+            }
+            current_avg_radius /= moving_count;
+
+            if (current_avg_radius > 0.0001f && rest_avg_radius > 0.0001f) {
+                float ratio = rest_avg_radius / current_avg_radius;
+                float strength = 0.15f;
+                float target_ratio = 1.0f + (ratio - 1.0f) * strength;
+                if (target_ratio > 1.0f) {
+                    for (int i = 0; i < n; i++) {
+                        if (sb->bones[i].pinned) continue;
+                        vec3 dir;
+                        glm_vec3_sub(world_positions[i], world_center, dir);
+                        float len = glm_vec3_norm(dir);
+                        if (len > 0.0001f) {
+                            glm_vec3_scale(dir, 1.0f / len, dir);
+                            float new_len = len * target_ratio;
+                            world_positions[i][0] = world_center[0] + dir[0] * new_len;
+                            world_positions[i][1] = world_center[1] + dir[1] * new_len;
+                            world_positions[i][2] = world_center[2] + dir[2] * new_len;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Transform back to local space
         for (int i = 0; i < n; i++) {
             vec4 wp = { world_positions[i][0], world_positions[i][1],
                         world_positions[i][2], 1.0f };
@@ -1017,16 +882,13 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             sb->bones[i].position[1] = lp[1];
             sb->bones[i].position[2] = lp[2];
 
+            // Transform velocities back to local space
             vec3_inv_transform(sb->bones[i].velocity, world_velocities[i], sb->inv_model);
-        }
 
-        for (int i = 0; i < n; i++) {
+            // Safety check for NaN
             if (isnan(sb->bones[i].position[0]) || isnan(sb->bones[i].position[1]) || isnan(sb->bones[i].position[2])) {
-                for (int j = 0; j < n; j++) {
-                    glm_vec3_copy(sb->rest_positions[j], sb->bones[j].position);
-                    glm_vec3_zero(sb->bones[j].velocity);
-                }
-                break;
+                glm_vec3_copy(sb->rest_positions[i], sb->bones[i].position);
+                glm_vec3_zero(sb->bones[i].velocity);
             }
         }
     }

@@ -383,18 +383,18 @@ void game_init() {
 
     {
         SoftbodyConfig sb_cfg = {
-            .bone_count = 256,        // adjust based on mesh complexity
-            .spring_k = 500.0f,
-            .damping = 20.0f,
+            .bone_count = 16,        // adjust based on mesh complexity
+            .spring_k = 100.0f,
+            .damping = 8.0f,
             .gravity = -9.81f,
             .bounce_factor = 0.2f
         };
-        g_test_softbody = softbody_load("assets/models/sphere.obj", &sb_cfg);
+        g_test_softbody = softbody_load("assets/models/torus.obj", &sb_cfg);
         if (g_test_softbody) {
             softbody_set_transform(g_test_softbody,
                 (vec3){text_pos[0], text_pos[1]+10.0f, text_pos[2]},
                 (vec3){0.0f, 0.0f, 0.0f},
-                (vec3){1.0f, 1.0f, 1.0f});
+                (vec3){0.5f, 0.5f, 0.5f});
             printf("game_init: Softbody loaded successfully\n");
         } else {
             printf("game_init: Failed to load softbody\n");

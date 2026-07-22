@@ -15,13 +15,18 @@
 #include <math.h>
 #include <float.h>
 
+// soft body physics, tested on obj models
+// for very soft bodies or complex bodies increase bone count, otherwise it will look broken
+
+// it is also pretty buggy, but enjoy 8>
+
 #ifdef SOFTBODY_USE_GLTF
 #define CGLTF_IMPLEMENTATION
-#include "cgltf.h"
+#include "cgltf.h" // yes, yes, i know that i already have loader for obj and glb
 #endif
 
-#define SUBSTEPS 16
-#define MAX_BONE_RADIUS 0.15f
+#define SUBSTEPS 16 // for physics
+#define MAX_BONE_RADIUS 0.15f // careful with that because it can collapse your model
 
 typedef struct {
     vec3 position;
@@ -77,28 +82,20 @@ static void resolve_collision(World* world, vec3 pos, vec3 vel, float radius, fl
     int max_y = (int)floorf(pos[1] + radius);
     int min_z = (int)floorf(pos[2] - radius);
     int max_z = (int)floorf(pos[2] + radius);
-    int hit = 0;
     
     for (int cx = min_x; cx <= max_x; cx++) {
         for (int cy = min_y; cy <= max_y; cy++) {
             for (int cz = min_z; cz <= max_z; cz++) {
                 if (!is_solid_block(world, cx, cy, cz)) continue;
-                hit = 1;
+                
                 float half = 0.5f;
                 float block_cx = (float)cx + half;
                 float block_cy = (float)cy + half;
                 float block_cz = (float)cz + half;
                 
-                float closest_x = pos[0];
-                float closest_y = pos[1];
-                float closest_z = pos[2];
-                
-                if (closest_x < block_cx - half) closest_x = block_cx - half;
-                if (closest_x > block_cx + half) closest_x = block_cx + half;
-                if (closest_y < block_cy - half) closest_y = block_cy - half;
-                if (closest_y > block_cy + half) closest_y = block_cy + half;
-                if (closest_z < block_cz - half) closest_z = block_cz - half;
-                if (closest_z > block_cz + half) closest_z = block_cz + half;
+                float closest_x = fmaxf(block_cx - half, fminf(pos[0], block_cx + half));
+                float closest_y = fmaxf(block_cy - half, fminf(pos[1], block_cy + half));
+                float closest_z = fmaxf(block_cz - half, fminf(pos[2], block_cz + half));
                 
                 float dx = pos[0] - closest_x;
                 float dy = pos[1] - closest_y;
@@ -120,37 +117,14 @@ static void resolve_collision(World* world, vec3 pos, vec3 vel, float radius, fl
                     float vel_normal = vel[0]*nx + vel[1]*ny + vel[2]*nz;
                     
                     if (vel_normal < 0) {
-                        vel[0] -= (1.0f + bounce) * vel_normal * nx;
-                        vel[1] -= (1.0f + bounce) * vel_normal * ny;
-                        vel[2] -= (1.0f + bounce) * vel_normal * nz;
+                        float new_vel_normal = -bounce * vel_normal;
+                        vel[0] += (new_vel_normal - vel_normal) * nx;
+                        vel[1] += (new_vel_normal - vel_normal) * ny;
+                        vel[2] += (new_vel_normal - vel_normal) * nz;
                     }
-                }
-                else if (dist_sq < 0.000001f) {
-                    float dx_c = pos[0] - block_cx;
-                    float dy_c = pos[1] - block_cy;
-                    float dz_c = pos[2] - block_cz;
-                    float ax = fabsf(dx_c), ay = fabsf(dy_c), az = fabsf(dz_c);
-                    float face_x = half + radius + 0.001f;
-                    float face_y = half + radius + 0.001f;
-                    float face_z = half + radius + 0.001f;
-                    if (ax >= ay && ax >= az) {
-                        pos[0] = block_cx + (dx_c >= 0 ? face_x : -face_x);
-                    } else if (ay >= az) {
-                        pos[1] = block_cy + (dy_c >= 0 ? face_y : -face_y);
-                    } else {
-                        pos[2] = block_cz + (dz_c >= 0 ? face_z : -face_z);
-                    }
-                    vel[0] = 0;
-                    vel[1] = 0;
-                    vel[2] = 0;
                 }
             }
         }
-    }
-    if (hit) {
-        vel[0] *= 0.95f;
-        vel[1] *= 0.95f;
-        vel[2] *= 0.95f;
     }
 }
 
@@ -615,49 +589,14 @@ static void compute_bone_rotations(Softbody* sb) {
     int n = sb->bone_count;
     
     for (int i = 0; i < n; i++) {
-        vec3 rest_com = {0,0,0};
-        vec3 deformed_com = {0,0,0};
-        int neighbor_count = 0;
-        
-        glm_vec3_add(rest_com, sb->rest_positions[i], rest_com);
-        glm_vec3_add(deformed_com, sb->bones[i].position, deformed_com);
-        neighbor_count = 1;
-        
-        for (int s = 0; s < sb->spring_count; s++) {
-            SoftbodySpring* spring = &sb->springs[s];
-            int neighbor = -1;
-            
-            if (spring->bone_a == i) neighbor = spring->bone_b;
-            else if (spring->bone_b == i) neighbor = spring->bone_a;
-            else continue;
-            
-            glm_vec3_add(rest_com, sb->rest_positions[neighbor], rest_com);
-            glm_vec3_add(deformed_com, sb->bones[neighbor].position, deformed_com);
-            neighbor_count++;
-        }
-        
-        if (neighbor_count < 3) {
+        float speed = glm_vec3_norm(sb->bones[i].velocity);
+        if (sb->bones[i].pinned || speed < 0.0001f) {
             glm_quat_identity(sb->bones[i].rotation);
             continue;
         }
         
-        glm_vec3_scale(rest_com, 1.0f/neighbor_count, rest_com);
-        glm_vec3_scale(deformed_com, 1.0f/neighbor_count, deformed_com);
-        
-        mat3 Apq = GLM_MAT3_ZERO_INIT;
-        float weight_sum = 0.0f;
-        
-        vec3 rest_rel, deformed_rel;
-        glm_vec3_sub(sb->rest_positions[i], rest_com, rest_rel);
-        glm_vec3_sub(sb->bones[i].position, deformed_com, deformed_rel);
-        
-        float wi = 1.0f;
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 3; col++) {
-                Apq[row][col] += wi * rest_rel[row] * deformed_rel[col];
-            }
-        }
-        weight_sum += wi;
+        mat3 F = GLM_MAT3_IDENTITY_INIT;
+        int neighbor_count = 0;
         
         for (int s = 0; s < sb->spring_count; s++) {
             SoftbodySpring* spring = &sb->springs[s];
@@ -667,37 +606,65 @@ static void compute_bone_rotations(Softbody* sb) {
             else if (spring->bone_b == i) neighbor = spring->bone_a;
             else continue;
             
-            glm_vec3_sub(sb->rest_positions[neighbor], rest_com, rest_rel);
-            glm_vec3_sub(sb->bones[neighbor].position, deformed_com, deformed_rel);
+            float dist_rest = spring->rest_length;
+            vec3 delta_rest, delta_cur;
+            glm_vec3_sub(sb->rest_positions[neighbor], sb->rest_positions[i], delta_rest);
+            glm_vec3_sub(sb->bones[neighbor].position, sb->bones[i].position, delta_cur);
             
-            float w = 1.0f;
+            float dist_cur = glm_vec3_norm(delta_cur);
+            if (dist_cur < 0.0001f || dist_rest < 0.0001f) continue;
+            
+            float stretch = dist_cur / dist_rest;
+            if (stretch < 0.1f || stretch > 10.0f) continue;
+            
+            glm_vec3_scale(delta_rest, 1.0f / dist_rest, delta_rest);
+            glm_vec3_scale(delta_cur, 1.0f / dist_cur, delta_cur);
+            
             for (int row = 0; row < 3; row++) {
                 for (int col = 0; col < 3; col++) {
-                    Apq[row][col] += w * rest_rel[row] * deformed_rel[col];
+                    F[row][col] += delta_cur[row] * delta_rest[col];
                 }
             }
-            weight_sum += w;
+            neighbor_count++;
         }
         
-        if (weight_sum > 0.0f) {
-            float inv_weight = 1.0f / weight_sum;
-            for (int row = 0; row < 3; row++) {
-                for (int col = 0; col < 3; col++) {
-                    Apq[row][col] *= inv_weight;
-                }
+        if (neighbor_count < 2) {
+            glm_quat_identity(sb->bones[i].rotation);
+            continue;
+        }
+        
+        float inv_count = 1.0f / neighbor_count;
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 3; col++) {
+                F[row][col] *= inv_count;
             }
         }
         
         mat3 R;
-        glm_mat3_copy(Apq, R);
+        glm_mat3_copy(F, R);
         
-        for (int iter = 0; iter < 5; iter++) {
-            mat3 R_inv, R_trans;
-            float det = glm_mat3_det(R);
+        float det = glm_mat3_det(R);
+        if (fabsf(det) < 1e-6f) {
+            float blend = 0.5f;
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 3; col++) {
+                    R[row][col] = (1.0f - blend) * R[row][col] + blend * (row == col ? 1.0f : 0.0f);
+                }
+            }
+        }
+        
+        for (int iter = 0; iter < 15; iter++) {
+            mat3 R_inv, R_trans, R_new;
             
-            if (fabsf(det) < 0.000001f) {
-                glm_mat3_identity(R);
-                break;
+            det = glm_mat3_det(R);
+            if (fabsf(det) < 1e-8f) {
+                float blend = 0.5f;
+                for (int row = 0; row < 3; row++) {
+                    for (int col = 0; col < 3; col++) {
+                        R[row][col] = (1.0f - blend) * R[row][col] + blend * (row == col ? 1.0f : 0.0f);
+                    }
+                }
+                continue;
             }
             
             glm_mat3_inv(R, R_inv);
@@ -712,13 +679,43 @@ static void compute_bone_rotations(Softbody* sb) {
                 }
             }
             
-            if (diff < 0.0001f) break;
+            if (diff < 1e-6f) break;
         }
         
-        glm_mat3_quat(R, sb->bones[i].rotation);
+        float trace = R[0][0] + R[1][1] + R[2][2];
+        float q[4];
         
-        float qlen = glm_quat_norm(sb->bones[i].rotation);
-        if (qlen < 0.0001f || isnan(qlen)) {
+        if (trace > 0.0f) {
+            float s = sqrtf(trace + 1.0f) * 2.0f;
+            q[0] = (R[2][1] - R[1][2]) / s;
+            q[1] = (R[0][2] - R[2][0]) / s;
+            q[2] = (R[1][0] - R[0][1]) / s;
+            q[3] = 0.25f * s;
+        } else if (R[0][0] > R[1][1] && R[0][0] > R[2][2]) {
+            float s = sqrtf(1.0f + R[0][0] - R[1][1] - R[2][2]) * 2.0f;
+            q[0] = 0.25f * s;
+            q[1] = (R[0][1] + R[1][0]) / s;
+            q[2] = (R[0][2] + R[2][0]) / s;
+            q[3] = (R[2][1] - R[1][2]) / s;
+        } else if (R[1][1] > R[2][2]) {
+            float s = sqrtf(1.0f + R[1][1] - R[0][0] - R[2][2]) * 2.0f;
+            q[0] = (R[0][1] + R[1][0]) / s;
+            q[1] = 0.25f * s;
+            q[2] = (R[1][2] + R[2][1]) / s;
+            q[3] = (R[0][2] - R[2][0]) / s;
+        } else {
+            float s = sqrtf(1.0f + R[2][2] - R[0][0] - R[1][1]) * 2.0f;
+            q[0] = (R[0][2] + R[2][0]) / s;
+            q[1] = (R[1][2] + R[2][1]) / s;
+            q[2] = 0.25f * s;
+            q[3] = (R[1][0] - R[0][1]) / s;
+        }
+        
+        float qnorm = sqrtf(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+        if (qnorm > 1e-6f) {
+            for (int k = 0; k < 4; k++) q[k] /= qnorm;
+            glm_quat_copy(q, sb->bones[i].rotation);
+        } else {
             glm_quat_identity(sb->bones[i].rotation);
         }
     }
@@ -753,11 +750,11 @@ void softbody_update(Softbody* sb, World* world, float dt) {
     vec3 local_gravity;
     vec3_inv_transform(local_gravity, world_gravity, sb->inv_rot_model);
 
-    vec3 rest_center_world;
-    glm_mat4_mulv3(sb->model, sb->rest_center, 1.0f, rest_center_world);
-
     float rest_avg_radius = 0.0f;
     int moving_count = 0;
+    vec3 rest_center_world;
+    glm_mat4_mulv3(sb->model, sb->rest_center, 1.0f, rest_center_world);
+    
     for (int i = 0; i < n; i++) {
         if (sb->bones[i].pinned) continue;
         vec3 rest_world;
@@ -934,38 +931,45 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             }
         }
 
-        if (moving_count > 0) {
-            vec3 world_center = {0,0,0};
-            for (int i = 0; i < n; i++) {
-                if (sb->bones[i].pinned) continue;
-                glm_vec3_add(world_center, world_positions[i], world_center);
-            }
-            glm_vec3_scale(world_center, 1.0f / moving_count, world_center);
+        vec3 world_center = {0,0,0};
+        int moving = 0;
+        for (int i = 0; i < n; i++) {
+            if (sb->bones[i].pinned) continue;
+            glm_vec3_add(world_center, world_positions[i], world_center);
+            moving++;
+        }
+        if (moving > 0) {
+            glm_vec3_scale(world_center, 1.0f / moving, world_center);
+        }
 
-            float current_avg_radius = 0.0f;
-            for (int i = 0; i < n; i++) {
-                if (sb->bones[i].pinned) continue;
-                current_avg_radius += glm_vec3_distance(world_center, world_positions[i]);
-            }
-            current_avg_radius /= moving_count;
+        float current_avg_radius = 0.0f;
+        int valid_moving = 0;
+        for (int i = 0; i < n; i++) {
+            if (sb->bones[i].pinned) continue;
+            current_avg_radius += glm_vec3_distance(world_center, world_positions[i]);
+            valid_moving++;
+        }
+        if (valid_moving > 0) current_avg_radius /= valid_moving;
 
-            if (current_avg_radius > 0.0001f && rest_avg_radius > 0.0001f) {
-                float ratio = rest_avg_radius / current_avg_radius;
-                float strength = 0.15f;
-                float target_ratio = 1.0f + (ratio - 1.0f) * strength;
-                if (target_ratio > 1.0f) {
-                    for (int i = 0; i < n; i++) {
-                        if (sb->bones[i].pinned) continue;
-                        vec3 dir;
-                        glm_vec3_sub(world_positions[i], world_center, dir);
-                        float len = glm_vec3_norm(dir);
-                        if (len > 0.0001f) {
-                            glm_vec3_scale(dir, 1.0f / len, dir);
-                            float new_len = len * target_ratio;
-                            world_positions[i][0] = world_center[0] + dir[0] * new_len;
-                            world_positions[i][1] = world_center[1] + dir[1] * new_len;
-                            world_positions[i][2] = world_center[2] + dir[2] * new_len;
-                        }
+        if (spring_k < 200.0f && current_avg_radius > 0.0001f && rest_avg_radius > 0.0001f) {
+            float strength = 1.0f - (spring_k / 200.0f);
+            strength = fminf(0.5f, strength);
+            
+            float ratio = rest_avg_radius / current_avg_radius;
+            float target_ratio = 1.0f + (ratio - 1.0f) * strength;
+            
+            if (target_ratio > 1.0f) {
+                for (int i = 0; i < n; i++) {
+                    if (sb->bones[i].pinned) continue;
+                    vec3 dir;
+                    glm_vec3_sub(world_positions[i], world_center, dir);
+                    float len = glm_vec3_norm(dir);
+                    if (len > 0.0001f) {
+                        glm_vec3_scale(dir, 1.0f / len, dir);
+                        float new_len = len * target_ratio;
+                        world_positions[i][0] = world_center[0] + dir[0] * new_len;
+                        world_positions[i][1] = world_center[1] + dir[1] * new_len;
+                        world_positions[i][2] = world_center[2] + dir[2] * new_len;
                     }
                 }
             }
@@ -1006,141 +1010,6 @@ Skinned_render_request* softbody_render_request(Softbody* sb) {
     return req;
 }
 
-static void softbody_update_normals(Softbody* sb) {
-    if (!sb || !sb->skinned || sb->vertex_count < 3 || sb->index_count < 3) return;
-    if (!sb->bones || !sb->rest_positions) return;
-
-    int vc = sb->vertex_count;
-    int ic = sb->index_count;
-    const float* verts = sb->vertices;
-
-    // Allocate arrays
-    vec3* bind_positions = (vec3*)malloc((size_t)vc * sizeof(vec3));
-    vec3* deformed = (vec3*)malloc((size_t)vc * sizeof(vec3));
-    if (!bind_positions || !deformed) {
-        free(bind_positions);
-        free(deformed);
-        return;
-    }
-
-    // Compute deformed positions WITH bone rotation
-    for (int i = 0; i < vc; i++) {
-        vec3 bind_pos = { verts[i*16+0], verts[i*16+1], verts[i*16+2] };
-        
-        // Store bind-pose position
-        bind_positions[i][0] = bind_pos[0];
-        bind_positions[i][1] = bind_pos[1];
-        bind_positions[i][2] = bind_pos[2];
-
-        const float* ids_f = &verts[i*16+8];
-        const float* w     = &verts[i*16+12];
-
-        // Compute weighted average of bone transformations
-        vec3 dpos = { 0.0f, 0.0f, 0.0f };
-        float wsum = w[0] + w[1] + w[2] + w[3];
-        
-        if (wsum >= 0.0001f) {
-            for (int j = 0; j < 4; j++) {
-                int bj = (int)ids_f[j];
-                if (bj >= 0 && bj < sb->bone_count && w[j] > 0.0f) {
-                    float weight = w[j] / wsum;
-                    
-                    // Get the vertex offset from bone in rest pose
-                    vec3 rest_offset;
-                    glm_vec3_sub(bind_pos, sb->rest_positions[bj], rest_offset);
-                    
-                    // Rotate the offset by the bone's current rotation
-                    vec3 rotated_offset;
-                    glm_quat_rotatev(sb->bones[bj].rotation, rest_offset, rotated_offset);
-                    
-                    // The new position is bone position + rotated offset
-                    vec3 new_pos;
-                    glm_vec3_add(sb->bones[bj].position, rotated_offset, new_pos);
-                    
-                    // Accumulate weighted position
-                    dpos[0] += weight * new_pos[0];
-                    dpos[1] += weight * new_pos[1];
-                    dpos[2] += weight * new_pos[2];
-                }
-            }
-            
-            deformed[i][0] = dpos[0];
-            deformed[i][1] = dpos[1];
-            deformed[i][2] = dpos[2];
-        } else {
-            // No bone influence, keep original position
-            deformed[i][0] = bind_pos[0];
-            deformed[i][1] = bind_pos[1];
-            deformed[i][2] = bind_pos[2];
-        }
-    }
-
-    // Initialize normals array to zero
-    vec3* normals = (vec3*)calloc((size_t)vc, sizeof(vec3));
-    if (!normals) {
-        free(bind_positions);
-        free(deformed);
-        return;
-    }
-
-    // Compute face normals with orientation check
-    for (int k = 0; k < ic; k += 3) {
-        int i0 = sb->indices[k];
-        int i1 = sb->indices[k+1];
-        int i2 = sb->indices[k+2];
-
-        // Compute original face normal from bind-pose positions
-        vec3 o1, o2, N_orig;
-        glm_vec3_sub(bind_positions[i1], bind_positions[i0], o1);
-        glm_vec3_sub(bind_positions[i2], bind_positions[i0], o2);
-        glm_vec3_cross(o1, o2, N_orig);
-
-        // Compute deformed face normal
-        vec3 e1, e2, N;
-        glm_vec3_sub(deformed[i1], deformed[i0], e1);
-        glm_vec3_sub(deformed[i2], deformed[i0], e2);
-        glm_vec3_cross(e1, e2, N);
-
-        // If the deformed normal points opposite to the original, flip it
-        if (glm_vec3_dot(N, N_orig) < 0.0f) {
-            glm_vec3_negate(N);
-        }
-
-        // Accumulate the corrected normal to all three vertices
-        glm_vec3_add(normals[i0], N, normals[i0]);
-        glm_vec3_add(normals[i1], N, normals[i1]);
-        glm_vec3_add(normals[i2], N, normals[i2]);
-    }
-
-    free(bind_positions);
-    free(deformed);
-
-    // Copy vertex data and update normals in GPU buffer
-    float* gpu_data = (float*)malloc((size_t)vc * 16 * sizeof(float));
-    if (!gpu_data) {
-        free(normals);
-        return;
-    }
-    memcpy(gpu_data, verts, (size_t)vc * 16 * sizeof(float));
-
-    // Normalize the accumulated normals and store them
-    for (int i = 0; i < vc; i++) {
-        float len = glm_vec3_norm(normals[i]);
-        if (len > 0.0001f) {
-            gpu_data[i*16+5] = normals[i][0] / len;
-            gpu_data[i*16+6] = normals[i][1] / len;
-            gpu_data[i*16+7] = normals[i][2] / len;
-        }
-        // If length is near zero, keep original normals from verts
-    }
-    free(normals);
-
-    // Upload updated vertex data to GPU
-    glBindBuffer(GL_ARRAY_BUFFER, sb->skinned->gpu.vbo.id);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, (size_t)vc * 16 * sizeof(float), gpu_data);
-    free(gpu_data);
-}
-
 void softbody_render(Softbody* sb, Program* prog) {
     if (!sb || !sb->skeleton || !sb->skinned || !prog) return;
     if (sb->index_count < 3) return;
@@ -1159,8 +1028,6 @@ void softbody_render(Softbody* sb, Program* prog) {
         
         skeleton_set_bone_offset(sb->skeleton, i, offset);
     }
-
-    softbody_update_normals(sb);
 
     glm_vec3_copy(sb->pos,   sb->skinned->pos);
     glm_vec3_copy(sb->rot,   sb->skinned->rot);

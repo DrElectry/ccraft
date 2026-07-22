@@ -16,13 +16,14 @@ the goal of this project is to have a flexible, cross platform, easily moddable 
 - deferred rendering (effects like shadows, SSAO, SSR, bloom, DOF, vignette),
 - basic HUD,
 - sounds, ambience.
-- and even a W.I.P multiplayer ;)
+- WIP Multiplayer.
+
+- and other advanced features like skeletal animations or 
 
 ### Planned features
 
 the list is huge, but things i need to implement ASAP:
 
-- particle system,
 - cleaning up the entire project codebase,
 - more optimizations,
 - GUI.

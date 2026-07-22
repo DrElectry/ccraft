@@ -383,16 +383,16 @@ void game_init() {
 
     {
         SoftbodyConfig sb_cfg = {
-            .bone_count = 32,
-            .spring_k = 50.0f,
+            .bone_count = 16,
+            .spring_k = 100.0f,
             .damping = 1.5f,
             .gravity = -9.81f,
-            .bounce_factor = 0.2f
+            .bounce_factor = 0.0f
         };
         g_test_softbody = softbody_load("assets/models/cube.obj", &sb_cfg);
         if (g_test_softbody) {
             softbody_set_transform(g_test_softbody,
-                (vec3){text_pos[0], text_pos[1]+10.0f, text_pos[2]},
+                (vec3){text_pos[0]-0.5f, text_pos[1]+10.0f, text_pos[2]-0.5f},
                 (vec3){0.0f, 0.0f, 0.0f},
                 (vec3){0.5f, 0.5f, 0.5f});
         }
@@ -633,7 +633,7 @@ void game_tick(float dt_p) {
     remote_update(dt);
     network_update_remotes(dt);
 
-    softbody_update(g_test_softbody, &world, dt);
+    softbody_update(g_test_softbody, &world, &player.aabb, dt);
 
     update_debug_texts();
 }
@@ -861,7 +861,6 @@ void game_draw(float time) {
 
     particle_manager_render(&particle_manager, &model_program);
 
-    /* Render softbody (uses skinned_prog for bone UBO) */
     if (g_test_softbody) {
         program_use(&skinned_prog);
         texture_bind(&textt, 0);
@@ -975,7 +974,6 @@ void game_draw_misc() {
 
     particle_manager_render(&particle_manager, &model_program);
 
-    /* Render softbody (uses skinned_prog for bone UBO) */
     if (g_test_softbody) {
         program_use(&skinned_prog);
         texture_bind(&textt, 0);

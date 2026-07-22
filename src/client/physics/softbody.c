@@ -1,4 +1,5 @@
 #include "physics/softbody.h"
+#include "physics/aabb.h"
 #include "core/gfx.h"
 #include "core/skin.h"
 #include "utils/mesh_raw.h"
@@ -24,11 +25,11 @@
 
 #ifdef SOFTBODY_USE_GLTF
 #define CGLTF_IMPLEMENTATION
-#include "cgltf.h" // yes, yes, i know that i already have loader for obj and glb
+#include "cgltf.h"
 #endif
 
-#define SUBSTEPS 16 // for physics
-#define MAX_BONE_RADIUS 0.15f // careful with that because it can collapse your model
+#define SUBSTEPS 16
+#define MAX_BONE_RADIUS 0.15f
 
 typedef struct {
     vec3 position;
@@ -126,6 +127,51 @@ static void resolve_collision(World* world, vec3 pos, vec3 vel, float radius, fl
                     }
                 }
             }
+        }
+    }
+}
+
+static void resolve_player_collision(const AABB* player_aabb, vec3 pos, vec3 vel, float radius, float bounce) {
+    vec3 player_center = {
+        player_aabb->x + player_aabb->w * 0.5f,
+        player_aabb->y + player_aabb->h * 0.5f,
+        player_aabb->z + player_aabb->d * 0.5f
+    };
+    
+    vec3 player_half = {
+        player_aabb->w * 0.5f,
+        player_aabb->h * 0.5f,
+        player_aabb->d * 0.5f
+    };
+    
+    float closest_x = fmaxf(player_center[0] - player_half[0], fminf(pos[0], player_center[0] + player_half[0]));
+    float closest_y = fmaxf(player_center[1] - player_half[1], fminf(pos[1], player_center[1] + player_half[1]));
+    float closest_z = fmaxf(player_center[2] - player_half[2], fminf(pos[2], player_center[2] + player_half[2]));
+    
+    float dx = pos[0] - closest_x;
+    float dy = pos[1] - closest_y;
+    float dz = pos[2] - closest_z;
+    float dist_sq = dx*dx + dy*dy + dz*dz;
+    
+    if (dist_sq < radius * radius && dist_sq > 0.000001f) {
+        float dist = sqrtf(dist_sq);
+        float pen = radius - dist;
+        
+        float nx = dx / dist;
+        float ny = dy / dist;
+        float nz = dz / dist;
+        
+        pos[0] += nx * pen;
+        pos[1] += ny * pen;
+        pos[2] += nz * pen;
+        
+        float vel_normal = vel[0]*nx + vel[1]*ny + vel[2]*nz;
+        
+        if (vel_normal < 0) {
+            float new_vel_normal = -bounce * vel_normal;
+            vel[0] += (new_vel_normal - vel_normal) * nx;
+            vel[1] += (new_vel_normal - vel_normal) * ny;
+            vel[2] += (new_vel_normal - vel_normal) * nz;
         }
     }
 }
@@ -723,7 +769,7 @@ static void compute_bone_rotations(Softbody* sb) {
     }
 }
 
-void softbody_update(Softbody* sb, World* world, float dt) {
+void softbody_update(Softbody* sb, World* world, const AABB* player_aabb, float dt) {
     if (!sb || !sb->bones || !sb->springs || !world) return;
 
     int n          = sb->bone_count;
@@ -873,6 +919,10 @@ void softbody_update(Softbody* sb, World* world, float dt) {
             if (sb->bones[i].pinned) continue;
             resolve_collision(world, world_positions[i], world_velocities[i],
                               bone_radius, bounce);
+            if (player_aabb != NULL) {
+                resolve_player_collision(player_aabb, world_positions[i], 
+                                        world_velocities[i], bone_radius, bounce);
+            }
         }
 
         for (int i = 0; i < n; i++) {

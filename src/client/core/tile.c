@@ -223,7 +223,6 @@ void tile_pre_render_all(Program* prog, Texture* atlas, Texture* roug_tex, Textu
         glm_lookat(eye, center, up, view);
 
         glm_mat4_identity(model);
-        glm_rotate(model, last_time, (vec3){0.0f, 1.0f, 0.0f});
 
         program_use(prog);
         texture_bind(atlas, 0);

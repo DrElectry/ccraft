@@ -422,6 +422,8 @@ void game_init() {
     sun_time = 11000;
     update_sun_direction();
 
+    tile_pre_render_all(&c, &texture_atlas, &roughness, &normal);
+
     update_debug_texts();
 }
 
@@ -429,7 +431,6 @@ void game_tick(float dt_p) {
     dt=dt_p;
     last_time+=dt;
     glm_mat4_mul(projection, view, prev_view_proj);
-    tile_pre_render_all(&c, &texture_atlas, &roughness, &normal);
 
     packs_ensure_loaded();
 

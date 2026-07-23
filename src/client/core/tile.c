@@ -1,5 +1,10 @@
 #include "core/tile.h"
 #include "core/chunk.h"
+#include "core/gfx.h"
+#include "gl/fbo.h"
+#include "core/main.h"
+#include <stdlib.h>
+#include <cglm/cglm.h>
 
 const float face_vertices[] = {
     0,0,1, 1,0,1, 1,1,1, 0,1,1,
@@ -135,4 +140,112 @@ void tile_push_cube(float* vertices, unsigned int* indices, float* pos, int* v_c
     tile_push_face(vertices, indices, pos, v_cursor, i_cursor, LEFT, 0, 15);
     tile_push_face(vertices, indices, pos, v_cursor, i_cursor, UP, 0, 15);
     tile_push_face(vertices, indices, pos, v_cursor, i_cursor, DOWN, 0, 15);
+}
+
+Render_request tile_render_cache[19];
+
+void tile_create_cube_from_tile(uint16_t block_id, Render_request* out)
+{
+    const int max_faces = 6;
+    const int max_vertices = max_faces * 4;
+    const int max_indices = max_faces * 6;
+
+    float* verts = (float*)malloc(max_vertices * CHUNK_VERT_FLOATS * sizeof(float));
+    int* inds = (int*)malloc(max_indices * sizeof(int));
+
+    int v_cursor = 0;
+    int i_cursor = 0;
+
+    float pos[3] = {0.0f, 0.0f, 0.0f};
+
+    int atlas_id;
+
+    atlas_id = lookup_atlas[block_id * 6 + FRONT];
+    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, FRONT, atlas_id, 15.0f);
+
+    atlas_id = lookup_atlas[block_id * 6 + BACK];
+    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, BACK, atlas_id, 15.0f);
+
+    atlas_id = lookup_atlas[block_id * 6 + RIGHT];
+    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, RIGHT, atlas_id, 15.0f);
+
+    atlas_id = lookup_atlas[block_id * 6 + LEFT];
+    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, LEFT, atlas_id, 15.0f);
+
+    atlas_id = lookup_atlas[block_id * 6 + UP];
+    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, UP, atlas_id, 15.0f);
+
+    atlas_id = lookup_atlas[block_id * 6 + DOWN];
+    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, DOWN, atlas_id, 15.0f);
+
+    out->data = verts;
+    out->triangles = inds;
+    out->data_size = v_cursor * sizeof(float);
+    out->tri_count = i_cursor / 3;
+
+    glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, out->pos);
+    glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, out->rot);
+    glm_vec3_copy((vec3){1.0f, 1.0f, 1.0f}, out->scale);
+}
+
+FBO tile_fbos[19] = {0};
+Canvas_Render_Request tile_icons[19] = {0}; // TEMPORAL
+
+void tile_pre_render_all(Program* prog, Texture* atlas, Texture* roug_tex, Texture* norm_tex)
+{
+    for (uint16_t id = FIRST_TILE; id <= LAST_TILE; id++) {
+        tile_create_cube_from_tile(id, &tile_render_cache[id]);
+        gfx_chunk_packet_static_request(&tile_render_cache[id]);
+
+        FBO* fbo = &tile_fbos[id];
+        fbo->color_formats[0] = FBO_COLOR_RGBA16F;
+        fbo->color_formats[1] = FBO_COLOR_RGB16F;
+        fbo->color_formats[2] = FBO_COLOR_RGBA16F;
+        fbo->color_formats[3] = FBO_COLOR_RG16F;
+        fbo_create(fbo, TILE_ICON_SIZE, TILE_ICON_SIZE, 4);
+        fbo_bind(fbo);
+
+        glViewport(0, 0, TILE_ICON_SIZE, TILE_ICON_SIZE);
+        glClearColor(1.0f, 0.0f, 1.0f, 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        mat4 proj, view, model;
+        glm_mat4_identity(proj);
+        glm_ortho(-1.2f, 1.2f, -1.2f, 1.2f, -5.0f, 5.0f, proj);
+
+        glm_mat4_identity(view);
+        vec3 eye = {1.0f, 1.2f, 1.0f};
+        vec3 center = {0.0f, 0.0f, 0.0f};
+        vec3 up = {0.0f, 1.0f, 0.0f};
+        glm_lookat(eye, center, up, view);
+
+        glm_mat4_identity(model);
+
+        program_use(prog);
+        texture_bind(atlas, 0);
+        texture_bind(roug_tex, 1);
+        texture_bind(norm_tex, 2);
+        program_set_int(prog, "tex", 0);
+        program_set_int(prog, "roug", 1);
+        program_set_int(prog, "normal", 2);
+        program_set_mat4(prog, "proj", (float*)proj);
+        program_set_mat4(prog, "view", (float*)view);
+        program_set_mat4(prog, "model", (float*)model);
+
+        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+
+        vao_bind(&tile_render_cache[id].cache.vao);
+        glDrawElements(GL_TRIANGLES, tile_render_cache[id].tri_count * 3, GL_UNSIGNED_INT, NULL);
+
+        glEnable(GL_CULL_FACE);
+
+        fbo_unbind();
+        glViewport(0, 0, WIDTH, HEIGHT);
+
+        glm_vec2_copy((vec2){0.0f, 0.0f}, tile_icons[id].pos);
+        glm_vec2_copy((vec2){TILE_ICON_SIZE, -TILE_ICON_SIZE}, tile_icons[id].scale);
+        tile_icons[id].rotation = 0.0f;
+        gfx_canvas_packet_static_request(&tile_icons[id]);
+    }
 }

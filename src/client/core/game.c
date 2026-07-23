@@ -418,8 +418,10 @@ void game_init() {
         gfx_canvas_packet_static_request(&slots[i]);
     }
 
-    sun_time = 11000; // idk it initializes as garbage so
+    sun_time = 11000;
     update_sun_direction();
+
+    tile_pre_render_all(&c, &texture_atlas, &roughness, &normal);
 
     update_debug_texts();
 }
@@ -1132,6 +1134,16 @@ void game_draw_hud() {
     program_set_int(&canvas_program, "tex", 0);
     gfx_set_screen_projection(&canvas_program);
     gfx_canvas_render_batch(slots, 8, &canvas_program);
+
+    program_use(&canvas_program);
+    gfx_set_screen_projection(&canvas_program);
+    for (int id = FIRST_TILE; id <= LAST_TILE; id++) {
+        tile_icons[id].pos[0] = 64.0f + ((float)(id - FIRST_TILE) * 64.0f);
+        tile_icons[id].pos[1] = HEIGHT - 64.0f;
+        fbo_bind_texture(&tile_fbos[id], 0, 0);
+        program_set_int(&canvas_program, "tex", 0);
+        gfx_canvas_render(&tile_icons[id], &canvas_program);
+    }
 
     if (debug_texts_ready && debug) {
         for (int i = 0; i < 7; i++) {

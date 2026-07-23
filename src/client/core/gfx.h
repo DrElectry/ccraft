@@ -48,6 +48,8 @@ typedef struct {
     vec2 pos;
     vec2 scale;
     float rotation;
+
+    float alpha;
     
     GPUBuffer cache;
     int initialized;

@@ -414,6 +414,7 @@ void game_init() {
     for (int i = 0; i < 8; i++) {
         glm_vec2_copy((vec2){30.0f+((float)i*54.0f), HEIGHT-30.0f}, slots[i].pos);
         glm_vec2_copy((vec2){48.0f, 48.0f}, slots[i].scale);
+        slots[i].alpha = 0.5f;
 
         gfx_canvas_packet_static_request(&slots[i]);
     }
@@ -1138,8 +1139,8 @@ void game_draw_hud() {
     program_use(&canvas_program);
     gfx_set_screen_projection(&canvas_program);
     for (int id = FIRST_TILE; id <= LAST_TILE; id++) {
-        tile_icons[id].pos[0] = 64.0f + ((float)(id - FIRST_TILE) * 64.0f);
-        tile_icons[id].pos[1] = HEIGHT - 64.0f;
+        tile_icons[id].pos[0] = 30.0f + ((float)(id - FIRST_TILE) * 54.0f);
+        tile_icons[id].pos[1] = HEIGHT - 30.0f;
         fbo_bind_texture(&tile_fbos[id], 0, 0);
         program_set_int(&canvas_program, "tex", 0);
         gfx_canvas_render(&tile_icons[id], &canvas_program);

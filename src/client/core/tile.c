@@ -246,6 +246,7 @@ void tile_pre_render_all(Program* prog, Texture* atlas, Texture* roug_tex, Textu
         glm_vec2_copy((vec2){0.0f, 0.0f}, tile_icons[id].pos);
         glm_vec2_copy((vec2){TILE_ICON_SIZE, -TILE_ICON_SIZE}, tile_icons[id].scale);
         tile_icons[id].rotation = 0.0f;
+        tile_icons[id].alpha = 1.0f;
         gfx_canvas_packet_static_request(&tile_icons[id]);
     }
 }

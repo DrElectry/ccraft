@@ -2,6 +2,7 @@
 #include "core/chunk.h"
 #include "core/gfx.h"
 #include "gl/fbo.h"
+#include "core/game.h"
 #include "core/main.h"
 #include <stdlib.h>
 #include <cglm/cglm.h>
@@ -197,6 +198,8 @@ void tile_pre_render_all(Program* prog, Texture* atlas, Texture* roug_tex, Textu
         tile_create_cube_from_tile(id, &tile_render_cache[id]);
         gfx_chunk_packet_static_request(&tile_render_cache[id]);
 
+        fbo_free(&tile_fbos[id]);
+
         FBO* fbo = &tile_fbos[id];
         fbo->color_formats[0] = FBO_COLOR_RGBA16F;
         fbo->color_formats[1] = FBO_COLOR_RGB16F;
@@ -220,6 +223,7 @@ void tile_pre_render_all(Program* prog, Texture* atlas, Texture* roug_tex, Textu
         glm_lookat(eye, center, up, view);
 
         glm_mat4_identity(model);
+        glm_rotate(model, last_time, (vec3){0.0f, 1.0f, 0.0f});
 
         program_use(prog);
         texture_bind(atlas, 0);
@@ -248,5 +252,7 @@ void tile_pre_render_all(Program* prog, Texture* atlas, Texture* roug_tex, Textu
         tile_icons[id].rotation = 0.0f;
         tile_icons[id].alpha = 1.0f;
         gfx_canvas_packet_static_request(&tile_icons[id]);
+
+        glClearColor(0.6f, 0.7f, 0.8f, 1.0f);
     }
 }

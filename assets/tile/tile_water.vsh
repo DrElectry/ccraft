@@ -86,10 +86,10 @@ void main()
         float hz = wave(world_pos + vec3(0.0, 0.0, eps));
 
         displaced.y += h;
-        displaced.y -= 0.1;
+        displaced.y -= 0.2;
 
         vec2 noise_uv = world_pos.xz * 0.5 + vec2(1.7, 3.2) * time * 0.3;
-        displaced.y += fbm(noise_uv) * 0.05;
+        displaced.y += fbm(noise_uv) * 0.2;
 
         vec3 tangent = normalize(vec3(eps, hx - h, 0.0));
         vec3 bitangent = normalize(vec3(0.0, hz - h, eps));

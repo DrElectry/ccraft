@@ -61,13 +61,13 @@ int lookup_transparent[] = {
 };
 
 int lookup_sounds[] = {
-    0, // AIR
+    -1, // AIR
     0, // GRASS
     2, // DIRT
     0, // LEAVES
     1, // STONE
     1, // IRON_BLOCK
-    0, // WATER
+    -1, // WATER
     3, // LOG
     1, // GLASS
     1, // COAL_ORE
@@ -75,7 +75,7 @@ int lookup_sounds[] = {
     1, // GOLD_ORE
     2, // SAND
     2, // GRAVEL
-    0, // LAVA
+    -1, // LAVA
     0, // ROSE
     0, // GRASS_CROSS
     1, // BORDER

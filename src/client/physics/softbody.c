@@ -157,6 +157,36 @@ static void resolve_player_collision(const AABB* player_aabb, vec3 pos, vec3 vel
         float dist = sqrtf(dist_sq);
         float pen = radius - dist;
         
+        vec3 bone_to_center;
+        bone_to_center[0] = pos[0] - player_center[0];
+        bone_to_center[1] = pos[1] - player_center[1];
+        bone_to_center[2] = pos[2] - player_center[2];
+        float dist_to_center = sqrtf(bone_to_center[0]*bone_to_center[0] + 
+                                     bone_to_center[1]*bone_to_center[1] + 
+                                     bone_to_center[2]*bone_to_center[2]);
+        
+        if (dist_to_center < radius * 0.5f) {
+            float vel_len = sqrtf(vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2]);
+            if (vel_len > 0.001f) {
+                float nx = vel[0] / vel_len;
+                float ny = vel[1] / vel_len;
+                float nz = vel[2] / vel_len;
+                
+                pos[0] += nx * (radius + 0.01f);
+                pos[1] += ny * (radius + 0.01f);
+                pos[2] += nz * (radius + 0.01f);
+                
+                float vel_normal = vel[0]*nx + vel[1]*ny + vel[2]*nz;
+                if (vel_normal < 0) {
+                    float new_vel_normal = -bounce * vel_normal;
+                    vel[0] += (new_vel_normal - vel_normal) * nx;
+                    vel[1] += (new_vel_normal - vel_normal) * ny;
+                    vel[2] += (new_vel_normal - vel_normal) * nz;
+                }
+                return;
+            }
+        }
+        
         float nx = dx / dist;
         float ny = dy / dist;
         float nz = dz / dist;

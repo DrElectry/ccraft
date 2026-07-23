@@ -73,6 +73,7 @@ struct World;
 
 extern int lookup_ignorecollision[];
 extern int lookup_atlas[];
+extern int lookup_sounds[];
 
 void chunk_generate(Chunk* chunk, int cx, int cz);
 void chunk_neighbors_capture(ChunkNeighbors* n, struct World* world, int cx, int cz);

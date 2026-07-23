@@ -284,7 +284,6 @@ void text_draw(HText* text) {
     glDisable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
 
-    glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // shadow pass (0x08)
@@ -316,8 +315,6 @@ void text_draw(HText* text) {
 
     vao_bind(&global_vao);
     glDrawElements(GL_TRIANGLES, text->index_count, GL_UNSIGNED_INT, NULL);
-
-    glDisable(GL_BLEND);
 
     if (depth_test_enabled) glEnable(GL_DEPTH_TEST);
     glDepthMask(depth_mask);

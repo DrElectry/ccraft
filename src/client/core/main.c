@@ -173,7 +173,7 @@ int main(int argc, char* argv[]) {
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
     glfwSetInputMode(packet.glwin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    glClearColor(0.3f, 1.0f, 1.0f, 1.0f);
+    glClearColor(0.6f, 0.7f, 0.8f, 1.0f);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -326,9 +326,9 @@ int main(int argc, char* argv[]) {
 
             game_draw(current_time);
 
-            glDisable(GL_BLEND);
-
             game_draw_hud();
+
+            glDisable(GL_BLEND);
 
             glfwSwapBuffers(_win->glwin);
             continue;

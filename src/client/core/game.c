@@ -50,9 +50,11 @@ File world_file;
 
 int underwater = 0;
 
+int debug = 0;
+
 vec3 text_pos;
 
-Program c, water_prog, bc, shadow, shadow_w, cursora, model_program;
+Program c, water_prog, bc, shadow, shadow_w, cursora, model_program, canvas_program;
 
 static Skinned_render_request* player_walk_model;
 static Skinned_render_request* player_jump_model;
@@ -88,6 +90,7 @@ int noclip = 0;
 float wdelay = 0.0f;
 float pdelay = 0.0f;
 float ndelay = 0.0f;
+float ddelay = 0.0f;
 
 int sun_time = 0;
 float sun_delay = 0.0f;
@@ -102,7 +105,7 @@ int ff[24 * 15] = {0};
 int cc, dd, gg, hh; // for block in our hand
 
 Input input_manager;
-Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, normal;
+Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, normal, slot;
 
 Render_request block, cursor; // in your hand
 
@@ -111,7 +114,8 @@ static float place_delay = 0.0f;
 
 static float g_footstep_delay = 0.0f;
 
-/* Softbody test */
+Canvas_Render_Request slots[8] = {0};
+
 static Softbody* g_test_softbody = NULL;
 
 static uint8_t remote_names_active[CLIENT_MAX_REMOTES] = {0};
@@ -247,9 +251,16 @@ void game_init() {
     normal.min_filter = GL_NEAREST;
     normal.wrap_s = GL_REPEAT;
     normal.wrap_t = GL_REPEAT;
+
+    slot.mag_filter = GL_NEAREST;
+    slot.min_filter = GL_NEAREST;
+    slot.wrap_s = GL_REPEAT;
+    slot.wrap_t = GL_REPEAT;
     
     texture_create(&player_tex, "assets/textures/player.png");
     texture_create(&player_shininess, "assets/textures/txt_shininess.png");
+
+    texture_create(&slot, "assets/textures/slot.png");
 
     texture_create(&brightt, "assets/textures/txt_shininess.png");
     texture_create(&textt, "assets/textures/txt.png");
@@ -269,6 +280,8 @@ void game_init() {
     gfx_program_create(&cursora, "assets/tile/tile.vsh", "assets/misc/cursor.fsh");
     gfx_program_create(&bc, "assets/misc/hand.vsh", "assets/misc/hand.fsh");
     gfx_program_create(&water_prog, "assets/tile/tile_water.vsh", "assets/tile/tile_water.fsh");
+
+    gfx_program_create(&canvas_program, "assets/gui/canvas.vsh", "assets/gui/canvas.fsh");
 
     input_init(&input_manager, _win->glwin);
 
@@ -301,7 +314,7 @@ void game_init() {
 
     text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/textures/text.png");
     chat_init();
-    text_create(&name, "0.30", 0x0F, 1.0f, 0, 0);
+    text_create(&name, "INDEV", 0x0F, 1.0f, 0, 0);
     text_create(&fps, "FPS: 0", 0x0F, 1.0f, 0, 16);
 
     player_get_pos(&player, body_pos);
@@ -398,6 +411,13 @@ void game_init() {
         }
     }
 
+    for (int i = 0; i < 8; i++) {
+        glm_vec2_copy((vec2){30.0f+((float)i*54.0f), HEIGHT-30.0f}, slots[i].pos);
+        glm_vec2_copy((vec2){48.0f, 48.0f}, slots[i].scale);
+
+        gfx_canvas_packet_static_request(&slots[i]);
+    }
+
     sun_time = 11000; // idk it initializes as garbage so
     update_sun_direction();
 
@@ -434,7 +454,7 @@ void game_tick(float dt_p) {
     snprintf(fps_text, sizeof(fps_text), "FPS: %.0f", debug_current_fps);
     text_free(&fps);
     text_create(&fps, fps_text, 0x0F, 1.0f, 0, 16);
-    text_create(&name, "0.30", 0x0F, 1.0f, 0, 0);
+    text_create(&name, "INDEV", 0x0F, 1.0f, 0, 0);
 
     vec3 player_pos;
     player_get_pos(&player, player_pos);
@@ -473,16 +493,17 @@ void game_tick(float dt_p) {
     wdelay -= dt;
     pdelay -= dt;
     ndelay -= dt;
+    ddelay -= dt;
 
     sun_delay -= dt;
     if (sun_delay <= 0.0f) {
-        if (input_down(&input_manager, GLFW_KEY_C)) {
+        if (input_down(&input_manager, GLFW_KEY_F4)) {
             sun_time+=10;
             if (sun_time > 24000) sun_time = 0;
             sun_delay = 0.01f;
             update_sun_direction();
         }
-        if (input_down(&input_manager, GLFW_KEY_V)) {
+        if (input_down(&input_manager, GLFW_KEY_F5)) {
             sun_time-=10;
             if (sun_time < 0) sun_time = 24000;
             sun_delay = 0.01f;
@@ -501,15 +522,19 @@ void game_tick(float dt_p) {
         return;
     }
 
-    if (input_down(&input_manager, GLFW_KEY_M) && wdelay < 0) {
+    if (input_down(&input_manager, GLFW_KEY_F1) && wdelay < 0) {
         wireframe = !wireframe;
         glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
         wdelay = 0.25f;
     }
-    if (input_down(&input_manager, GLFW_KEY_N) && pdelay < 0) {
+    if (input_down(&input_manager, GLFW_KEY_F2) && pdelay < 0) {
         potato_mode = !potato_mode;
         world_reload_render_distance(&world, eye);
         pdelay = 0.25f;
+    }
+    if (input_down(&input_manager, GLFW_KEY_F3) && ddelay < 0) {
+        debug = !debug;
+        ddelay = 0.25f;
     }
     if (input_down(&input_manager, GLFW_KEY_B) && ndelay < 0) {
         noclip = !noclip;
@@ -608,10 +633,10 @@ void game_tick(float dt_p) {
 
         int wx = (int)floorf(ppos[0]);
         int wz = (int)floorf(ppos[2]);
-        int wy = (int)floorf(ppos[1]);
+        int wy = (int)floorf(ppos[1]-0.5f);
 
         uint16_t below = world_get_block(&world, wx, wy, wz);
-        if (below != AIR) {
+        if (lookup_sounds[below] != -1) {
             float move_x = input_down(&input_manager, GLFW_KEY_W) || input_down(&input_manager, GLFW_KEY_S) ? 1.0f : 0.0f;
             float move_z = input_down(&input_manager, GLFW_KEY_A) || input_down(&input_manager, GLFW_KEY_D) ? 1.0f : 0.0f;
             if (move_x + move_z > 0.5f) {
@@ -865,6 +890,10 @@ void game_draw(float time) {
         program_use(&skinned_prog);
         texture_bind(&textt, 0);
         texture_bind(&brightt, 1);
+
+        program_set_int(&skinned_prog, "tex", 0);
+        program_set_int(&skinned_prog, "roug", 1);
+    
         program_set_mat4(&skinned_prog, "projection", (float*)projection);
         program_set_mat4(&skinned_prog, "view", (float*)view);
         softbody_render(g_test_softbody, &skinned_prog);
@@ -1097,7 +1126,14 @@ void game_draw_hud() {
         chat_draw();
     }
 
-    if (debug_texts_ready) {
+    program_use(&canvas_program);
+
+    texture_bind(&slot, 0);
+    program_set_int(&canvas_program, "tex", 0);
+    gfx_set_screen_projection(&canvas_program);
+    gfx_canvas_render_batch(slots, 8, &canvas_program);
+
+    if (debug_texts_ready && debug) {
         for (int i = 0; i < 7; i++) {
             text_draw(&debug_texts[i]);
         }
@@ -1150,7 +1186,6 @@ void game_destroy() {
     sound_pack_destroy();
     world_destroy(&world);
 
-    /* Cleanup softbody */
     if (g_test_softbody) {
         softbody_destroy(g_test_softbody);
         g_test_softbody = NULL;

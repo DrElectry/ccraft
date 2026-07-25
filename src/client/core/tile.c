@@ -34,6 +34,21 @@ const float face_normals[] = {
     0,-1,0
 };
 
+const float cross_vertices[] = {
+    -0.5f, 0.0f, -0.5f,  0.5f, 0.0f, 0.5f,  0.5f, 1.0f, 0.5f,  -0.5f, 1.0f, -0.5f,
+     0.5f, 0.0f, -0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 1.0f, 0.5f,   0.5f, 1.0f, -0.5f
+};
+
+const unsigned int cross_indices[] = {
+    0,1,2, 2,3,0,
+    4,5,6, 6,7,4
+};
+
+const float cross_normals[] = {
+    0.707f, 0.0f, 0.707f,
+   -0.707f, 0.0f, 0.707f
+};
+
 void tile_atlas_getuv(int atlas_number, float* uv)
 {
     const int tiles_per_row = 16;
@@ -133,6 +148,82 @@ void tile_push_face(float* vertices,
     *i_cursor += 6;
 }
 
+void tile_push_cross_face(float* vertices,
+                          unsigned int* indices,
+                          float* pos,
+                          int* v_cursor,
+                          int* i_cursor,
+                          int cross_face,
+                          int atlas_id,
+                          float light)
+{
+    float uv[8];
+    tile_atlas_getuv(atlas_id, uv);
+
+    float nx = cross_normals[cross_face * 3 + 0];
+    float ny = cross_normals[cross_face * 3 + 1];
+    float nz = cross_normals[cross_face * 3 + 2];
+
+    float tx, ty, tz, bx, by, bz;
+    if (cross_face == 0) {
+        tx = 1.0f; ty = 0.0f; tz = 0.0f;
+        bx = 0.0f; by = 1.0f; bz = 0.0f;
+    } else {
+        tx = 0.0f; ty = 0.0f; tz = 1.0f;
+        bx = 0.0f; by = 1.0f; bz = 0.0f;
+    }
+
+    int v_start = *v_cursor / CHUNK_VERT_FLOATS;
+    int offset = cross_face * 12;
+
+    for (int i = 0; i < 4; i++)
+    {
+        int base = *v_cursor;
+
+        vertices[base + 0] = cross_vertices[offset + i * 3 + 0] + pos[0];
+        vertices[base + 1] = cross_vertices[offset + i * 3 + 1] + pos[1];
+        vertices[base + 2] = cross_vertices[offset + i * 3 + 2] + pos[2];
+
+        vertices[base + 3] = uv[i * 2 + 0];
+        vertices[base + 4] = uv[i * 2 + 1];
+
+        vertices[base + 5] = nx;
+        vertices[base + 6] = ny;
+        vertices[base + 7] = nz;
+        vertices[base + 8] = light;
+
+        vertices[base + 9] = tx;
+        vertices[base + 10] = ty;
+        vertices[base + 11] = tz;
+
+        vertices[base + 12] = bx;
+        vertices[base + 13] = by;
+        vertices[base + 14] = bz;
+
+        *v_cursor += CHUNK_VERT_FLOATS;
+    }
+
+    indices[*i_cursor + 0] = v_start + 0;
+    indices[*i_cursor + 1] = v_start + 1;
+    indices[*i_cursor + 2] = v_start + 2;
+    indices[*i_cursor + 3] = v_start + 2;
+    indices[*i_cursor + 4] = v_start + 3;
+    indices[*i_cursor + 5] = v_start + 0;
+
+    *i_cursor += 6;
+}
+
+void tile_push_cross(float* vertices,
+                     unsigned int* indices,
+                     float* pos,
+                     int* v_cursor,
+                     int* i_cursor,
+                     int atlas_id,
+                     float light)
+{
+    tile_push_cross_face(vertices, indices, pos, v_cursor, i_cursor, 0, atlas_id, light);
+    tile_push_cross_face(vertices, indices, pos, v_cursor, i_cursor, 1, atlas_id, light);
+}
 
 void tile_push_cube(float* vertices, unsigned int* indices, float* pos, int* v_cursor, int* i_cursor) {
     tile_push_face(vertices, indices, pos, v_cursor, i_cursor, FRONT, 0, 15);
@@ -147,7 +238,12 @@ Render_request tile_render_cache[19];
 
 void tile_create_cube_from_tile(uint16_t block_id, Render_request* out)
 {
-    const int max_faces = 6;
+    int is_cross = 0;
+    if (lookup_cross[block_id] == 1) {
+        is_cross = 1;
+    }
+    
+    int max_faces = is_cross ? 2 : 6;
     const int max_vertices = max_faces * 4;
     const int max_indices = max_faces * 6;
 
@@ -159,25 +255,30 @@ void tile_create_cube_from_tile(uint16_t block_id, Render_request* out)
 
     float pos[3] = {0.0f, 0.0f, 0.0f};
 
-    int atlas_id;
+    if (is_cross) {
+        int atlas_id = lookup_atlas[block_id * 6 + FRONT];
+        tile_push_cross(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, atlas_id, 15.0f);
+    } else {
+        int atlas_id;
 
-    atlas_id = lookup_atlas[block_id * 6 + FRONT];
-    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, FRONT, atlas_id, 15.0f);
+        atlas_id = lookup_atlas[block_id * 6 + FRONT];
+        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, FRONT, atlas_id, 15.0f);
 
-    atlas_id = lookup_atlas[block_id * 6 + BACK];
-    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, BACK, atlas_id, 15.0f);
+        atlas_id = lookup_atlas[block_id * 6 + BACK];
+        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, BACK, atlas_id, 15.0f);
 
-    atlas_id = lookup_atlas[block_id * 6 + RIGHT];
-    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, RIGHT, atlas_id, 15.0f);
+        atlas_id = lookup_atlas[block_id * 6 + RIGHT];
+        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, RIGHT, atlas_id, 15.0f);
 
-    atlas_id = lookup_atlas[block_id * 6 + LEFT];
-    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, LEFT, atlas_id, 15.0f);
+        atlas_id = lookup_atlas[block_id * 6 + LEFT];
+        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, LEFT, atlas_id, 15.0f);
 
-    atlas_id = lookup_atlas[block_id * 6 + UP];
-    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, UP, atlas_id, 15.0f);
+        atlas_id = lookup_atlas[block_id * 6 + UP];
+        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, UP, atlas_id, 15.0f);
 
-    atlas_id = lookup_atlas[block_id * 6 + DOWN];
-    tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, DOWN, atlas_id, 15.0f);
+        atlas_id = lookup_atlas[block_id * 6 + DOWN];
+        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, DOWN, atlas_id, 15.0f);
+    }
 
     out->data = verts;
     out->triangles = inds;
@@ -190,7 +291,7 @@ void tile_create_cube_from_tile(uint16_t block_id, Render_request* out)
 }
 
 FBO tile_fbos[19] = {0};
-Canvas_Render_Request tile_icons[19] = {0}; // TEMPORAL
+Canvas_Render_Request tile_icons[19] = {0};
 
 void tile_pre_render_all(Program* prog, Texture* atlas, Texture* roug_tex, Texture* norm_tex)
 {

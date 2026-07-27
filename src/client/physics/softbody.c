@@ -78,7 +78,7 @@ static int is_solid_block(World* world, int x, int y, int z) {
     return b != AIR && lookup_ignorecollision[b] == 0;
 }
 
-static void resolve_collision(World* world, vec3 pos, vec3 vel, float radius, float bounce) {
+static void resolve_collision(World* world, vec3 pos, vec3 vel, float radius, float bounce, float pushout_strength) {
     int min_x = (int)floorf(pos[0] - radius);
     int max_x = (int)floorf(pos[0] + radius);
     int min_y = (int)floorf(pos[1] - radius);
@@ -125,6 +125,11 @@ static void resolve_collision(World* world, vec3 pos, vec3 vel, float radius, fl
                         vel[1] += (new_vel_normal - vel_normal) * ny;
                         vel[2] += (new_vel_normal - vel_normal) * nz;
                     }
+                    
+                    float push_impulse = pen * pushout_strength;
+                    vel[0] += nx * push_impulse;
+                    vel[1] += ny * push_impulse;
+                    vel[2] += nz * push_impulse;
                 }
             }
         }
@@ -948,7 +953,7 @@ void softbody_update(Softbody* sb, World* world, const AABB* player_aabb, float 
         for (int i = 0; i < n; i++) {
             if (sb->bones[i].pinned) continue;
             resolve_collision(world, world_positions[i], world_velocities[i],
-                              bone_radius, bounce);
+                              bone_radius, bounce, 10.0f);
             if (player_aabb != NULL) {
                 resolve_player_collision(player_aabb, world_positions[i], 
                                         world_velocities[i], bone_radius, bounce);

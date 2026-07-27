@@ -397,12 +397,12 @@ void game_init() {
     {
         SoftbodyConfig sb_cfg = {
             .bone_count = 16,
-            .spring_k = 100.0f,
-            .damping = 1.5f,
+            .spring_k = 35.0f,
+            .damping = 3.0f,
             .gravity = -9.81f,
-            .bounce_factor = 0.0f
+            .bounce_factor = 0.8f
         };
-        g_test_softbody = softbody_load("assets/models/cube.obj", &sb_cfg);
+        g_test_softbody = softbody_load("assets/models/slime.obj", &sb_cfg);
         if (g_test_softbody) {
             softbody_set_transform(g_test_softbody,
                 (vec3){text_pos[0]-0.5f, text_pos[1]+10.0f, text_pos[2]-0.5f},

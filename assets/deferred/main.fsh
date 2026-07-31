@@ -41,10 +41,10 @@ const vec3 SUN_COLOR = vec3(1.0, 0.95, 0.85);
 const float SUN_INTENSITY = 512.0;
 
 const float CAUSTICS_SCALE = 0.25;
-const float CAUSTICS_SPEED = 0.08;
-const float CAUSTICS_STRENGTH = 0.45;
+const float CAUSTICS_SPEED = 0.04;
+const float CAUSTICS_STRENGTH = 1.25;
 const float CAUSTICS_MAX_DEPTH = 24.0;
-const float CAUSTICS_CHROMATIC_ABERRATION = 0.008;
+const float CAUSTICS_CHROMATIC_ABERRATION = 0.004;
 
 const float CHROMATIC_ABERRATION_UNDERWATER = 0.0008;
 
@@ -209,46 +209,20 @@ vec3 lightDirAtDist(float dist)
     return normalize(mix(lightDir1, lightDir2, clamp((dist - (shadowSplitDistance - 8.0)) / 16.0, 0.0, 1.0)));
 }
 
-float sampleCausticsTriplanar(vec3 worldPos, vec3 normal, vec3 lightDir)
+vec3 sampleCausticsPlanarChromatic(vec3 worldPos, vec3 normal, float timeVal)
 {
-    vec2 offset = vec2(time * CAUSTICS_SPEED, time * CAUSTICS_SPEED * 0.7);
+    vec2 uv = worldPos.xz * CAUSTICS_SCALE;
+    uv += vec2(timeVal * CAUSTICS_SPEED, timeVal * CAUSTICS_SPEED * 0.7);
 
-    vec2 uvX = worldPos.yz * CAUSTICS_SCALE + offset;
-    vec2 uvY = worldPos.xz * CAUSTICS_SCALE + offset;
-    vec2 uvZ = worldPos.xy * CAUSTICS_SCALE + offset;
+    vec3 tangent = normalize(cross(normal, vec3(0.0, 1.0, 0.0)));
+    if (length(tangent) < 0.01)
+        tangent = vec3(1.0, 0.0, 0.0);
 
-    float cx = texture(caustics, uvX).r;
-    float cy = texture(caustics, uvY).r;
-    float cz = texture(caustics, uvZ).r;
-
-    vec3 weights = abs(normal);
-    weights = weights / (weights.x + weights.y + weights.z + 0.0001);
-
-    return cx * weights.x + cy * weights.y + cz * weights.z;
-}
-
-float sampleCausticsAtPos(vec3 pos, vec3 normal, float timeVal)
-{
-    vec2 offset = vec2(timeVal * CAUSTICS_SPEED, timeVal * CAUSTICS_SPEED * 0.7);
-    vec2 uvX = pos.yz * CAUSTICS_SCALE + offset;
-    vec2 uvY = pos.xz * CAUSTICS_SCALE + offset;
-    vec2 uvZ = pos.xy * CAUSTICS_SCALE + offset;
-    float cx = texture(caustics, uvX).r;
-    float cy = texture(caustics, uvY).r;
-    float cz = texture(caustics, uvZ).r;
-    vec3 weights = abs(normal);
-    weights = weights / (weights.x + weights.y + weights.z + 0.0001);
-    return cx * weights.x + cy * weights.y + cz * weights.z;
-}
-
-vec3 sampleCausticsTriplanarChromatic(vec3 worldPos, vec3 normal, vec3 viewDir, float timeVal)
-{
-    vec3 up = abs(normal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-    vec3 tangent = normalize(cross(normal, up));
     float scale = CAUSTICS_CHROMATIC_ABERRATION;
-    float r = sampleCausticsAtPos(worldPos + tangent * scale, normal, timeVal);
-    float g = sampleCausticsAtPos(worldPos, normal, timeVal);
-    float b = sampleCausticsAtPos(worldPos - tangent * scale, normal, timeVal);
+    float r = texture(caustics, uv + tangent.xz * scale).r;
+    float g = texture(caustics, uv).g;
+    float b = texture(caustics, uv - tangent.xz * scale).b;
+
     return vec3(r, g, b);
 }
 
@@ -257,14 +231,14 @@ vec3 getUnderwaterFogColor()
     vec2 texelSize = 1.0 / vec2(textureSize(gWaterAlbedo, 0));
     vec3 waterColor = texture(gWaterAlbedo, out_uv).rgb;
     float waterPresent = dot(waterColor, vec3(0.333));
-    
+
     if (waterPresent > 0.01) {
         return waterColor;
     }
-    
+
     vec3 accumulatedColor = vec3(0.0);
     float totalWeight = 0.0;
-    
+
     for (int x = -2; x <= 2; x++) {
         for (int y = -2; y <= 2; y++) {
             vec2 sampleUV = out_uv + vec2(x, y) * texelSize * 4.0;
@@ -275,37 +249,69 @@ vec3 getUnderwaterFogColor()
             totalWeight += weight;
         }
     }
-    
+
     if (totalWeight > 0.0) {
         return accumulatedColor / totalWeight;
     }
-    
+
     vec3 centerColor = texture(gWaterAlbedo, vec2(0.5, 0.5)).rgb;
     if (dot(centerColor, vec3(0.333)) > 0.01) {
         return centerColor;
     }
-    
+
     return vec3(0.1, 0.3, 0.6);
 }
 
-vec3 calculateSpecular(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 albedo, float roughness, float metallic, float NdotL)
+float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
-    if (NdotL <= 0.0) return vec3(0.0);
-    
-    vec3 halfDir = normalize(lightDir + viewDir);
-    float NdotH = max(dot(normal, halfDir), 0.0);
-    
-    float shininess = mix(4.0, 256.0, 1.0 - roughness);
-    float spec = pow(NdotH, shininess);
-    
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    return a2 / (3.14159265 * denom * denom);
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = roughness + 1.0;
+    float k = r * r / 8.0;
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx1 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx2 = GeometrySchlickGGX(NdotL, roughness);
+    return ggx1 * ggx2;
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+vec3 computeSpecular(vec3 albedo, float metallic, float roughness, vec3 N, vec3 V, vec3 L, vec3 lightCol, float shadow)
+{
+    vec3 H = normalize(V + L);
+    float NdotL = max(dot(N, L), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
+
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
-    
-    float HdotV = max(dot(halfDir, viewDir), 0.0);
-    vec3 fresnel = F0 + (1.0 - F0) * pow(1.0 - HdotV, 5.0);
-    
-    float specIntensity = (1.0 - roughness * 0.7);
-    
-    return fresnel * spec * specIntensity * 0.5;
+
+    float D = DistributionGGX(N, H, roughness);
+    float G = GeometrySmith(N, V, L, roughness);
+    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+    vec3 numerator = D * G * F;
+    float denominator = 4.0 * NdotV * NdotL + 0.0001;
+    vec3 spec = numerator / denominator;
+
+    spec *= lightCol * NdotL * (1.0 - shadow);
+
+    return spec;
 }
 
 void main()
@@ -323,13 +329,13 @@ void main()
 
     vec3 waterAlbedo = texture(gWaterAlbedo, out_uv).rgb;
     vec3 waterNormal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
-    float waterRoughness = 0.2+texture(gWaterRoughness, out_uv).r*0.0001;
-    float waterMetallic = 1.0+texture(gWaterRoughness, out_uv).r*0.0001;
+    float waterRoughness = texture(gWaterRoughness, out_uv).r;
+    float waterMetallic = 0.0;
 
     vec3 terrainAlbedo = texture(gAlbedo, out_uv).rgb;
     vec3 terrainNormal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
-    float terrainRoughness = 0.2+texture(gRoughness, out_uv).r*0.0001;
-    float terrainMetallic = 1.0+texture(gRoughness, out_uv).r*0.0001;
+    float terrainRoughness = 1.0-texture(gRoughness, out_uv).r;
+    float terrainMetallic = texture(gRoughness, out_uv).r;
 
     vec3 worldPos;
     vec3 color;
@@ -352,7 +358,6 @@ void main()
     }
 
     vec3 light = lightColor;
-    vec3 specular;
 
     if (isWater)
     {
@@ -365,11 +370,12 @@ void main()
         float ao = texture(dSSAO, out_uv).r;
 
         vec3 viewDir = normalize(cameraPos - waterWorldPos);
-        specular = calculateSpecular(lightDir, waterNormal, viewDir, waterAlbedo, waterRoughness, waterMetallic, NdotL);
-        specular *= light * NdotL * (1.0 - shadow);
 
         vec3 ambient = waterAlbedo * ao * 0.25;
         vec3 diffuse = waterAlbedo * light * NdotL * (1.0 - shadow);
+
+        vec3 specular = computeSpecular(waterAlbedo, waterMetallic, waterRoughness, waterNormal, viewDir, lightDir, light, shadow);
+
         vec3 waterColor = ambient + diffuse + specular + waterSSR.rgb * waterSSR.a;
 
         float distToCamera = length(waterWorldPos - cameraPos);
@@ -392,15 +398,17 @@ void main()
             float distanceFromCenter = length(refractUV - 0.5) * 2.0;
             float aberrationStrength = CHROMATIC_ABERRATION_UNDERWATER * (1.0 + distanceFromCenter * 3.0);
             vec2 chromaticOffset = normalize(refractUV - 0.5 + 0.001) * aberrationStrength * 0.5;
-            
+
             vec2 refractUV_r = clamp(refractUV + chromaticOffset * 2.0, 0.001, 0.999);
             vec2 refractUV_b = clamp(refractUV - chromaticOffset * 2.0, 0.001, 0.999);
-            
+
             float r = texture(gAlbedo, refractUV_r).r;
             float g = texture(gAlbedo, refractUV).g;
             float b = texture(gAlbedo, refractUV_b).b;
             vec3 terrainAlbedoAtWater = vec3(r, g, b);
             vec3 terrainNormalAtWater = normalize(texture(gNormal, refractUV).rgb * 2.0 - 1.0);
+            float terrainRoughnessAtWater = texture(gRoughness, refractUV).r;
+            float terrainMetallicAtWater = 0.0;
 
             float terrainShadow = calculateShadow(terrainWorldPosRefract, refractUV);
             vec3 terrainLightDir = lightDirAtDist(length(terrainWorldPosRefract - cameraPos));
@@ -408,11 +416,12 @@ void main()
             float terrainAO = texture(dSSAO, refractUV).r;
 
             vec3 terrainViewDir = normalize(cameraPos - terrainWorldPosRefract);
-            vec3 terrainSpecular = calculateSpecular(terrainLightDir, terrainNormalAtWater, terrainViewDir, terrainAlbedoAtWater, terrainRoughness, terrainMetallic, terrainNdotL);
-            terrainSpecular *= (1.0 - terrainShadow);
 
             vec3 terrainAmbient = terrainAlbedoAtWater * terrainAO * 0.25;
             vec3 terrainDiffuse = terrainAlbedoAtWater * light * terrainNdotL * (1.0 - terrainShadow);
+
+            vec3 terrainSpecular = computeSpecular(terrainAlbedoAtWater, terrainMetallicAtWater, terrainRoughnessAtWater, terrainNormalAtWater, terrainViewDir, terrainLightDir, light, terrainShadow);
+
             terrainColor = terrainAmbient + terrainDiffuse + terrainSpecular;
             vec4 terrainSSR = texture(dSSR, refractUV);
             terrainColor += terrainSSR.rgb * terrainSSR.a;
@@ -420,11 +429,14 @@ void main()
             float waterDepthHere = abs(terrainWorldPosRefract.y - waterWorldPos.y);
             float causticFactor = smoothstep(CAUSTICS_MAX_DEPTH, 0.0, waterDepthHere);
 
-            if (causticFactor > 0.001) {
-                vec3 causticColor = sampleCausticsTriplanarChromatic(terrainWorldPosRefract, terrainNormalAtWater, normalize(cameraPos - terrainWorldPosRefract), time);
+            // only apply caustics if the terrain is lit (not in shadow) and visible
+            if (causticFactor > 0.001 && terrainShadow < 0.9) {
+                vec3 causticColor = sampleCausticsPlanarChromatic(terrainWorldPosRefract, terrainNormalAtWater, time);
                 causticColor = pow(causticColor, vec3(0.7));
                 causticColor = smoothstep(vec3(0.1), vec3(0.9), causticColor);
-                vec3 causticLight = causticColor * light * CAUSTICS_STRENGTH * causticFactor;
+                float shadowFactor = 1.0 - smoothstep(0.1, 0.9, terrainShadow);
+                float causticUpFactor = max(terrainNormalAtWater.y, 0.0);
+                vec3 causticLight = causticColor * light * CAUSTICS_STRENGTH * causticFactor * shadowFactor * causticUpFactor;
                 terrainColor += causticLight;
             }
         }
@@ -454,7 +466,7 @@ void main()
     else
     {
         depth = terrainDepth;
-        
+
         if (isUnderwater) {
             vec2 centerOffset = out_uv - 0.5;
             float distanceFromCenter = length(centerOffset) * 2.0;
@@ -469,7 +481,7 @@ void main()
         } else {
             terrainAlbedo = texture(gAlbedo, out_uv).rgb;
         }
-        
+
         normal = terrainNormal;
         roughness = terrainRoughness;
         metallic = terrainMetallic;
@@ -484,13 +496,13 @@ void main()
         vec4 ssr = texture(dSSR, out_uv);
 
         vec3 viewDir = normalize(cameraPos - worldPos);
-        specular = calculateSpecular(lightDir, normal, viewDir, terrainAlbedo, roughness, metallic, NdotL);
-        specular *= light * NdotL * (1.0 - shadow);
 
         float ambientStrength = isUnderwater ? 0.45 : 0.25;
         vec3 ambient = terrainAlbedo * ao * ambientStrength;
         vec3 diffuse = terrainAlbedo * light * NdotL * (1.0 - shadow);
-        
+
+        vec3 specular = computeSpecular(terrainAlbedo, metallic, roughness, normal, viewDir, lightDir, light, shadow);
+
         color = ambient + diffuse + specular;
 
         if (!isSky)

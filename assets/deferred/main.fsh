@@ -126,7 +126,7 @@ vec3 getSun(vec3 rd, vec3 lightDir)
     return (diskColor * sunDisk + innerColor * innerGlow) * 4.0;
 }
 
-float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMultiplier, vec3 lightDir)
+float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMultiplier, vec3 lightDir, float receiverDist)
 {
     vec3 proj = fragPosLightSpace.xyz / fragPosLightSpace.w;
     proj = proj * 0.5 + 0.5;
@@ -151,8 +151,44 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
         bias = 0.001 + 0.0005 * (1.0 - NdotL) + texelSize.x * 3.0;
     }
 
-    float radius = 2.0 * radiusMultiplier;
-    int totalSamples = (radiusMultiplier > 0.5) ? 16 : 32;
+    float occluderDist = 0.0;
+    int sampleCount = 8;
+    float nearestOccluder = 1.0;
+    
+    for (int i = 0; i < sampleCount; i++)
+    {
+        vec2 offset = rot * poissonDisk[i] * texelSize * 2.0;
+        float sampledDepth = texture(shadowMap, proj.xy + offset).r;
+        
+        if (sampledDepth + bias < currentDepth) {
+            float distToOccluder = currentDepth - sampledDepth;
+            nearestOccluder = min(nearestOccluder, distToOccluder);
+        }
+    }
+    
+    if (nearestOccluder < 1.0) {
+        occluderDist = nearestOccluder * 200.0;
+        occluderDist = clamp(occluderDist, 0.5, 10.0);
+    } else {
+        occluderDist = 1.0;
+    }
+
+    float cameraDistFactor = 1.0 + receiverDist * 0.008;
+    cameraDistFactor = clamp(cameraDistFactor, 0.5, 3.0);
+    
+    float radius = 2.0 * radiusMultiplier * occluderDist * cameraDistFactor;
+    radius = clamp(radius, 0.5, 12.0);
+
+    int totalSamples = 32;
+    if (radius < 2.0) {
+        totalSamples = 12;
+    } else if (radius < 4.0) {
+        totalSamples = 20;
+    } else if (radius < 7.0) {
+        totalSamples = 28;
+    } else {
+        totalSamples = 32;
+    }
     int edgeSamples = 4;
 
     float shadow = 0.0;
@@ -186,10 +222,10 @@ float calculateShadow(vec3 worldPos, vec2 uv)
     float blendEnd = shadowSplitDistance + 12.0;
 
     vec4 fragPosLightSpaceNear = light_space_matrix_near * vec4(worldPos, 1.0);
-    float shadowNear = pcf(fragPosLightSpaceNear, dShadow1, uv, 1.0, lightDir1);
+    float shadowNear = pcf(fragPosLightSpaceNear, dShadow1, uv, 1.0, lightDir1, dist);
 
     vec4 fragPosLightSpaceFar = light_space_matrix_far * vec4(worldPos, 1.0);
-    float shadowFar = pcf(fragPosLightSpaceFar, dShadow2, uv, 0.5, lightDir2);
+    float shadowFar = pcf(fragPosLightSpaceFar, dShadow2, uv, 0.5, lightDir2, dist);
 
     if (dist <= blendStart) {
         return shadowNear;

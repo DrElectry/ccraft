@@ -15,12 +15,9 @@
 #endif
 
 #ifndef WORLD_RENDER_DISTANCE
-#define WORLD_RENDER_DISTANCE 8
+#define WORLD_RENDER_DISTANCE 1
 #endif
 
-#ifndef FAR_WATER_DISTANCE
-#define FAR_WATER_DISTANCE 4
-#endif
 
 typedef struct BlockChange {
     int x;

@@ -396,8 +396,8 @@ void game_init() {
 
     {
         SoftbodyConfig sb_cfg = {
-            .bone_count = 16,
-            .spring_k = 35.0f,
+            .bone_count = 32,
+            .spring_k = 350.0f,
             .damping = 3.0f,
             .gravity = -9.81f,
             .bounce_factor = 0.8f
@@ -1138,14 +1138,7 @@ void game_draw_hud() {
     gfx_canvas_render_batch(slots, 8, &canvas_program);
 
     program_use(&canvas_program);
-    gfx_set_screen_projection(&canvas_program);
-    for (int id = FIRST_TILE; id <= LAST_TILE; id++) {
-        tile_icons[id].pos[0] = 30.0f + ((float)(id - FIRST_TILE) * 54.0f);
-        tile_icons[id].pos[1] = HEIGHT - 30.0f;
-        fbo_bind_texture(&tile_fbos[id], 0, 0);
-        program_set_int(&canvas_program, "tex", 0);
-        gfx_canvas_render(&tile_icons[id], &canvas_program);
-    }
+    gfx_set_screen_projection(&canvas_program); // you should render canvas after those commands
 
     if (debug_texts_ready && debug) {
         for (int i = 0; i < 7; i++) {

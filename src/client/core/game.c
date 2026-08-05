@@ -55,7 +55,7 @@ int debug = 0;
 
 vec3 text_pos;
 
-Program c, water_prog, bc, shadow, shadow_w, cursora, model_program, canvas_program;
+Program c, water_prog, shadow, shadow_w, cursora, model_program, canvas_program;
 
 static Skinned_render_request* player_walk_model;
 static Skinned_render_request* player_jump_model;
@@ -64,6 +64,9 @@ static AnimationClip* idle_clip;
 static AnimState* walk_anim;
 static GLTFModel player_model;
 static Program skinned_prog;
+
+// dedicated walk animation for the test skinned item, advances independently
+static AnimState* g_item_walk_anim = NULL;
 
 static int bone_head = -1;
 static int bone_neck = -1;
@@ -277,9 +280,8 @@ void game_init() {
     gfx_program_create(&shadow, "assets/tile/tile.vsh", "assets/tile/shadow.fsh");
     gfx_program_create(&shadow_w, "assets/tile/tile_water.vsh", "assets/tile/shadow.fsh");
 
-    gfx_program_create(&c, "assets/tile/tile.vsh", "assets/tile/tile.fsh");
+gfx_program_create(&c, "assets/tile/tile.vsh", "assets/tile/tile.fsh");
     gfx_program_create(&cursora, "assets/tile/tile.vsh", "assets/misc/cursor.fsh");
-    gfx_program_create(&bc, "assets/misc/hand.vsh", "assets/misc/hand.fsh");
     gfx_program_create(&water_prog, "assets/tile/tile_water.vsh", "assets/tile/tile_water.fsh");
 
     gfx_program_create(&canvas_program, "assets/gui/canvas.vsh", "assets/gui/canvas.fsh");
@@ -425,8 +427,61 @@ void game_init() {
 
     tile_pre_render_all(&c, &texture_atlas, &roughness, &normal);
 
-    items_init();
+items_init();
     inventory_init();
+    inventory_select(0);
+
+// Register a test skinned item using the remote player walk model.
+    if (player_walk_model && player_walk_model->skinned) {
+        // Give the item its own dedicated Skinned + AnimState so its walk
+        // animation advances asynchronously from the shared player model.
+        Skinned* item_sk = (Skinned*)malloc(sizeof(Skinned));
+        if (!item_sk) {
+            printf("Failed to allocate item Skinned\n");
+            return;
+        }
+        memcpy(item_sk, player_walk_model->skinned, sizeof(Skinned));
+
+        if (walk_clip) {
+            g_item_walk_anim = anim_state_create(walk_clip);
+            g_item_walk_anim->loop = 1;
+            g_item_walk_anim->speed = 0.75f;
+            item_sk->gpu.anim = g_item_walk_anim;
+        }
+        item_sk->gpu.skeleton = player_walk_model->skeleton;
+
+        Skinned_render_request* item_req = (Skinned_render_request*)malloc(sizeof(Skinned_render_request));
+        if (!item_req) {
+            free(item_sk);
+            printf("Failed to allocate item Skinned_render_request\n");
+            return;
+        }
+        *item_req = *player_walk_model;
+        item_req->skinned = item_sk;
+        item_req->anim = g_item_walk_anim;
+        item_req->look.enabled = 1;
+
+        ItemSpec skinned_spec;
+        memset(&skinned_spec, 0, sizeof(ItemSpec));
+        skinned_spec.id = 100; // above the tile range (1..18)
+        skinned_spec.stack_size = 1;
+        skinned_spec.skinned = item_req;
+        skinned_spec.skinned_program = &skinned_prog;
+        skinned_spec.viewmodel_scale[0] = 0.5f;
+        skinned_spec.viewmodel_scale[1] = 0.5f;
+        skinned_spec.viewmodel_scale[2] = 0.5f;
+        skinned_spec.viewmodel_offset[1] = -0.5f;
+        skinned_spec.viewmodel_offset[2] = 0.6f;
+        strncpy(skinned_spec.name, "Kniwife", MAX_NICKNAME - 1);
+        skinned_spec.name[MAX_NICKNAME - 1] = '\0';
+        Item* skinned_item = item_register(&skinned_spec);
+        if (skinned_item) {
+            // enable look so item_has_skinned() returns true
+            skinned_item->skinned->look.enabled = 1;
+            // put it in the last inventory slot for easy testing
+            inventory_set(7, skinned_item, INFINITE_AMOUNT);
+        }
+    }
 
     update_debug_texts();
 }
@@ -583,12 +638,17 @@ void game_tick(float dt_p) {
         }
     }
 
-    if (input_manager.scroll_y != 0.0f) {
+if (input_manager.scroll_y != 0.0f) {
         int dir = (input_manager.scroll_y > 0.0f) ? 1 : -1;
-        int next = (int)blockih + dir;
-        if (next < FIRST_TILE) next = LAST_TILE;
-        if (next > LAST_TILE) next = FIRST_TILE;
-        blockih = (uint16_t)next;
+        int next = inventory_selected() + dir;
+        if (next < 0) next = INVENTORY_SLOTS - 1;
+        if (next >= INVENTORY_SLOTS) next = 0;
+        if (next != inventory_selected()) {
+            inventory_select(next);
+            Item* sel = inventory_selected_item();
+            if (sel && sel->on_select) sel->on_select(sel);
+        }
+        blockih = inventory[inventory_selected()].item->id;
         input_manager.scroll_y = 0.0f;
         place_delay = 0.0f;
     }
@@ -615,21 +675,10 @@ void game_tick(float dt_p) {
                             (pz + 1 > player_min_z && pz < player_max_z);
             
             if (!collision) {
-                int variant = RAND(0, 3);
-                sound_t* s = pick_pack_sound(blockih, variant);
-                if (s) {
-                    sound_set_looping(s, false);
-                    sound_set_volume(s, 1.0f);
-                    sound_play(s);
+                Item* selected = inventory_selected_item();
+                if (selected->on_use && selected->id != 0) {
+                    selected->on_use(selected, &world, px, py, pz);
                 }
-
-                if (!__onserv) {
-                    world_set_block(&world, px, py, pz, blockih);
-                    rebuild_chunks_for_block(&world, px, py, pz);
-                } else {
-                    network_send_block_change(network_get_local_client_id(), px, py, pz, blockih);
-                }
-                game_mark_shadow_dirty(); // block changed, need new shadows
                 place_delay = 0.2f;
             }
         }
@@ -668,7 +717,28 @@ void game_tick(float dt_p) {
 
     softbody_update(g_test_softbody, &world, &player.aabb, dt);
 
+Item* held_now = inventory_selected_item();
+    if (held_now && held_now->on_update && held_now->id != 0) {
+        held_now->on_update(held_now, dt);
+    }
+
+    // advance the test item's walk animation asynchronously
+    if (g_item_walk_anim) {
+        anim_state_update(g_item_walk_anim, dt);
+    }
+
     update_debug_texts();
+}
+
+static void draw_held_hand(mat4 hand_model) {
+    Item* held = inventory_selected_item();
+    if (!held || held->id == 0) return;
+
+    if (item_has_skinned(held)) {
+        item_render_skinned(held, &c, hand_model);
+    } else if (held->on_render) {
+        held->on_render(held, &c, hand_model);
+    }
 }
 
 void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 out_light_dir, int cascade)
@@ -770,55 +840,23 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
     player_get_eye(&player, eye);
 
     glm_mat4_identity(hand_model);
-
-    vec3 fwd;
-    vec3 right;
-    vec3 upv;
-    glm_vec3_copy(player.camera.forward, fwd);
-    glm_vec3_copy(player.camera.right, right);
-    glm_vec3_copy(player.camera.up, upv);
-
-    float d = 0.7f;
-    float x = 0.3f;
-    float y = -0.5f;
-
-    vec3 hold_pos;
-    glm_vec3_scale(fwd, d, hold_pos);
-    glm_vec3_muladds(right, x, hold_pos);
-    glm_vec3_muladds(upv, y, hold_pos);
-    glm_vec3_add(hold_pos, eye, hold_pos);
-
-    glm_translate(hand_model, hold_pos);
+    glm_translate(hand_model, eye);
 
     mat4 rot;
     glm_mat4_identity(rot);
-    rot[0][0] = right[0];
-    rot[0][1] = right[1];
-    rot[0][2] = right[2];
-    rot[1][0] = upv[0];
-    rot[1][1] = upv[1];
-    rot[1][2] = upv[2];
-    rot[2][0] = fwd[0];
-    rot[2][1] = fwd[1];
-    rot[2][2] = fwd[2];
+    rot[0][0] = player.camera.right[0];
+    rot[0][1] = player.camera.right[1];
+    rot[0][2] = player.camera.right[2];
+    rot[1][0] = player.camera.up[0];
+    rot[1][1] = player.camera.up[1];
+    rot[1][2] = player.camera.up[2];
+    rot[2][0] = player.camera.forward[0];
+    rot[2][1] = player.camera.forward[1];
+    rot[2][2] = player.camera.forward[2];
 
     glm_mat4_mul(hand_model, rot, hand_model);
-    glm_scale(hand_model, block.scale);
 
-    program_use(&bc);
-    texture_bind(&texture_atlas, 0);
-    texture_bind(&roughness, 1);
-    program_set_int(&bc, "tex", 0);
-    program_set_int(&bc, "roug", 1);
-    program_set_mat4(&bc, "proj", (float*)projection);
-    program_set_mat4(&bc, "view", (float*)view);
-    program_set_mat4(&bc, "model", (float*)hand_model);
-    program_set_uint(&bc, "id", lookup_atlas[blockih*6]);
-
-    glDisable(GL_CULL_FACE);
-    vao_bind(&block.cache.vao);
-    glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
-    glEnable(GL_CULL_FACE);
+draw_held_hand(hand_model);
 
     glViewport(0, 0, WIDTH, HEIGHT);
 
@@ -907,60 +945,27 @@ void game_draw(float time) {
         softbody_render(g_test_softbody, &skinned_prog);
     }
 
-    vec3 eye;
+vec3 eye;
     player_get_eye(&player, eye);
 
     glm_mat4_identity(hand_model);
-
-    vec3 fwd;
-    vec3 right;
-    vec3 upv;
-    glm_vec3_copy(player.camera.forward, fwd);
-    glm_vec3_copy(player.camera.right, right);
-    glm_vec3_copy(player.camera.up, upv);
-
-    float d = 0.55f;
-    float x = 0.2f;
-    float y = -0.6f;
-
-    vec3 hold_pos;
-    glm_vec3_scale(fwd, d, hold_pos);
-    glm_vec3_muladds(right, x, hold_pos);
-    glm_vec3_muladds(upv, y, hold_pos);
-    glm_vec3_add(hold_pos, eye, hold_pos);
-
-    glm_translate(hand_model, hold_pos);
+    glm_translate(hand_model, eye);
 
     mat4 rot;
     glm_mat4_identity(rot);
-    rot[0][0] = right[0];
-    rot[0][1] = right[1];
-    rot[0][2] = right[2];
-    rot[1][0] = upv[0];
-    rot[1][1] = upv[1];
-    rot[1][2] = upv[2];
-    rot[2][0] = fwd[0];
-    rot[2][1] = fwd[1];
-    rot[2][2] = fwd[2];
+    rot[0][0] = player.camera.right[0];
+    rot[0][1] = player.camera.right[1];
+    rot[0][2] = player.camera.right[2];
+    rot[1][0] = player.camera.up[0];
+    rot[1][1] = player.camera.up[1];
+    rot[1][2] = player.camera.up[2];
+    rot[2][0] = player.camera.forward[0];
+    rot[2][1] = player.camera.forward[1];
+    rot[2][2] = player.camera.forward[2];
 
     glm_mat4_mul(hand_model, rot, hand_model);
 
-    glm_scale(hand_model, block.scale);
-
-    program_use(&bc);
-    texture_bind(&texture_atlas, 0);
-    texture_bind(&roughness, 1);
-    program_set_int(&bc, "tex", 0);
-    program_set_int(&bc, "roug", 1);
-    program_set_mat4(&bc, "proj", (float*)projection);
-    program_set_mat4(&bc, "view", (float*)view);
-    program_set_mat4(&bc, "model", (float*)hand_model);
-    program_set_uint(&bc, "id", lookup_atlas[blockih*6]);
-
-    glDisable(GL_CULL_FACE);
-    
-    vao_bind(&block.cache.vao);
-    glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
+draw_held_hand(hand_model);
 
     program_use(&cursora);
     program_set_mat4(&cursora, "proj", (float*)projection);
@@ -1025,55 +1030,23 @@ void game_draw_misc() {
     player_get_eye(&player, eye);
 
     glm_mat4_identity(hand_model);
-
-    vec3 fwd;
-    vec3 right;
-    vec3 upv;
-    glm_vec3_copy(player.camera.forward, fwd);
-    glm_vec3_copy(player.camera.right, right);
-    glm_vec3_copy(player.camera.up, upv);
-
-    float d = 0.55f;
-    float x = 0.2f;
-    float y = -0.6f;
-
-    vec3 hold_pos;
-    glm_vec3_scale(fwd, d, hold_pos);
-    glm_vec3_muladds(right, x, hold_pos);
-    glm_vec3_muladds(upv, y, hold_pos);
-    glm_vec3_add(hold_pos, eye, hold_pos);
-
-    glm_translate(hand_model, hold_pos);
+    glm_translate(hand_model, eye);
 
     mat4 rot;
     glm_mat4_identity(rot);
-    rot[0][0] = right[0];
-    rot[0][1] = right[1];
-    rot[0][2] = right[2];
-    rot[1][0] = upv[0];
-    rot[1][1] = upv[1];
-    rot[1][2] = upv[2];
-    rot[2][0] = fwd[0];
-    rot[2][1] = fwd[1];
-    rot[2][2] = fwd[2];
+    rot[0][0] = player.camera.right[0];
+    rot[0][1] = player.camera.right[1];
+    rot[0][2] = player.camera.right[2];
+    rot[1][0] = player.camera.up[0];
+    rot[1][1] = player.camera.up[1];
+    rot[1][2] = player.camera.up[2];
+    rot[2][0] = player.camera.forward[0];
+    rot[2][1] = player.camera.forward[1];
+    rot[2][2] = player.camera.forward[2];
 
     glm_mat4_mul(hand_model, rot, hand_model);
-    glm_scale(hand_model, block.scale);
 
-    program_use(&bc);
-    texture_bind(&texture_atlas, 0);
-    texture_bind(&roughness, 1);
-    program_set_int(&bc, "tex", 0);
-    program_set_int(&bc, "roug", 1);
-    program_set_mat4(&bc, "proj", (float*)projection);
-    program_set_mat4(&bc, "view", (float*)view);
-    program_set_mat4(&bc, "model", (float*)hand_model);
-    program_set_uint(&bc, "id", lookup_atlas[blockih * 6]);
-
-    glDisable(GL_CULL_FACE);
-    vao_bind(&block.cache.vao);
-    glDrawElements(GL_TRIANGLES, block.tri_count * 3, GL_UNSIGNED_INT, NULL);
-    glEnable(GL_CULL_FACE);
+draw_held_hand(hand_model);
 
     program_use(&cursora);
     program_set_mat4(&cursora, "proj", (float*)projection);
@@ -1134,7 +1107,13 @@ void game_draw_hud() {
         chat_draw();
     }
 
-    program_use(&canvas_program);
+program_use(&canvas_program);
+
+    float slot_y = (float)HEIGHT - 30.0f;
+    for (int i = 0; i < 8; i++) {
+        slots[i].pos[0] = 30.0f + ((float)i * 54.0f);
+        slots[i].pos[1] = slot_y;
+    }
 
     texture_bind(&slot, 0);
     program_set_int(&canvas_program, "tex", 0);
@@ -1204,7 +1183,11 @@ void game_destroy() {
         g_test_softbody = NULL;
     }
 
-    (void)walk_anim;
+(void)walk_anim;
+    if (g_item_walk_anim) {
+        anim_state_destroy(g_item_walk_anim);
+        g_item_walk_anim = NULL;
+    }
     if (player_walk_model) {
         player_walk_model->skinned = NULL;
         player_walk_model->skeleton = NULL;

@@ -37,6 +37,7 @@ void game_draw_misc();
 void game_tick(float dt_p);
 void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 out_light_dir, int cascade);
 void game_draw_hud();
+void game_mark_shadow_dirty(void);
 void game_destroy();
 
 void update_debug_texts(void);

@@ -180,7 +180,7 @@ void gfx_set_screen_projection(Program* program) {
     mat4 projection;
     glm_mat4_identity(projection);
     
-    glm_ortho(0.0f, 1280.0f, 720.0f, 0.0f, -1.0f, 1.0f, projection);
+    glm_ortho(0.0f, (float)WIDTH, (float)HEIGHT, 0.0f, -1.0f, 1.0f, projection);
     
     program_set_mat4(program, "projection", (float*)projection);
 }

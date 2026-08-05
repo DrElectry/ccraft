@@ -14,7 +14,7 @@ void main() {
     float strength = abs(sin(time))*0.025;
 
     float bulgeRadius = 1.0;
-    float bulgeStrength = -0.15;
+    float bulgeStrength = -0.25;
 
     vec2 uv = out_uv;
     vec2 dirToCenter = uv - center;

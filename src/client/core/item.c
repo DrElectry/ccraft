@@ -14,8 +14,9 @@
 #include "utils/rand.h"
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
-#define MAX_ITEMS 256
+#define MAX_ITEMS 1024
 
 extern Texture texture_atlas, roughness, normal;
 
@@ -24,6 +25,18 @@ static uint16_t item_count = 0;
 int g_selected_slot = 0;
 
 InventoryEntry inventory[INVENTORY_SLOTS] = {0};
+
+#define SWITCH_SLIDE_DEPTH 0.7f
+#define SWITCH_SPRING_K   360.0f
+#define SWITCH_DAMPING    8.0f
+#define SWITCH_EPSILON    0.0005f
+
+static Item* g_displayed_item = NULL;
+static Item* g_pending_item  = NULL;
+static float g_slide = 0.0f;
+static float g_slide_vel = 0.0f;
+static float g_slide_target = 0.0f;
+static int g_switching = 0;
 
 void item_transform_viewmodel(mat4 model, Item* item) {
     glm_translate(model, item->viewmodel_offset);
@@ -50,7 +63,8 @@ Item* item_register(const ItemSpec* spec) {
     it->viewmodel_scale[0] = spec->viewmodel_scale[0];
     it->viewmodel_scale[1] = spec->viewmodel_scale[1];
     it->viewmodel_scale[2] = spec->viewmodel_scale[2];
-it->render_program = spec->render_program;
+    it->no_animation = spec->no_animation;
+    it->render_program = spec->render_program;
     it->base = spec->base;
     it->roughness = spec->roughness;
     it->inventory_slot = spec->inventory_slot;
@@ -117,8 +131,8 @@ void item_render_skinned(Item* item, Program* active_program, mat4 model) {
     }
     glm_mat4_copy(model, sk->node_transform);
 
-    // skinned_render() only sets the "model" uniform, so we must set
-    // projection/view on the skinned program before drawing.
+    // skinned_render() only sets the model uniform, so we must set
+    // projection/view on the skinned program before drawing
     Program* sp = item->skinned_program ? item->skinned_program : active_program;
     program_use(sp);
     program_set_mat4(sp, "projection", (float*)projection);
@@ -216,6 +230,8 @@ void inventory_init(void) {
     inventory_set(5, item_get(PLANKS), INFINITE_AMOUNT);
     inventory_set(6, item_get(GLASS), INFINITE_AMOUNT);
     inventory_set(7, item_get(SAND), INFINITE_AMOUNT);
+
+    g_displayed_item = inventory[g_selected_slot].item;
 }
 
 void inventory_draw_icons(Program* active_program) {
@@ -257,4 +273,75 @@ int inventory_selected(void) {
 
 Item* inventory_selected_item(void) {
     return inventory[g_selected_slot].item;
+}
+
+Item* inventory_displayed_item(void) {
+    return g_displayed_item;
+}
+
+float item_switch_offset(void) {
+    return g_slide;
+}
+
+void inventory_switch(int slot) {
+    if (slot < 0 || slot >= INVENTORY_SLOTS) return;
+
+    Item* next = inventory[slot].item;
+    if (!next) return;
+
+    if (next->no_animation) {
+        g_displayed_item = next;
+        g_pending_item  = NULL;
+        g_switching     = 0;
+        g_slide         = 0.0f;
+        g_slide_vel     = 0.0f;
+        g_slide_target  = 0.0f;
+        g_selected_slot = slot;
+        return;
+    }
+
+    if (next == g_displayed_item && !g_switching) {
+        g_selected_slot = slot;
+        return;
+    }
+
+    g_pending_item = next;
+    g_switching    = 1;
+    g_slide_target = SWITCH_SLIDE_DEPTH;
+    g_selected_slot = slot;
+}
+
+void item_switch_update(float dt) {
+    if (dt <= 0.0f) return;
+
+    float accel = SWITCH_SPRING_K * (g_slide_target - g_slide) - SWITCH_DAMPING * g_slide_vel;
+    g_slide_vel += accel * dt;
+    g_slide += g_slide_vel * dt;
+
+    if (g_slide_target > 0.0f) {
+        if (g_slide >= SWITCH_SLIDE_DEPTH) {
+            g_slide = SWITCH_SLIDE_DEPTH;
+            g_slide_vel = 0.0f;
+        }
+    } else {
+        if (g_slide <= 0.0f) {
+            g_slide = 0.0f;
+            g_slide_vel = 0.0f;
+        }
+    }
+
+    if (g_switching && g_slide >= SWITCH_SLIDE_DEPTH - SWITCH_EPSILON) {
+        if (g_pending_item) {
+            g_displayed_item = g_pending_item;
+        }
+        g_pending_item = NULL;
+        g_switching    = 0;
+        g_slide_target = 0.0f;
+    }
+
+    if (!g_switching && g_slide_target == 0.0f &&
+        g_slide < SWITCH_EPSILON && fabsf(g_slide_vel) < 0.01f) {
+        g_slide = 0.0f;
+        g_slide_vel = 0.0f;
+    }
 }

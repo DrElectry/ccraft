@@ -280,7 +280,7 @@ void game_init() {
     gfx_program_create(&shadow, "assets/tile/tile.vsh", "assets/tile/shadow.fsh");
     gfx_program_create(&shadow_w, "assets/tile/tile_water.vsh", "assets/tile/shadow.fsh");
 
-gfx_program_create(&c, "assets/tile/tile.vsh", "assets/tile/tile.fsh");
+    gfx_program_create(&c, "assets/tile/tile.vsh", "assets/tile/tile.fsh");
     gfx_program_create(&cursora, "assets/tile/tile.vsh", "assets/misc/cursor.fsh");
     gfx_program_create(&water_prog, "assets/tile/tile_water.vsh", "assets/tile/tile_water.fsh");
 
@@ -427,14 +427,11 @@ gfx_program_create(&c, "assets/tile/tile.vsh", "assets/tile/tile.fsh");
 
     tile_pre_render_all(&c, &texture_atlas, &roughness, &normal);
 
-items_init();
+    items_init();
     inventory_init();
     inventory_select(0);
 
-// Register a test skinned item using the remote player walk model.
     if (player_walk_model && player_walk_model->skinned) {
-        // Give the item its own dedicated Skinned + AnimState so its walk
-        // animation advances asynchronously from the shared player model.
         Skinned* item_sk = (Skinned*)malloc(sizeof(Skinned));
         if (!item_sk) {
             printf("Failed to allocate item Skinned\n");
@@ -476,7 +473,6 @@ items_init();
         skinned_spec.name[MAX_NICKNAME - 1] = '\0';
         Item* skinned_item = item_register(&skinned_spec);
         if (skinned_item) {
-            // enable look so item_has_skinned() returns true
             skinned_item->skinned->look.enabled = 1;
             // put it in the last inventory slot for easy testing
             inventory_set(7, skinned_item, INFINITE_AMOUNT);
@@ -638,13 +634,13 @@ void game_tick(float dt_p) {
         }
     }
 
-if (input_manager.scroll_y != 0.0f) {
+    if (input_manager.scroll_y != 0.0f) {
         int dir = (input_manager.scroll_y > 0.0f) ? 1 : -1;
         int next = inventory_selected() + dir;
         if (next < 0) next = INVENTORY_SLOTS - 1;
         if (next >= INVENTORY_SLOTS) next = 0;
         if (next != inventory_selected()) {
-            inventory_select(next);
+            inventory_switch(next);
             Item* sel = inventory_selected_item();
             if (sel && sel->on_select) sel->on_select(sel);
         }
@@ -717,12 +713,14 @@ if (input_manager.scroll_y != 0.0f) {
 
     softbody_update(g_test_softbody, &world, &player.aabb, dt);
 
-Item* held_now = inventory_selected_item();
+    // advance the procedural item switch animation
+    item_switch_update(dt);
+
+    Item* held_now = inventory_selected_item();
     if (held_now && held_now->on_update && held_now->id != 0) {
         held_now->on_update(held_now, dt);
     }
 
-    // advance the test item's walk animation asynchronously
     if (g_item_walk_anim) {
         anim_state_update(g_item_walk_anim, dt);
     }
@@ -731,13 +729,17 @@ Item* held_now = inventory_selected_item();
 }
 
 static void draw_held_hand(mat4 hand_model) {
-    Item* held = inventory_selected_item();
+    Item* held = inventory_displayed_item();
     if (!held || held->id == 0) return;
 
+    mat4 m;
+    glm_mat4_copy(hand_model, m);
+    glm_translate(m, (vec3){0.0f, -item_switch_offset(), 0.0f});
+
     if (item_has_skinned(held)) {
-        item_render_skinned(held, &c, hand_model);
+        item_render_skinned(held, &c, m);
     } else if (held->on_render) {
-        held->on_render(held, &c, hand_model);
+        held->on_render(held, &c, m);
     }
 }
 
@@ -945,7 +947,7 @@ void game_draw(float time) {
         softbody_render(g_test_softbody, &skinned_prog);
     }
 
-vec3 eye;
+    vec3 eye;
     player_get_eye(&player, eye);
 
     glm_mat4_identity(hand_model);
@@ -1046,7 +1048,7 @@ void game_draw_misc() {
 
     glm_mat4_mul(hand_model, rot, hand_model);
 
-draw_held_hand(hand_model);
+    draw_held_hand(hand_model);
 
     program_use(&cursora);
     program_set_mat4(&cursora, "proj", (float*)projection);
@@ -1107,7 +1109,7 @@ void game_draw_hud() {
         chat_draw();
     }
 
-program_use(&canvas_program);
+    program_use(&canvas_program);
 
     float slot_y = (float)HEIGHT - 30.0f;
     for (int i = 0; i < 8; i++) {

@@ -25,7 +25,9 @@ typedef struct Item {
     Render_request viewmodel;
     vec3 viewmodel_offset, viewmodel_rotation, viewmodel_scale;
 
-    // optional skinned render model (e.g. animated knife)
+    int no_animation;
+
+    // optional
     Skinned_render_request* skinned;
     Program* skinned_program;
 
@@ -47,7 +49,9 @@ typedef struct ItemSpec {
     Render_request viewmodel;
     vec3 viewmodel_offset, viewmodel_rotation, viewmodel_scale;
 
-    // optional skinned render model (e.g. animated knife)
+    int no_animation;
+
+    // optional
     Skinned_render_request* skinned;
     Program* skinned_program;
 
@@ -89,5 +93,9 @@ void inventory_select(int slot);
 int inventory_selected(void);
 Item* inventory_selected_item(void);
 
-#endif
+void inventory_switch(int slot);
+void item_switch_update(float dt);
+float item_switch_offset(void);
+Item* inventory_displayed_item(void);
 
+#endif

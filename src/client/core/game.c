@@ -27,6 +27,7 @@
 #include "network/remote.h"
 #include "core/particle.h"
 #include "physics/softbody.h"
+#include "core/item.h"
 #include <GLFW/glfw3.h>
 #include <string.h>
 #include <stdio.h>
@@ -423,6 +424,9 @@ void game_init() {
     update_sun_direction();
 
     tile_pre_render_all(&c, &texture_atlas, &roughness, &normal);
+
+    items_init();
+    inventory_init();
 
     update_debug_texts();
 }
@@ -1136,6 +1140,8 @@ void game_draw_hud() {
     program_set_int(&canvas_program, "tex", 0);
     gfx_set_screen_projection(&canvas_program);
     gfx_canvas_render_batch(slots, 8, &canvas_program);
+
+    inventory_draw_icons(&canvas_program);
 
     program_use(&canvas_program);
     gfx_set_screen_projection(&canvas_program); // you should render canvas after those commands

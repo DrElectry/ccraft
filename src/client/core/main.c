@@ -50,6 +50,10 @@ void on_window_resize(int width, int height)
     glViewport(0, 0, width, height);
     WIDTH = width;
     HEIGHT = height;
+    if (_win) {
+        _win->width = (uint16_t)width;
+        _win->height = (uint16_t)height;
+    }
     fbo_resize(&gbuffer, width, height);
     fbo_resize(&water_gbuffer, width, height);
     fbo_resize(&shadow1, 2048, 2048);

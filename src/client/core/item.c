@@ -53,6 +53,7 @@ Item* item_register(const ItemSpec* spec) {
     memset(it, 0, sizeof(Item));
     it->id = spec->id;
     it->stack_size = spec->stack_size;
+    it->rarity = spec->rarity;
     it->viewmodel = spec->viewmodel;
     it->viewmodel_offset[0] = spec->viewmodel_offset[0];
     it->viewmodel_offset[1] = spec->viewmodel_offset[1];
@@ -86,6 +87,17 @@ Item* item_get(uint16_t id) {
         if (items[i].id == id) return &items[i];
     }
     return NULL;
+}
+
+uint8_t item_rarity_color(const Item* item) {
+    if (!item) return 0x0F;
+    switch (item->rarity) {
+        case RARITY_RARE:     return 0x0E; // yellow
+        case RARITY_MYTHIC:   return 0x05; // purple
+        case RARITY_LEGENDARY: return 0x0B; // aqua
+        case RARITY_COMMON:
+        default:              return 0x0F; // white
+    }
 }
 
 void item_render_block(Item* item, Program* active_program, mat4 model) {
@@ -173,10 +185,32 @@ static void item_empty_use(Item* item, World* world, int x, int y, int z) {
     (void)z;
 }
 
+static const char* tile_names[LAST_TILE + 1] = {
+    [GRASS] = "GRASS",
+    [DIRT] = "DIRT",
+    [LEAVES] = "LEAVES",
+    [STONE] = "STONE",
+    [IRON_BLOCK] = "IRON BLOCK",
+    [WATER] = "WATER",
+    [LOG] = "LOG",
+    [GLASS] = "GLASS",
+    [COAL_ORE] = "COAL ORE",
+    [IRON_ORE] = "IRON ORE",
+    [GOLD_ORE] = "GOLD ORE",
+    [SAND] = "SAND",
+    [GRAVEL] = "GRAVEL",
+    [LAVA] = "LAVA",
+    [ROSE] = "ROSE",
+    [GRASS_CROSS] = "GRASS",
+    [BORDER] = "BORDER",
+    [PLANKS] = "PLANKS",
+};
+
 static void default_block_spec(ItemSpec* spec, uint16_t id) {
     memset(spec, 0, sizeof(ItemSpec));
     spec->id = id;
     spec->stack_size = 64;
+    spec->rarity = RARITY_COMMON;
     spec->viewmodel = tile_render_cache[id];
     spec->inventory_slot.id = tile_fbos[id].color_attachments[0];
     spec->viewmodel_offset[0] = 0.15f;
@@ -188,6 +222,11 @@ static void default_block_spec(ItemSpec* spec, uint16_t id) {
     spec->viewmodel_scale[2] = 0.25f;
     spec->on_render = item_render_block;
     spec->on_use = item_use_block;
+
+    if (id <= LAST_TILE && tile_names[id]) {
+        strncpy(spec->name, tile_names[id], MAX_NICKNAME - 1);
+        spec->name[MAX_NICKNAME - 1] = '\0';
+    }
 }
 
 void items_init(void) {

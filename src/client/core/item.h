@@ -13,6 +13,16 @@ struct World;
 
 typedef struct Item Item;
 
+typedef uint8_t ItemRarity;
+
+enum {
+    RARITY_COMMON = 0,
+    RARITY_RARE,
+    RARITY_MYTHIC,
+    RARITY_LEGENDARY,
+    RARITY_COUNT
+};
+
 typedef void (*ItemRenderFn)(Item* item, Program* active_program, mat4 model);
 typedef void (*ItemUseFn)(Item* item, struct World* world, int x, int y, int z);
 typedef void (*ItemSelectFn)(Item* item);
@@ -21,6 +31,7 @@ typedef void (*ItemUpdateFn)(Item* item, float dt);
 typedef struct Item {
     uint16_t id;
     uint8_t stack_size;
+    ItemRarity rarity;
 
     Render_request viewmodel;
     vec3 viewmodel_offset, viewmodel_rotation, viewmodel_scale;
@@ -45,6 +56,7 @@ typedef struct Item {
 typedef struct ItemSpec {
     uint16_t id;
     uint8_t stack_size;
+    ItemRarity rarity;
 
     Render_request viewmodel;
     vec3 viewmodel_offset, viewmodel_rotation, viewmodel_scale;
@@ -80,6 +92,7 @@ void inventory_draw_icons(Program* active_program);
 
 Item* item_register(const ItemSpec* spec);
 Item* item_get(uint16_t id);
+uint8_t item_rarity_color(const Item* item);
 
 void item_transform_viewmodel(mat4 model, Item* item);
 void item_render_block(Item* item, Program* active_program, mat4 model);

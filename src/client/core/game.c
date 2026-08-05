@@ -130,6 +130,15 @@ static HText debug_texts[7];
 static int debug_texts_ready = 0;
 static float debug_current_fps = 0.0f;
 
+// pickup / grab item name fade-out text
+static HText g_pickup_text;
+static float g_pickup_alpha = 0.0f;
+static int g_pickup_active = 0;
+static const float g_pickup_lifetime = 1.5f;
+static int g_pickup_text_ready = 0;
+static uint8_t g_pickup_color = 0x0F;
+static char g_pickup_name[MAX_NICKNAME];
+
 // shadow caching state
 static vec3 shadow_last_pos = {0.0f, 0.0f, 0.0f};
 int shadow_dirty = 1; // force first update
@@ -464,12 +473,13 @@ void game_init() {
         skinned_spec.stack_size = 1;
         skinned_spec.skinned = item_req;
         skinned_spec.skinned_program = &skinned_prog;
+        skinned_spec.rarity = RARITY_LEGENDARY;
         skinned_spec.viewmodel_scale[0] = 0.5f;
         skinned_spec.viewmodel_scale[1] = 0.5f;
         skinned_spec.viewmodel_scale[2] = 0.5f;
         skinned_spec.viewmodel_offset[1] = -0.5f;
         skinned_spec.viewmodel_offset[2] = 0.6f;
-        strncpy(skinned_spec.name, "Kniwife", MAX_NICKNAME - 1);
+        strncpy(skinned_spec.name, "son", MAX_NICKNAME - 1);
         skinned_spec.name[MAX_NICKNAME - 1] = '\0';
         Item* skinned_item = item_register(&skinned_spec);
         if (skinned_item) {
@@ -643,6 +653,22 @@ void game_tick(float dt_p) {
             inventory_switch(next);
             Item* sel = inventory_selected_item();
             if (sel && sel->on_select) sel->on_select(sel);
+
+            if (sel && sel->id != 0) {
+                strncpy(g_pickup_name, sel->name, MAX_NICKNAME - 1);
+                g_pickup_name[MAX_NICKNAME - 1] = '\0';
+                g_pickup_color = item_rarity_color(sel);
+
+                if (!g_pickup_text_ready) {
+                    text_create(&g_pickup_text, g_pickup_name, g_pickup_color, 1.0f, 0, 0);
+                    g_pickup_text_ready = 1;
+                } else {
+                    text_free(&g_pickup_text);
+                    text_create(&g_pickup_text, g_pickup_name, g_pickup_color, 1.0f, 0, 0);
+                }
+                g_pickup_alpha = 1.0f;
+                g_pickup_active = 1;
+            }
         }
         blockih = inventory[inventory_selected()].item->id;
         input_manager.scroll_y = 0.0f;
@@ -715,6 +741,15 @@ void game_tick(float dt_p) {
 
     // advance the procedural item switch animation
     item_switch_update(dt);
+
+    // fade out the pickup/grab item name text
+    if (g_pickup_active) {
+        g_pickup_alpha -= (float)dt / g_pickup_lifetime;
+        if (g_pickup_alpha <= 0.0f) {
+            g_pickup_alpha = 0.0f;
+            g_pickup_active = 0;
+        }
+    }
 
     Item* held_now = inventory_selected_item();
     if (held_now && held_now->on_update && held_now->id != 0) {
@@ -858,7 +893,7 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
 
     glm_mat4_mul(hand_model, rot, hand_model);
 
-draw_held_hand(hand_model);
+    draw_held_hand(hand_model);
 
     glViewport(0, 0, WIDTH, HEIGHT);
 
@@ -967,7 +1002,7 @@ void game_draw(float time) {
 
     glm_mat4_mul(hand_model, rot, hand_model);
 
-draw_held_hand(hand_model);
+    draw_held_hand(hand_model);
 
     program_use(&cursora);
     program_set_mat4(&cursora, "proj", (float*)projection);
@@ -1133,6 +1168,18 @@ void game_draw_hud() {
         }
     }
 
+    if (g_pickup_active && g_pickup_text_ready) {
+        // text_draw uses _win->width/_win->height for its projection
+        int len = (int)strlen(g_pickup_name);
+        int text_w = len * CHAR_WIDTH;
+        int x = (_win->width - text_w) / 2;
+        int y = (_win->height - CHAR_HEIGHT) / 2 + HEIGHT/3;
+
+        // rebuild geometry so text stays centered after window resizes 
+        text_create(&g_pickup_text, g_pickup_name, g_pickup_color, g_pickup_alpha, x, y);
+        text_draw(&g_pickup_text);
+    }
+
     if (!__onserv) return;
 
     RemotePlayer* remotes = network_get_remote_players();
@@ -1185,7 +1232,7 @@ void game_destroy() {
         g_test_softbody = NULL;
     }
 
-(void)walk_anim;
+    (void)walk_anim;
     if (g_item_walk_anim) {
         anim_state_destroy(g_item_walk_anim);
         g_item_walk_anim = NULL;

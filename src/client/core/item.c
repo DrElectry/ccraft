@@ -74,6 +74,8 @@ Item* item_register(const ItemSpec* spec) {
     it->on_render = spec->on_render;
     it->on_use = spec->on_use;
     it->on_select = spec->on_select;
+    it->on_deselect = spec->on_deselect;
+    it->on_unselect = spec->on_unselect;
     it->on_update = spec->on_update;
     strncpy(it->name, spec->name, MAX_NICKNAME - 1);
     it->name[MAX_NICKNAME - 1] = '\0';
@@ -284,6 +286,10 @@ void inventory_draw_icons(Program* active_program) {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, e->item->inventory_slot.id);
         program_set_int(active_program, "tex", 0);
+
+        // fbo sampled block icons are stored bottom up in opengl to match the top-down screen-space canvas convention
+        // non block icons are regular png textures (stb_image, top up) and need no flip.
+        e->request.flip_v = (e->item->id >= FIRST_TILE && e->item->id <= LAST_TILE) ? 1 : 0;
 
         e->request.pos[1] = (float)HEIGHT - 30.0f;
         gfx_canvas_render(&e->request, active_program);

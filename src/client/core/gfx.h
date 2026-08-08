@@ -50,6 +50,7 @@ typedef struct {
     float rotation;
 
     float alpha;
+    int flip_v; // flip the texture vertically (for FBO-sampled block icons)
     
     GPUBuffer cache;
     int initialized;

@@ -35,7 +35,7 @@
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! READ THIS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 // If you want to modify the game rendering code, you have to understand that
 // Deferred renderer uses functions game_draw_misc() game_shadow_pass() game_draw_water_gbuffer() game_draw_terrain_gbuffer()
-// Potato mode renderer uses only game_draw(), which is unused in deferred renderer
+// Potato mode renderer uses only game_draw(), which is unused in the deferred renderer
 // amazing code, i know
 
 Player player;
@@ -96,6 +96,9 @@ float pdelay = 0.0f;
 float ndelay = 0.0f;
 float ddelay = 0.0f;
 
+static sound_t* tung_music;
+static sound_t* tung;
+
 int sun_time = 0;
 float sun_delay = 0.0f;
 
@@ -109,7 +112,7 @@ int ff[24 * 15] = {0};
 int cc, dd, gg, hh; // for block in our hand
 
 Input input_manager;
-Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, normal, slot;
+Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, normal, slot, slot_select;
 
 Render_request block, cursor; // in your hand
 
@@ -119,6 +122,7 @@ static float place_delay = 0.0f;
 static float g_footstep_delay = 0.0f;
 
 Canvas_Render_Request slots[8] = {0};
+Canvas_Render_Request slot_select_rq = {0};
 
 static Softbody* g_test_softbody = NULL;
 
@@ -130,7 +134,7 @@ static HText debug_texts[7];
 static int debug_texts_ready = 0;
 static float debug_current_fps = 0.0f;
 
-// pickup / grab item name fade-out text
+// pickup / grab item name fadeout text
 static HText g_pickup_text;
 static float g_pickup_alpha = 0.0f;
 static int g_pickup_active = 0;
@@ -142,6 +146,70 @@ static char g_pickup_name[MAX_NICKNAME];
 // shadow caching state
 static vec3 shadow_last_pos = {0.0f, 0.0f, 0.0f};
 int shadow_dirty = 1; // force first update
+
+static Render_request* g_tung_model = NULL;
+static Texture g_tung_tex;
+static Texture g_tung_slot_tex;
+static float g_tung_rotation = 0.0f;
+
+static void render_tung_model(Item* item, Program* prog, mat4 model) {
+    (void)prog;
+    if (!g_tung_model) return;
+
+    program_use(&model_program);
+    texture_bind(&g_tung_tex, 0);
+    texture_bind(&brightt, 1);
+    program_set_int(&model_program, "tex", 0);
+    program_set_int(&model_program, "roug", 1);
+    program_set_mat4(&model_program, "proj", (float*)projection);
+    program_set_mat4(&model_program, "view", (float*)view);
+
+    mat4 m;
+    glm_mat4_copy(model, m);
+    glm_translate(m, item->viewmodel_offset);
+    glm_rotate_y(m, g_tung_rotation, m);
+    glm_scale(m, item->viewmodel_scale);
+    program_set_mat4(&model_program, "model", (float*)m);
+
+    glDisable(GL_CULL_FACE);
+
+    vao_bind(&g_tung_model->cache.vao);
+    glDrawElements(GL_TRIANGLES, g_tung_model->tri_count * 3, GL_UNSIGNED_INT, NULL);
+
+    glEnable(GL_CULL_FACE);
+}
+
+static void select_tung_model(Item* item) {
+    (void)item;
+    if (!tung_music) return;
+    sound_set_looping(tung_music, false);
+    sound_set_volume(tung_music, 1.0f);
+    sound_play(tung_music);
+}
+
+static void deselect_tung_model(Item* item) {
+    (void)item;
+    if (!tung_music) return;
+    sound_stop(tung_music);
+}
+
+static void unselect_tung_model(Item* item) {
+    (void)item;
+    if (!tung_music) return;
+    sound_stop(tung_music);
+}
+
+static void use_tung_model(Item* item, struct World* world, int x, int y, int z) {
+    (void)item;
+    (void)world;
+    (void)x;
+    (void)y;
+    (void)z;
+    if (!tung) return;
+    sound_set_looping(tung, false);
+    sound_set_volume(tung, 1.0f);
+    sound_play(tung);
+}
 
 void update_debug_texts(void) {
     char buf[256];
@@ -269,11 +337,17 @@ void game_init() {
     slot.min_filter = GL_NEAREST;
     slot.wrap_s = GL_REPEAT;
     slot.wrap_t = GL_REPEAT;
+
+    slot_select.mag_filter = GL_NEAREST;
+    slot_select.min_filter = GL_NEAREST;
+    slot_select.wrap_s = GL_REPEAT;
+    slot_select.wrap_t = GL_REPEAT;
     
     texture_create(&player_tex, "assets/textures/player.png");
     texture_create(&player_shininess, "assets/textures/txt_shininess.png");
 
     texture_create(&slot, "assets/textures/slot.png");
+    texture_create(&slot_select, "assets/textures/slot_select.png");
 
     texture_create(&brightt, "assets/textures/txt_shininess.png");
     texture_create(&textt, "assets/textures/txt.png");
@@ -397,7 +471,7 @@ void game_init() {
     );
 
     particle_manager_init(&particle_manager);
-
+    
     vec3 gravity = { 0.0f, -9.81f, 0.0f };
     vec3 start_vel = {0.0f, 6.0f, 0.0f };
     vec3 aabb_size = {2.0f, 0.5f, 0.5f};
@@ -431,6 +505,10 @@ void game_init() {
         gfx_canvas_packet_static_request(&slots[i]);
     }
 
+    glm_vec2_copy((vec2){48.0f, 48.0f}, slot_select_rq.scale);
+    slot_select_rq.alpha = 0.75f;
+    gfx_canvas_packet_static_request(&slot_select_rq);
+
     sun_time = 11000;
     update_sun_direction();
 
@@ -439,6 +517,38 @@ void game_init() {
     items_init();
     inventory_init();
     inventory_select(0);
+
+    g_tung_model = obj_load_render_request("assets/models/tung_tung_tung_sahur.obj");
+    if (!g_tung_model) {
+        printf("Failed to load tung_tung_tung_sahur.obj\n");
+    } else {
+        texture_create(&g_tung_tex, "assets/textures/tung.png");
+        texture_create(&g_tung_slot_tex, "assets/textures/tung_slot.png");
+
+        tung_music = sound_load("assets/sounds/tung_music.wav");
+        tung = sound_load("assets/sounds/tung.wav");
+
+        ItemSpec tung_spec;
+        memset(&tung_spec, 0, sizeof(ItemSpec));
+        tung_spec.id = 101;
+        tung_spec.stack_size = 1;
+        tung_spec.rarity = RARITY_LEGENDARY; // triple t is legendary
+        glm_vec3_copy((vec3){0.05f, 0.05f, 0.05f}, tung_spec.viewmodel_scale);
+        glm_vec3_copy((vec3){0.35f, -0.35f, 0.6f}, tung_spec.viewmodel_offset);
+        strncpy(tung_spec.name, "Tung Tung Tung Sahur", MAX_NICKNAME - 1);
+        tung_spec.name[MAX_NICKNAME - 1] = '\0';
+
+        Item* tung_item = item_register(&tung_spec);
+        tung_item->inventory_slot = g_tung_slot_tex;
+        tung_item->base = g_tung_tex;
+        if (tung_item) {
+            tung_item->on_render = render_tung_model;
+            tung_item->on_select = select_tung_model;
+            tung_item->on_unselect = unselect_tung_model;
+            tung_item->on_use = use_tung_model;
+            inventory_set(7, tung_item, INFINITE_AMOUNT);
+        }
+    }
 
     if (player_walk_model && player_walk_model->skinned) {
         Skinned* item_sk = (Skinned*)malloc(sizeof(Skinned));
@@ -469,23 +579,22 @@ void game_init() {
 
         ItemSpec skinned_spec;
         memset(&skinned_spec, 0, sizeof(ItemSpec));
-        skinned_spec.id = 100; // above the tile range (1..18)
+        skinned_spec.id = 100;
         skinned_spec.stack_size = 1;
         skinned_spec.skinned = item_req;
         skinned_spec.skinned_program = &skinned_prog;
-        skinned_spec.rarity = RARITY_LEGENDARY;
+        skinned_spec.rarity = RARITY_RARE;
         skinned_spec.viewmodel_scale[0] = 0.5f;
         skinned_spec.viewmodel_scale[1] = 0.5f;
         skinned_spec.viewmodel_scale[2] = 0.5f;
         skinned_spec.viewmodel_offset[1] = -0.5f;
         skinned_spec.viewmodel_offset[2] = 0.6f;
-        strncpy(skinned_spec.name, "son", MAX_NICKNAME - 1);
+        strncpy(skinned_spec.name, "Skinned render request as an item test", MAX_NICKNAME - 1);
         skinned_spec.name[MAX_NICKNAME - 1] = '\0';
         Item* skinned_item = item_register(&skinned_spec);
         if (skinned_item) {
             skinned_item->skinned->look.enabled = 1;
-            // put it in the last inventory slot for easy testing
-            inventory_set(7, skinned_item, INFINITE_AMOUNT);
+            inventory_set(6, skinned_item, INFINITE_AMOUNT);
         }
     }
 
@@ -639,7 +748,7 @@ void game_tick(float dt_p) {
             } else {
                 network_send_block_change(network_get_local_client_id(), hit.bx, hit.by, hit.bz, AIR);
             }
-            game_mark_shadow_dirty(); // block changed, need new shadows
+            game_mark_shadow_dirty();
             break_delay = 0.2f;
         }
     }
@@ -650,6 +759,8 @@ void game_tick(float dt_p) {
         if (next < 0) next = INVENTORY_SLOTS - 1;
         if (next >= INVENTORY_SLOTS) next = 0;
         if (next != inventory_selected()) {
+            Item* prev = inventory_selected_item();
+            if (prev && prev->on_unselect) prev->on_unselect(prev);
             inventory_switch(next);
             Item* sel = inventory_selected_item();
             if (sel && sel->on_select) sel->on_select(sel);
@@ -755,6 +866,8 @@ void game_tick(float dt_p) {
     if (held_now && held_now->on_update && held_now->id != 0) {
         held_now->on_update(held_now, dt);
     }
+
+    g_tung_rotation += dt * 0.5f;
 
     if (g_item_walk_anim) {
         anim_state_update(g_item_walk_anim, dt);
@@ -1157,10 +1270,16 @@ void game_draw_hud() {
     gfx_set_screen_projection(&canvas_program);
     gfx_canvas_render_batch(slots, 8, &canvas_program);
 
+    slot_select_rq.pos[0] = 30.0f + ((float)inventory_selected() * 54.0f);
+    slot_select_rq.pos[1] = slot_y;
+    texture_bind(&slot_select, 0);
+    program_set_int(&canvas_program, "tex", 0);
+    gfx_canvas_render(&slot_select_rq, &canvas_program);
+
     inventory_draw_icons(&canvas_program);
 
     program_use(&canvas_program);
-    gfx_set_screen_projection(&canvas_program); // you should render canvas after those commands
+    gfx_set_screen_projection(&canvas_program);
 
     if (debug_texts_ready && debug) {
         for (int i = 0; i < 7; i++) {
@@ -1169,13 +1288,11 @@ void game_draw_hud() {
     }
 
     if (g_pickup_active && g_pickup_text_ready) {
-        // text_draw uses _win->width/_win->height for its projection
         int len = (int)strlen(g_pickup_name);
         int text_w = len * CHAR_WIDTH;
         int x = (_win->width - text_w) / 2;
         int y = (_win->height - CHAR_HEIGHT) / 2 + HEIGHT/3;
 
-        // rebuild geometry so text stays centered after window resizes 
         text_create(&g_pickup_text, g_pickup_name, g_pickup_color, g_pickup_alpha, x, y);
         text_draw(&g_pickup_text);
     }

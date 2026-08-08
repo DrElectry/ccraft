@@ -200,6 +200,7 @@ void gfx_canvas_render(Canvas_Render_Request* r, Program* active_program) {
     program_use(active_program);
     program_set_mat4(active_program, "model", (float*)model_matrix);
     program_set_float(active_program, "alpha", r->alpha);
+    program_set_float(active_program, "flip_v", (float)r->flip_v);
     
     vao_bind(&r->cache.vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
@@ -226,6 +227,7 @@ void gfx_canvas_render_batch(Canvas_Render_Request* requests, int count, Program
         
         program_set_mat4(active_program, "model", (float*)model_matrix);
         program_set_float(active_program, "alpha", r->alpha);
+        program_set_float(active_program, "flip_v", (float)r->flip_v);
         
         vao_bind(&r->cache.vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);

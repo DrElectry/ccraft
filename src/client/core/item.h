@@ -26,6 +26,8 @@ enum {
 typedef void (*ItemRenderFn)(Item* item, Program* active_program, mat4 model);
 typedef void (*ItemUseFn)(Item* item, struct World* world, int x, int y, int z);
 typedef void (*ItemSelectFn)(Item* item);
+typedef void (*ItemDeselectFn)(Item* item);
+typedef void (*ItemUnselectFn)(Item* item);
 typedef void (*ItemUpdateFn)(Item* item, float dt);
 
 typedef struct Item {
@@ -42,7 +44,7 @@ typedef struct Item {
     Skinned_render_request* skinned;
     Program* skinned_program;
 
-    Program render_program;
+Program render_program;
     Texture base, roughness, inventory_slot;
 
     char name[MAX_NICKNAME];
@@ -50,6 +52,8 @@ typedef struct Item {
     ItemRenderFn on_render;
     ItemUseFn on_use;
     ItemSelectFn on_select;
+    ItemDeselectFn on_deselect;
+    ItemUnselectFn on_unselect;
     ItemUpdateFn on_update;
 } Item;
 
@@ -67,7 +71,7 @@ typedef struct ItemSpec {
     Skinned_render_request* skinned;
     Program* skinned_program;
 
-    Program render_program;
+Program render_program;
     Texture base, roughness, inventory_slot;
 
     char name[MAX_NICKNAME];
@@ -75,6 +79,8 @@ typedef struct ItemSpec {
     ItemRenderFn on_render;
     ItemUseFn on_use;
     ItemSelectFn on_select;
+    ItemDeselectFn on_deselect;
+    ItemUnselectFn on_unselect;
     ItemUpdateFn on_update;
 } ItemSpec;
 

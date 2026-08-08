@@ -754,7 +754,7 @@ void game_tick(float dt_p) {
     }
 
     if (input_manager.scroll_y != 0.0f) {
-        int dir = (input_manager.scroll_y > 0.0f) ? 1 : -1;
+        int dir = (input_manager.scroll_y > 0.0f) ? -1 : 1;
         int next = inventory_selected() + dir;
         if (next < 0) next = INVENTORY_SLOTS - 1;
         if (next >= INVENTORY_SLOTS) next = 0;

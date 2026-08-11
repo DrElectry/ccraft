@@ -68,6 +68,11 @@ void on_window_resize(int width, int height)
     fbo_resize(&ffb, width, height);
     fbo_resize(&underwaterfb, width, height);
 
+    glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, crosshair_rq.pos);
+    glm_vec2_copy((vec2){4.0f, 4.0f}, crosshair_rq.scale);
+    crosshair_rq.alpha = 0.75f;
+    gfx_canvas_packet_static_request(&crosshair_rq);
+
     update_debug_texts();
 }
 
@@ -187,16 +192,11 @@ int main(int argc, char* argv[]) {
     mat4 light_space_matrix_near;
     mat4 light_space_matrix_far;
 
-    Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, crossf, underwf;
-    Program main, ssao, pp, ssr, blur, bloom, cross, underwater_prog;
-    File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, crossff, underwff;
+    Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, fxaa_f, underwf;
+    Program main, ssao, pp, ssr, blur, bloom, fxaa, underwater_prog;
+    File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, fxaa_ff, underwff;
 
-    Texture crosshair, caustics, dirt;
-
-    crosshair.mag_filter = GL_NEAREST;
-    crosshair.min_filter = GL_NEAREST;
-    crosshair.wrap_s = GL_REPEAT;
-    crosshair.wrap_t = GL_REPEAT;
+    Texture caustics, dirt;
 
     caustics.mag_filter = GL_LINEAR;
     caustics.min_filter = GL_LINEAR_MIPMAP_LINEAR;
@@ -208,7 +208,6 @@ int main(int argc, char* argv[]) {
     dirt.wrap_s = GL_REPEAT;
     dirt.wrap_t = GL_REPEAT;
 
-    texture_create(&crosshair, "assets/textures/crosshair.png");
     texture_create(&caustics, "assets/textures/caustics.jpg");
     texture_create(&dirt, "assets/textures/water_dirt.png");
 
@@ -219,7 +218,7 @@ int main(int argc, char* argv[]) {
     ssrf.type = GL_FRAGMENT_SHADER;
     bloomf.type = GL_FRAGMENT_SHADER;
     blurf.type = GL_FRAGMENT_SHADER;
-    crossf.type = GL_FRAGMENT_SHADER;
+    fxaa_f.type = GL_FRAGMENT_SHADER;
     underwf.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
@@ -229,7 +228,7 @@ int main(int argc, char* argv[]) {
     ssrff = file_open("assets/deferred/ssr.fsh");
     bloomff = file_open("assets/deferred/bloom.fsh");
     blurff = file_open("assets/deferred/blur.fsh");
-    crossff = file_open("assets/gui/crosshair.fsh");
+    fxaa_ff = file_open("assets/deferred/fxaa.fsh");
     underwff = file_open("assets/deferred/underwater.fsh");
 
     shader_create(&mainv, mainfv.data);
@@ -239,7 +238,7 @@ int main(int argc, char* argv[]) {
     shader_create(&ssrf, ssrff.data);
     shader_create(&bloomf, bloomff.data);
     shader_create(&blurf, blurff.data);
-    shader_create(&crossf, crossff.data);
+    shader_create(&fxaa_f, fxaa_ff.data);
     shader_create(&underwf, underwff.data);
 
     program_create(&main, &mainv, &mainf);
@@ -248,7 +247,7 @@ int main(int argc, char* argv[]) {
     program_create(&ssr, &mainv, &ssrf);
     program_create(&blur, &mainv, &blurf);
     program_create(&bloom, &mainv, &bloomf);
-    program_create(&cross, &mainv, &crossf);
+    program_create(&fxaa, &mainv, &fxaa_f);
     program_create(&underwater_prog, &mainv, &underwf);
 
     ssrfb.color_formats[0] = FBO_COLOR_RGBA16F;
@@ -613,7 +612,7 @@ int main(int argc, char* argv[]) {
         printf("final_composite: %.3f ms\n", (t_end_final - t_start_final) * 1000.0);
 #endif
 
-        FBO* scene_for_crosshair = &ffb;
+        FBO* scene_for_fxaa = &ffb;
 
         if (underwater) {
 #ifdef DEBUG_PERF
@@ -635,15 +634,14 @@ int main(int argc, char* argv[]) {
             double t_end_underwater = glfwGetTime();
             printf("underwater: %.3f ms\n", (t_end_underwater - t_start_underwater) * 1000.0);
 #endif
-            scene_for_crosshair = &underwaterfb;
+            scene_for_fxaa = &underwaterfb;
         }
 
-        program_use(&cross);
-        fbo_bind_texture(scene_for_crosshair, 0, 0);
-        texture_bind(&crosshair, 1);
-        program_set_int(&cross, "crosshair", 1);
-        program_set_float(&cross, "width", (float)WIDTH);
-        program_set_float(&cross, "height", (float)HEIGHT);
+        program_use(&fxaa);
+        fbo_bind_texture(scene_for_fxaa, 0, 0);
+        program_set_int(&fxaa, "frame", 0);
+        program_set_float(&fxaa, "width", (float)WIDTH);
+        program_set_float(&fxaa, "height", (float)HEIGHT);
         gfx_draw_fullscreen_quad();
 
         glEnable(GL_BLEND);

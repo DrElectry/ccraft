@@ -124,6 +124,9 @@ static float g_footstep_delay = 0.0f;
 Canvas_Render_Request slots[8] = {0};
 Canvas_Render_Request slot_select_rq = {0};
 
+Texture crosshair_tex;
+Canvas_Render_Request crosshair_rq;
+
 static Softbody* g_test_softbody = NULL;
 
 static uint8_t remote_names_active[CLIENT_MAX_REMOTES] = {0};
@@ -342,12 +345,19 @@ void game_init() {
     slot_select.min_filter = GL_NEAREST;
     slot_select.wrap_s = GL_REPEAT;
     slot_select.wrap_t = GL_REPEAT;
+
+    crosshair_tex.mag_filter = GL_NEAREST;
+    crosshair_tex.min_filter = GL_NEAREST;
+    crosshair_tex.wrap_s = GL_REPEAT;
+    crosshair_tex.wrap_t = GL_REPEAT;
     
     texture_create(&player_tex, "assets/textures/player.png");
     texture_create(&player_shininess, "assets/textures/txt_shininess.png");
 
     texture_create(&slot, "assets/textures/slot.png");
     texture_create(&slot_select, "assets/textures/slot_select.png");
+
+    texture_create(&crosshair_tex, "assets/textures/crosshair.png");
 
     texture_create(&brightt, "assets/textures/txt_shininess.png");
     texture_create(&textt, "assets/textures/txt.png");
@@ -508,6 +518,11 @@ void game_init() {
     glm_vec2_copy((vec2){48.0f, 48.0f}, slot_select_rq.scale);
     slot_select_rq.alpha = 0.75f;
     gfx_canvas_packet_static_request(&slot_select_rq);
+
+    glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, crosshair_rq.pos);
+    glm_vec2_copy((vec2){4.0f, 4.0f}, crosshair_rq.scale);
+    crosshair_rq.alpha = 0.75f;
+    gfx_canvas_packet_static_request(&crosshair_rq);
 
     sun_time = 11000;
     update_sun_direction();
@@ -1277,6 +1292,11 @@ void game_draw_hud() {
     gfx_canvas_render(&slot_select_rq, &canvas_program);
 
     inventory_draw_icons(&canvas_program);
+
+    texture_bind(&crosshair_tex, 0);
+    program_set_int(&canvas_program, "tex", 0);
+    gfx_set_screen_projection(&canvas_program);
+    gfx_canvas_render(&crosshair_rq, &canvas_program);
 
     program_use(&canvas_program);
     gfx_set_screen_projection(&canvas_program);

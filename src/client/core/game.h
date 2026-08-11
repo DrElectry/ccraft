@@ -20,6 +20,8 @@ extern Player player;
 
 extern int shadow_dirty;
 
+extern Canvas_Render_Request crosshair_rq;
+
 static float clamp(float value, float min,  float max)
 {
     if (value < min)

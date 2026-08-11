@@ -340,12 +340,6 @@ int main(int argc, char* argv[]) {
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
 
-        fbo_bind(&prev_frame);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prev_frame.id);
-        glBlitFramebuffer(0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_LINEAR);
-        fbo_unbind();
-
 #ifdef DEBUG_PERF
         double t_start_gbuffer = glfwGetTime();
 #endif
@@ -643,6 +637,12 @@ int main(int argc, char* argv[]) {
         program_set_float(&fxaa, "width", (float)WIDTH);
         program_set_float(&fxaa, "height", (float)HEIGHT);
         gfx_draw_fullscreen_quad();
+
+        fbo_bind(&prev_frame);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prev_frame.id);
+        glBlitFramebuffer(0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        fbo_unbind();
 
         glEnable(GL_BLEND);
 

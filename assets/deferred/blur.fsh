@@ -13,7 +13,7 @@ const int samples = 11;
 void main()
 {
     vec2 scaled_uv = out_uv * blur_ratio;
-    vec2 texel = (1.0 / textureSize(image, 0)) * blurScale;
+    vec2 texelSize = (1.0 / textureSize(image, 0)) * blurScale;
     
     float weights[] = float[](
         0.0565, 0.0940, 0.1195, 0.1308, 0.1195, 0.0940,
@@ -24,7 +24,7 @@ void main()
     
     for (int i = 0; i < samples; i++)
     {
-        float offset = float(i) * texel.x;
+        vec2 offset = float(i) * texelSize;
         vec2 sampleOffset = direction * offset;
         
         result += texture(image, scaled_uv + sampleOffset).rgb * weights[i];

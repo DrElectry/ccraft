@@ -263,12 +263,22 @@ void update_debug_texts(void) {
 
 static void update_sun_direction() {
     float dayTime = sun_time / 24000.0f;
-
-    float angle = dayTime * 2.0f * 3.14159265f - 3.14159265f / 2.0f;
-
-    light_dir[0] = cosf(angle);
-    light_dir[1] = sinf(angle);
-    light_dir[2] = 0.0f;
+    
+    const float axialTilt = -23.5f * (3.14159265f / 180.0f); // Convert to radians
+    const float sunDistance = 30.0f;
+    
+    float sunAngle = dayTime * 2.0f * 3.14159265f;
+    
+    float sunX = sunDistance * cosf(sunAngle);
+    float sunY = sunDistance * sinf(sunAngle) * cosf(axialTilt);
+    float sunZ = sunDistance * sinf(sunAngle) * sinf(axialTilt);
+    
+    // normalize
+    float length = sqrtf(sunX * sunX + sunY * sunY + sunZ * sunZ);
+    light_dir[0] = sunX / length;
+    light_dir[1] = sunY / length;
+    light_dir[2] = sunZ / length;
+    
     shadow_dirty = 1;
 }
 
@@ -524,7 +534,7 @@ void game_init() {
     crosshair_rq.alpha = 0.75f;
     gfx_canvas_packet_static_request(&crosshair_rq);
 
-    sun_time = 11000;
+    sun_time = 4500;
     update_sun_direction();
 
     tile_pre_render_all(&c, &texture_atlas, &roughness, &normal);

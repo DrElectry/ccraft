@@ -112,12 +112,12 @@ vec3 getSun(vec3 rd, vec3 lightDir)
     float cosTheta = dot(rd, sunDirection);
     float angle = acos(cosTheta);
 
-    float sunDisk = 1.0 - smoothstep(0.0, 0.02, angle);
+    float sunDisk = 1.0 - smoothstep(0.0, 0.05, angle);
 
     float innerGlow = 0.0;
-    if (angle < 0.08) {
-        float t = angle / 0.08;
-        innerGlow = pow(1.0 - t, 1.5) * 0.2;
+    if (angle < 0.5) {
+        float t = angle / 0.5;
+        innerGlow = pow(1.0 - t, 1.5) * 0.05;
     }
 
     vec3 diskColor = SUN_COLOR;
@@ -177,7 +177,7 @@ float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMult
     cameraDistFactor = clamp(cameraDistFactor, 0.5, 3.0);
     
     float radius = 2.0 * radiusMultiplier * occluderDist * cameraDistFactor;
-    radius = clamp(radius, 0.5, 12.0);
+    radius = clamp(radius, 0.5, 126.0);
 
     int totalSamples = 32;
     if (radius < 2.0) {
@@ -555,7 +555,14 @@ void main()
 
     if (isSky && !(isUnderwater && depth > 0.99999))
     {
-        color += getSun(rd, lightDir);
+        vec3 sunColor = getSun(rd, lightDir);
+        
+        float horizonBlend = 1.0 - max(0.0, rd.y);
+        vec3 horizonColor = vec3(0.6, 0.7, 0.8);
+        vec3 zenithColor = vec3(0.52, 0.65, 0.78);
+        vec3 skyGradient = mix(zenithColor, horizonColor, horizonBlend);
+        
+        color = skyGradient + sunColor;
     }
 
     fragColor = vec4(color, 1.0);

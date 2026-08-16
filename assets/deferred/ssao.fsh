@@ -16,7 +16,6 @@ const float ssaoRadius = 0.5;
 const float bias = 0.05;
 const int kernelSize = 32;
 
-// pregenerated offline kernel
 const vec3 ssaoKernel[32] = vec3[](
     vec3(0.0625, 0.0000, 0.0000),
     vec3(0.0541, 0.0313, 0.0312),
@@ -73,7 +72,7 @@ void main()
     mat3 TBN = mat3(tangent, bitangent, normal);
 
     float occlusion = 0.0;
-    int count = 0;
+    float totalWeight = 0.0;
 
     for (int i = 0; i < kernelSize; ++i)
     {
@@ -97,12 +96,17 @@ void main()
             ssaoRadius / (abs(fragPos.z - sampleDepth) + 1e-4)
         );
 
-        occlusion += (sampleDepth - samplePos.z >= bias ? 1.0 : 0.0) * rangeCheck;
-        count++;
+        vec3 sampleDir = normalize(samplePos - fragPos);
+        float normalWeight = max(0.0, dot(normal, sampleDir));
+
+        float depthOcclusion = (sampleDepth - samplePos.z >= bias) ? 1.0 : 0.0;
+        float weight = rangeCheck * normalWeight;
+        occlusion += depthOcclusion * weight;
+        totalWeight += weight;
     }
 
-    if (count > 0)
-        occlusion = 1.0 - occlusion / float(count);
+    if (totalWeight > 0.0)
+        occlusion = 1.0 - occlusion / totalWeight;
     else
         occlusion = 1.0;
 

@@ -27,7 +27,6 @@ char __nickname[32];
 float blur_strength = 0.0f;
 float aperture = 0.0f;
 
-
 int WIDTH = 1280;
 int HEIGHT = 720;
 
@@ -313,7 +312,7 @@ int main(int argc, char* argv[]) {
                 blur_strength-=60.0f*delta_time;
         }
 
-        blur_strength = clamp(blur_strength, 16.0f, 128.0f);
+        blur_strength = clamp(blur_strength, 24.0f, 128.0f);
         aperture = clamp(aperture, 1.0f, 3.0f);
 
         if (wireframe==1 || potato_mode==1) {

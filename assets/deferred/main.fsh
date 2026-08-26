@@ -559,7 +559,7 @@ void main()
         
         float horizonBlend = 1.0 - max(0.0, rd.y);
         vec3 horizonColor = vec3(0.6, 0.7, 0.8);
-        vec3 zenithColor = vec3(0.52, 0.65, 0.78);
+        vec3 zenithColor = vec3(0.45, 0.56, 0.66);
         vec3 skyGradient = mix(zenithColor, horizonColor, horizonBlend);
         
         color = skyGradient + sunColor;

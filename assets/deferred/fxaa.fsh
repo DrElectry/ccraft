@@ -12,7 +12,7 @@ out vec4 fragColor;
 
 #define FXAA_REDUCE_MIN   (1.0 / 256.0)
 #define FXAA_REDUCE_MUL   (1.0 / 2.0)
-#define FXAA_SPAN_MAX     24.0
+#define FXAA_SPAN_MAX     36.0
 
 void main() {
     vec2 resolution = vec2(width, height);

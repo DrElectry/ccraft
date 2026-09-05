@@ -15,6 +15,8 @@ uniform sampler2D gWaterNormal;
 uniform sampler2D gWaterRoughness;
 
 uniform sampler2D caustics;
+uniform sampler2D cloudAlbedo;
+uniform sampler2D cloudDepth;
 
 uniform mat4 inv_projection;
 uniform mat4 inv_view;
@@ -33,7 +35,9 @@ uniform int underwater;
 in vec2 out_uv;
 out vec4 fragColor;
 
-const vec3 FOG_COLOR = vec3(0.6, 0.7, 0.8);
+// too lazy to use uniforms
+
+const vec3 FOG_COLOR = vec3(0.6, 0.7, 0.8); // will remove this when i switch to biomes
 const float FOG_START = 110.0;
 const float FOG_END = 120.0;
 
@@ -380,6 +384,13 @@ void main()
     vec3 cameraPos = getCameraPos();
     bool isUnderwater = (underwater != 0);
 
+    // Calculate sky gradient for fog color
+    vec3 initialRd = normalize(reconstructWorldPosition(max(terrainDepth, waterDepth)) - cameraPos);
+    float fogHorizonBlend = 1.0 - max(0.0, initialRd.y);
+    vec3 fogHorizonColor = vec3(0.6, 0.7, 0.8);
+    vec3 fogZenithColor = vec3(0.45, 0.56, 0.66);
+    vec3 skyFogColor = mix(fogZenithColor, fogHorizonColor, fogHorizonBlend);
+
     vec3 fogColor;
     float fogStart;
     float fogEnd;
@@ -388,7 +399,7 @@ void main()
         fogStart = 4.0;
         fogEnd   = 22.0;
     } else {
-        fogColor = FOG_COLOR;
+        fogColor = skyFogColor; // Use sky gradient for fog color
         fogStart = FOG_START;
         fogEnd   = FOG_END;
     }
@@ -429,7 +440,10 @@ void main()
 
         vec3 terrainColor;
         if (terrainIsSky) {
-            terrainColor = fogColor;
+            // Calculate fog color based on the refracted ray direction
+            vec3 refractRd = normalize(terrainWorldPosRefract - cameraPos);
+            float refractHorizonBlend = 1.0 - max(0.0, refractRd.y);
+            terrainColor = mix(fogZenithColor, fogHorizonColor, refractHorizonBlend);
         } else {
             float distanceFromCenter = length(refractUV - 0.5) * 2.0;
             float aberrationStrength = CHROMATIC_ABERRATION_UNDERWATER * (1.0 + distanceFromCenter * 3.0);
@@ -465,7 +479,6 @@ void main()
             float waterDepthHere = abs(terrainWorldPosRefract.y - waterWorldPos.y);
             float causticFactor = smoothstep(CAUSTICS_MAX_DEPTH, 0.0, waterDepthHere);
 
-            // only apply caustics if the terrain is lit (not in shadow) and visible
             if (causticFactor > 0.001 && terrainShadow < 0.9) {
                 vec3 causticColor = sampleCausticsPlanarChromatic(terrainWorldPosRefract, terrainNormalAtWater, time);
                 causticColor = pow(causticColor, vec3(0.7));
@@ -487,7 +500,12 @@ void main()
 
         float terrainDist = length(terrainWorldPosRefract - cameraPos);
         float terrainFogFactor = clamp((fogEnd - terrainDist) / (fogEnd - fogStart), 0.0, 1.0);
-        vec3 terrainFogged = mix(fogColor, terrainColor, terrainFogFactor);
+        
+        // Calculate fog color for terrain based on its position
+        vec3 terrainRd = normalize(terrainWorldPosRefract - cameraPos);
+        float terrainHorizonBlend = 1.0 - max(0.0, terrainRd.y);
+        vec3 terrainFogColor = isUnderwater ? fogColor : mix(fogZenithColor, fogHorizonColor, terrainHorizonBlend);
+        vec3 terrainFogged = mix(terrainFogColor, terrainColor, terrainFogFactor);
 
         color = mix(waterFogged, terrainFogged, 0.5);
         isSky = terrainIsSky && terrainVisibility > 0.5;
@@ -546,7 +564,13 @@ void main()
 
         float dist = length(worldPos - cameraPos);
         float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
-        color = mix(fogColor, color, fogFactor);
+        
+        // Calculate fog color based on current fragment position
+        vec3 currentRd = normalize(worldPos - cameraPos);
+        float currentHorizonBlend = 1.0 - max(0.0, currentRd.y);
+        vec3 currentFogColor = isUnderwater ? fogColor : mix(fogZenithColor, fogHorizonColor, currentHorizonBlend);
+        
+        color = mix(currentFogColor, color, fogFactor);
     }
 
     vec3 rd = getRd(worldPos, cameraPos);
@@ -563,6 +587,39 @@ void main()
         vec3 skyGradient = mix(zenithColor, horizonColor, horizonBlend);
         
         color = skyGradient + sunColor;
+    }
+
+    vec2 cloudUV = out_uv;
+    vec4 cloudColor = texture(cloudAlbedo, cloudUV);
+    float cloudAlpha = cloudColor.a;
+    float cloudDepthVal = texture(cloudDepth, cloudUV).r;
+    
+    if (cloudAlpha > 0.01) {
+        vec3 cloudWorldPos = reconstructWorldPositionUV(cloudDepthVal, cloudUV);
+        float cloudDist = length(cloudWorldPos - cameraPos);
+        float terrainDist = length(worldPos - cameraPos);
+        
+        if (cloudDepthVal > 0.0 && cloudDist < terrainDist && cloudDist < fogEnd) {
+            float cloudShadow = calculateShadow(cloudWorldPos, cloudUV);
+            vec3 cloudLightDir = lightDirAtDist(cloudDist);
+            float cloudNdotL = max(dot(normalize(vec3(0.0, 1.0, 0.0)), cloudLightDir), 0.0);
+            float cloudAO = texture(dSSAO, cloudUV).r;
+            
+            vec3 cloudViewDir = normalize(cameraPos - cloudWorldPos);
+            vec3 cloudAmbient = cloudColor.rgb * cloudAO * 0.35;
+            vec3 cloudDiffuse = cloudColor.rgb * light * cloudNdotL * (1.0 - cloudShadow) * 0.8;
+            
+            // Calculate fog color for clouds based on their position
+            vec3 cloudRd = normalize(cloudWorldPos - cameraPos);
+            float cloudHorizonBlend = 1.0 - max(0.0, cloudRd.y);
+            vec3 cloudFogColor = isUnderwater ? fogColor : mix(fogZenithColor, fogHorizonColor, cloudHorizonBlend);
+            
+            float cloudFogFactor = clamp((fogEnd - cloudDist) / (fogEnd - fogStart), 0.0, 1.0);
+            vec3 cloudFogged = mix(cloudFogColor, cloudAmbient + cloudDiffuse, cloudFogFactor);
+            
+            float cloudOpacity = cloudAlpha * 0.7;
+            color = mix(color, cloudFogged, cloudOpacity * (1.0 - cloudShadow * 0.5));
+        }
     }
 
     fragColor = vec4(color, 1.0);

@@ -43,6 +43,9 @@ FBO bloomfb;
 FBO blurfb;
 FBO ffb;
 FBO underwaterfb;
+FBO clouds_fb;
+
+vec3 wind_direction = (vec3){-1.0f, 0.0f, 0.5f};
 
 void on_window_resize(int width, int height)
 {
@@ -66,6 +69,7 @@ void on_window_resize(int width, int height)
     fbo_resize(&blurfb, width/2, height/2);
     fbo_resize(&ffb, width, height);
     fbo_resize(&underwaterfb, width, height);
+    fbo_resize(&clouds_fb, width/4, height/4);
 
     glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, crosshair_rq.pos);
     glm_vec2_copy((vec2){4.0f, 4.0f}, crosshair_rq.scale);
@@ -191,11 +195,11 @@ int main(int argc, char* argv[]) {
     mat4 light_space_matrix_near;
     mat4 light_space_matrix_far;
 
-    Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, fxaa_f, underwf;
-    Program main, ssao, pp, ssr, blur, bloom, fxaa, underwater_prog;
-    File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, fxaa_ff, underwff;
+    Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, fxaa_f, underwf, cloudf;
+    Program main, ssao, pp, ssr, blur, bloom, fxaa, underwater_prog, cloud_prog;
+    File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, fxaa_ff, underwff, cloudff;
 
-    Texture caustics, dirt;
+    Texture caustics, dirt, cloud_map;
 
     caustics.mag_filter = GL_LINEAR;
     caustics.min_filter = GL_LINEAR_MIPMAP_LINEAR;
@@ -207,8 +211,14 @@ int main(int argc, char* argv[]) {
     dirt.wrap_s = GL_REPEAT;
     dirt.wrap_t = GL_REPEAT;
 
+    cloud_map.mag_filter = GL_LINEAR;
+    cloud_map.min_filter = GL_LINEAR_MIPMAP_LINEAR;
+    cloud_map.wrap_s = GL_REPEAT;
+    cloud_map.wrap_t = GL_REPEAT;
+
     texture_create(&caustics, "assets/textures/caustics.jpg");
     texture_create(&dirt, "assets/textures/water_dirt.png");
+    texture_create(&cloud_map, "assets/textures/clouds.png");
 
     mainv.type = GL_VERTEX_SHADER;
     mainf.type = GL_FRAGMENT_SHADER;
@@ -219,6 +229,7 @@ int main(int argc, char* argv[]) {
     blurf.type = GL_FRAGMENT_SHADER;
     fxaa_f.type = GL_FRAGMENT_SHADER;
     underwf.type = GL_FRAGMENT_SHADER;
+    cloudf.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
     mainff = file_open("assets/deferred/main.fsh");
@@ -229,6 +240,7 @@ int main(int argc, char* argv[]) {
     blurff = file_open("assets/deferred/blur.fsh");
     fxaa_ff = file_open("assets/deferred/fxaa.fsh");
     underwff = file_open("assets/deferred/underwater.fsh");
+    cloudff = file_open("assets/deferred/clouds.fsh");
 
     shader_create(&mainv, mainfv.data);
     shader_create(&mainf, mainff.data);
@@ -239,6 +251,7 @@ int main(int argc, char* argv[]) {
     shader_create(&blurf, blurff.data);
     shader_create(&fxaa_f, fxaa_ff.data);
     shader_create(&underwf, underwff.data);
+    shader_create(&cloudf, cloudff.data);
 
     program_create(&main, &mainv, &mainf);
     program_create(&ssao, &mainv, &ssaof);
@@ -248,6 +261,7 @@ int main(int argc, char* argv[]) {
     program_create(&bloom, &mainv, &bloomf);
     program_create(&fxaa, &mainv, &fxaa_f);
     program_create(&underwater_prog, &mainv, &underwf);
+    program_create(&cloud_prog, &mainv, &cloudf);
 
     ssrfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloomfb.color_formats[0] = FBO_COLOR_RGBA16F;
@@ -255,6 +269,8 @@ int main(int argc, char* argv[]) {
     ssaoblurfb.color_formats[0] = FBO_COLOR_RGBA16F;
     ffb.color_formats[0] = FBO_COLOR_RGBA16F;
     underwaterfb.color_formats[0] = FBO_COLOR_RGBA16F;
+    clouds_fb.color_formats[0] = FBO_COLOR_RGBA16F;
+    clouds_fb.color_formats[1] = FBO_COLOR_R32F;
 
     fbo_create(&ssaofb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&ssaoblurfb, WIDTH/2, HEIGHT/2, 1);
@@ -265,6 +281,7 @@ int main(int argc, char* argv[]) {
     fbo_create(&blurfb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&ffb, WIDTH, HEIGHT, 1);
     fbo_create(&underwaterfb, WIDTH, HEIGHT, 1);
+    fbo_create(&clouds_fb, WIDTH/4, HEIGHT/4, 2);
 
     gbuffer.color_formats[0] = FBO_COLOR_RGBA16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
@@ -286,6 +303,7 @@ int main(int argc, char* argv[]) {
     float ssao_ratio[2] = {(float)WIDTH / (WIDTH/2), (float)HEIGHT / (HEIGHT/2)};
     float ssr_ratio[2] = {(float)WIDTH / (WIDTH/2), (float)HEIGHT / (HEIGHT/2)};
     float bloom_ratio[2] = {(float)WIDTH / (WIDTH/2), (float)HEIGHT / (HEIGHT/2)};
+    float cloud_ratio[2] = {(float)WIDTH / (WIDTH/2), (float)HEIGHT / (HEIGHT/2)};
 
     game_init();
 
@@ -295,6 +313,7 @@ int main(int argc, char* argv[]) {
     float time = 0.0f;
 
     while (!window_shouldclose()) {
+        printf("%f\n", player.camera.rot[1]);
 #ifdef DEBUG_PERF
         printf("\n\n\n\n\n\n");
 #endif
@@ -312,7 +331,7 @@ int main(int argc, char* argv[]) {
                 blur_strength-=60.0f*delta_time;
         }
 
-        blur_strength = clamp(blur_strength, 24.0f, 128.0f);
+        blur_strength = clamp(blur_strength, 16.0f, 128.0f);
         aperture = clamp(aperture, 1.0f, 3.0f);
 
         if (wireframe==1 || potato_mode==1) {
@@ -488,6 +507,34 @@ int main(int argc, char* argv[]) {
 #endif
 
 #ifdef DEBUG_PERF
+        double t_start_clouds = glfwGetTime();
+#endif
+        fbo_bind(&clouds_fb);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        program_use(&cloud_prog);
+        texture_bind(&cloud_map, 1);
+        program_set_int(&cloud_prog, "cloudMap", 1);
+        program_set_mat4(&cloud_prog, "projection", (float*)projection);
+        program_set_mat4(&cloud_prog, "view", (float*)view);
+        program_set_vec3(&cloud_prog, "cameraPos", (float*)player.camera.pos);
+        program_set_vec3(&cloud_prog, "sunColor", (float[]){1.0f, 0.975f, 0.95f});
+        program_set_vec3(&cloud_prog, "sunDirection", (float*)light_dir);
+        program_set_vec3(&cloud_prog, "wind_direction", (float*)wind_direction);
+        program_set_float(&cloud_prog, "time", time);
+        vec2 resolution;
+        resolution[0] = WIDTH/4;
+        resolution[1] = HEIGHT/4;
+        program_set_vec2(&cloud_prog, "screenSize", (float*)resolution);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        gfx_draw_fullscreen_quad();
+        fbo_unbind();
+#ifdef DEBUG_PERF
+        double t_end_clouds = glfwGetTime();
+        printf("clouds: %.3f ms\n", (t_end_clouds - t_start_clouds) * 1000.0);
+#endif
+
+#ifdef DEBUG_PERF
         double t_start_main = glfwGetTime();
 #endif
         fbo_bind(&ppfb);
@@ -504,7 +551,9 @@ int main(int argc, char* argv[]) {
         fbo_bind_depth_texture(&shadow2, 9);
         fbo_bind_texture(&ssaofb, 0, 10);
         fbo_bind_texture(&ssrfb, 0, 11);
-        texture_bind(&caustics, 12);
+        fbo_bind_texture(&clouds_fb, 0, 12);
+        fbo_bind_texture(&clouds_fb, 1, 13);
+        texture_bind(&caustics, 14);
         program_set_int(&main, "gAlbedo", 0);
         program_set_int(&main, "gNormal", 1);
         program_set_int(&main, "gDepth", 2);
@@ -517,7 +566,9 @@ int main(int argc, char* argv[]) {
         program_set_int(&main, "dShadow2", 9);
         program_set_int(&main, "dSSAO", 10);
         program_set_int(&main, "dSSR", 11);
-        program_set_int(&main, "caustics", 12);
+        program_set_int(&main, "cloudAlbedo", 12);
+        program_set_int(&main, "cloudDepth", 13);
+        program_set_int(&main, "caustics", 14);
         program_set_float(&main, "time", time);
         program_set_mat4(&main, "light_space_matrix_far", (float*)light_space_matrix_far);
         program_set_mat4(&main, "light_space_matrix_near", (float*)light_space_matrix_near);

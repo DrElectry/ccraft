@@ -15,7 +15,10 @@ void fbo_create(FBO* fbo, int width, int height, int color_count)
     {
         int format, channels;
         
-        if (fbo->color_formats[i] == FBO_COLOR_RG16F) {
+        if (fbo->color_formats[i] == FBO_COLOR_R32F) {
+            format = GL_R32F;
+            channels = GL_RED;
+        } else if (fbo->color_formats[i] == FBO_COLOR_RG16F) {
             format = GL_RG16F;
             channels = GL_RG;
         } else if (fbo->color_formats[i] == FBO_COLOR_RGBA16F) {
@@ -195,7 +198,10 @@ void fbo_resize(FBO* fbo, int width, int height)
     {
         int format, channels;
         
-        if (color_formats[i] == FBO_COLOR_RG16F) {
+        if (color_formats[i] == FBO_COLOR_R32F) {
+            format = GL_R32F;
+            channels = GL_RED;
+        } else if (color_formats[i] == FBO_COLOR_RG16F) {
             format = GL_RG16F;
             channels = GL_RG;
         } else if (color_formats[i] == FBO_COLOR_RGBA16F) {

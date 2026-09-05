@@ -74,7 +74,7 @@ static void chat_expire_old(void) {
 }
 
 static int chat_compose_screen_y(void) {
-    int y = (int)HEIGHT - CHAT_MARGIN_Y - CHAR_HEIGHT;
+    int y = (int)HEIGHT - CHAT_MARGIN_Y - 5 * CHAR_HEIGHT;
     if (chat_line_count > 0) {
         y -= chat_line_count * (CHAR_HEIGHT + CHAT_LINE_GAP);
     }
@@ -98,7 +98,7 @@ static void chat_sync_compose_hud(void) {
 }
 
 static void chat_layout_and_sync(void) {
-    int y = (int)HEIGHT - CHAT_MARGIN_Y - CHAR_HEIGHT;
+    int y = (int)HEIGHT - CHAT_MARGIN_Y - 5 * CHAR_HEIGHT;
 
     for (int i = chat_line_count - 1; i >= 0; i--) {
         if (!chat_lines[i].active) continue;
@@ -209,7 +209,7 @@ void chat_push_line(const char* line, uint16_t color) {
     slot->color = color ? color : CHAT_DEFAULT_COLOR;
     slot->active = 1;
 
-    int y = (int)HEIGHT - CHAT_MARGIN_Y - CHAR_HEIGHT;
+    int y = (int)HEIGHT - CHAT_MARGIN_Y - 5 * CHAR_HEIGHT;
     text_create(&slot->hud, slot->text, slot->color, 1.0f, CHAT_MARGIN_X, y);
 }
 

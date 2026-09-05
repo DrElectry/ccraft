@@ -5,14 +5,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdio.h>
 #include "core/light.h"
 
-static pthread_t workers[GEN_WORKERS];
+static pthread_t workers[8];
+static int num_workers = 0;
 static pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t work_cond = PTHREAD_COND_INITIALIZER;
 
-static WorkJob job_queue[WORK_QUEUE_CAP];
-static int job_head = 0, job_tail = 0, job_count = 0;
+static WorkJob gen_job_queue[WORK_QUEUE_CAP];
+static int gen_job_head = 0, gen_job_tail = 0, gen_job_count = 0;
+
+static WorkJob mesh_job_queue[WORK_QUEUE_CAP];
+static int mesh_job_head = 0, mesh_job_tail = 0, mesh_job_count = 0;
 
 static WorkResult gen_result_queue[WORK_QUEUE_CAP];
 static int gen_head = 0, gen_tail = 0, gen_count = 0;
@@ -23,18 +28,102 @@ static int mesh_head = 0, mesh_tail = 0, mesh_count = 0;
 static int work_running = 0;
 static int work_shutdown = 0;
 
-static void queue_push_job(WorkJob job) {
-    job_queue[job_tail] = job;
-    job_tail = (job_tail + 1) % WORK_QUEUE_CAP;
-    job_count++;
+#define INFLIGHT_TABLE_SIZE 512
+static struct { int cx; int cz; int occupied; } gen_inflight[INFLIGHT_TABLE_SIZE];
+static struct { int cx; int cz; int occupied; } mesh_inflight[INFLIGHT_TABLE_SIZE];
+
+static uint32_t hash_coord(int cx, int cz) {
+    return (cx * 31 + cz) & (INFLIGHT_TABLE_SIZE - 1);
 }
 
-static int queue_pop_job(WorkJob* out) {
-    if (job_count <= 0) return 0;
-    *out = job_queue[job_head];
-    job_head = (job_head + 1) % WORK_QUEUE_CAP;
-    job_count--;
+static int inflight_add(int cx, int cz, int kind) {
+    uint32_t h = hash_coord(cx, cz);
+    for (int i = 0; i < INFLIGHT_TABLE_SIZE; i++) {
+        int idx = (h + i) & (INFLIGHT_TABLE_SIZE - 1);
+        if (kind == JOB_GEN) {
+            if (!gen_inflight[idx].occupied) {
+                gen_inflight[idx].cx = cx;
+                gen_inflight[idx].cz = cz;
+                gen_inflight[idx].occupied = 1;
+                return 1;
+            }
+        } else {
+            if (!mesh_inflight[idx].occupied) {
+                mesh_inflight[idx].cx = cx;
+                mesh_inflight[idx].cz = cz;
+                mesh_inflight[idx].occupied = 1;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static void inflight_remove(int cx, int cz, int kind) {
+    uint32_t h = hash_coord(cx, cz);
+    for (int i = 0; i < INFLIGHT_TABLE_SIZE; i++) {
+        int idx = (h + i) & (INFLIGHT_TABLE_SIZE - 1);
+        if (kind == JOB_GEN) {
+            if (gen_inflight[idx].occupied && gen_inflight[idx].cx == cx && gen_inflight[idx].cz == cz) {
+                gen_inflight[idx].occupied = 0;
+                return;
+            }
+        } else {
+            if (mesh_inflight[idx].occupied && mesh_inflight[idx].cx == cx && mesh_inflight[idx].cz == cz) {
+                mesh_inflight[idx].occupied = 0;
+                return;
+            }
+        }
+    }
+}
+
+static int inflight_contains(int cx, int cz, int kind) {
+    uint32_t h = hash_coord(cx, cz);
+    for (int i = 0; i < INFLIGHT_TABLE_SIZE; i++) {
+        int idx = (h + i) & (INFLIGHT_TABLE_SIZE - 1);
+        if (kind == JOB_GEN) {
+            if (gen_inflight[idx].occupied && gen_inflight[idx].cx == cx && gen_inflight[idx].cz == cz)
+                return 1;
+        } else {
+            if (mesh_inflight[idx].occupied && mesh_inflight[idx].cx == cx && mesh_inflight[idx].cz == cz)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static int push_job(WorkJob job) {
+    if (job.kind == JOB_GEN) {
+        if (gen_job_count >= WORK_QUEUE_CAP) return 0;
+        if (!inflight_add(job.cx, job.cz, JOB_GEN)) return 0;
+        gen_job_queue[gen_job_tail] = job;
+        gen_job_tail = (gen_job_tail + 1) % WORK_QUEUE_CAP;
+        gen_job_count++;
+    } else {
+        if (mesh_job_count >= WORK_QUEUE_CAP) return 0;
+        if (!inflight_add(job.cx, job.cz, JOB_MESH)) return 0;
+        mesh_job_queue[mesh_job_tail] = job;
+        mesh_job_tail = (mesh_job_tail + 1) % WORK_QUEUE_CAP;
+        mesh_job_count++;
+    }
     return 1;
+}
+
+static int pop_job(WorkJob* out) {
+    // Try mesh first
+    if (mesh_job_count > 0) {
+        *out = mesh_job_queue[mesh_job_head];
+        mesh_job_head = (mesh_job_head + 1) % WORK_QUEUE_CAP;
+        mesh_job_count--;
+        return 1;
+    }
+    if (gen_job_count > 0) {
+        *out = gen_job_queue[gen_job_head];
+        gen_job_head = (gen_job_head + 1) % WORK_QUEUE_CAP;
+        gen_job_count--;
+        return 1;
+    }
+    return 0;
 }
 
 static void push_gen_result(WorkResult res) {
@@ -48,6 +137,7 @@ static int pop_gen_result(WorkResult* out) {
     *out = gen_result_queue[gen_head];
     gen_head = (gen_head + 1) % WORK_QUEUE_CAP;
     gen_count--;
+    inflight_remove(out->cx, out->cz, JOB_GEN);
     return 1;
 }
 
@@ -62,46 +152,14 @@ static int pop_mesh_result(WorkResult* out) {
     *out = mesh_result_queue[mesh_head];
     mesh_head = (mesh_head + 1) % WORK_QUEUE_CAP;
     mesh_count--;
+    inflight_remove(out->cx, out->cz, JOB_MESH);
     return 1;
-}
-
-static int coords_in_job_queue(int cx, int cz, JobKind kind) {
-    for (int i = 0; i < job_count; i++) {
-        int idx = (job_head + i) % WORK_QUEUE_CAP;
-        if (job_queue[idx].kind == kind &&
-            job_queue[idx].cx == cx && job_queue[idx].cz == cz)
-            return 1;
-    }
-    return 0;
-}
-
-static int coords_in_gen_result(int cx, int cz) {
-    for (int i = 0; i < gen_count; i++) {
-        int idx = (gen_head + i) % WORK_QUEUE_CAP;
-        if (gen_result_queue[idx].cx == cx && gen_result_queue[idx].cz == cz)
-            return 1;
-    }
-    return 0;
-}
-
-static int coords_in_mesh_result(int cx, int cz) {
-    for (int i = 0; i < mesh_count; i++) {
-        int idx = (mesh_head + i) % WORK_QUEUE_CAP;
-        if (mesh_result_queue[idx].cx == cx && mesh_result_queue[idx].cz == cz)
-            return 1;
-    }
-    return 0;
-}
-
-static int coords_in_flight(int cx, int cz, JobKind kind) {
-    if (coords_in_job_queue(cx, cz, kind)) return 1;
-    if (kind == JOB_GEN) return coords_in_gen_result(cx, cz);
-    else return coords_in_mesh_result(cx, cz);
 }
 
 static void discard_job(WorkJob* job) {
     if (job->kind == JOB_MESH && job->mesh)
         free(job->mesh);
+    inflight_remove(job->cx, job->cz, job->kind);
 }
 
 static void discard_result(WorkResult* res) {
@@ -110,6 +168,7 @@ static void discard_result(WorkResult* res) {
     } else {
         if (res->mesh) chunk_mesh_result_free(res->mesh);
     }
+    inflight_remove(res->cx, res->cz, res->kind);
 }
 
 static void* worker_main(void* arg) {
@@ -119,15 +178,15 @@ static void* worker_main(void* arg) {
         WorkJob job;
 
         pthread_mutex_lock(&queue_mutex);
-        while (!work_shutdown && job_count <= 0)
+        while (!work_shutdown && gen_job_count == 0 && mesh_job_count == 0)
             pthread_cond_wait(&work_cond, &queue_mutex);
 
-        if (work_shutdown && job_count <= 0) {
+        if (work_shutdown && gen_job_count == 0 && mesh_job_count == 0) {
             pthread_mutex_unlock(&queue_mutex);
             break;
         }
 
-        queue_pop_job(&job);
+        pop_job(&job);
         pthread_mutex_unlock(&queue_mutex);
 
         WorkResult res;
@@ -185,13 +244,23 @@ static void* worker_main(void* arg) {
 void world_gen_start(void) {
     if (work_running) return;
 
-    job_head = job_tail = job_count = 0;
+    long cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (cores < 1) cores = 1;
+    if (cores > 4) cores = 4;
+    num_workers = (int)cores;
+
+    printf("Chunk generation using %d worker threads\n", num_workers); // Print thread count
+
+    gen_job_head = gen_job_tail = gen_job_count = 0;
+    mesh_job_head = mesh_job_tail = mesh_job_count = 0;
     gen_head = gen_tail = gen_count = 0;
     mesh_head = mesh_tail = mesh_count = 0;
+    memset(gen_inflight, 0, sizeof(gen_inflight));
+    memset(mesh_inflight, 0, sizeof(mesh_inflight));
     work_shutdown = 0;
     work_running = 1;
 
-    for (int i = 0; i < GEN_WORKERS; i++)
+    for (int i = 0; i < num_workers; i++)
         pthread_create(&workers[i], NULL, worker_main, NULL);
 }
 
@@ -203,13 +272,23 @@ void world_gen_stop(void) {
     pthread_cond_broadcast(&work_cond);
     pthread_mutex_unlock(&queue_mutex);
 
-    for (int i = 0; i < GEN_WORKERS; i++)
+    for (int i = 0; i < num_workers; i++)
         pthread_join(workers[i], NULL);
 
     pthread_mutex_lock(&queue_mutex);
-    while (job_count > 0) {
+    while (gen_job_count > 0) {
         WorkJob job;
-        queue_pop_job(&job);
+        // pop from gen queue
+        job = gen_job_queue[gen_job_head];
+        gen_job_head = (gen_job_head + 1) % WORK_QUEUE_CAP;
+        gen_job_count--;
+        discard_job(&job);
+    }
+    while (mesh_job_count > 0) {
+        WorkJob job;
+        job = mesh_job_queue[mesh_job_head];
+        mesh_job_head = (mesh_job_head + 1) % WORK_QUEUE_CAP;
+        mesh_job_count--;
         discard_job(&job);
     }
     while (gen_count > 0) {
@@ -230,7 +309,7 @@ void world_gen_stop(void) {
 
 int world_gen_in_flight(int cx, int cz) {
     pthread_mutex_lock(&queue_mutex);
-    int found = coords_in_flight(cx, cz, JOB_GEN);
+    int found = inflight_contains(cx, cz, JOB_GEN);
     pthread_mutex_unlock(&queue_mutex);
     return found;
 }
@@ -239,11 +318,12 @@ int world_gen_submit(int cx, int cz) {
     int ok = 0;
 
     pthread_mutex_lock(&queue_mutex);
-    if (job_count < WORK_QUEUE_CAP && !coords_in_flight(cx, cz, JOB_GEN)) {
+    if (gen_job_count < WORK_QUEUE_CAP && !inflight_contains(cx, cz, JOB_GEN)) {
         WorkJob job = {.kind = JOB_GEN, .cx = cx, .cz = cz, .mesh = NULL};
-        queue_push_job(job);
-        pthread_cond_signal(&work_cond);
-        ok = 1;
+        if (push_job(job)) {
+            pthread_cond_signal(&work_cond);
+            ok = 1;
+        }
     }
     pthread_mutex_unlock(&queue_mutex);
 
@@ -269,7 +349,7 @@ int world_gen_poll(int* cx, int* cz, uint16_t** data) {
 
 int world_mesh_in_flight(int cx, int cz) {
     pthread_mutex_lock(&queue_mutex);
-    int found = coords_in_flight(cx, cz, JOB_MESH);
+    int found = inflight_contains(cx, cz, JOB_MESH);
     pthread_mutex_unlock(&queue_mutex);
     return found;
 }
@@ -288,12 +368,15 @@ int world_mesh_submit(struct World* world, int cx, int cz) {
 
     int ok = 0;
     pthread_mutex_lock(&queue_mutex);
-    if (job_count < WORK_QUEUE_CAP && !coords_in_flight(cx, cz, JOB_MESH)) {
+    if (mesh_job_count < WORK_QUEUE_CAP && !inflight_contains(cx, cz, JOB_MESH)) {
         payload->generation = chunk->mesh_generation;
         WorkJob job = {.kind = JOB_MESH, .cx = cx, .cz = cz, .mesh = payload};
-        queue_push_job(job);
-        pthread_cond_signal(&work_cond);
-        ok = 1;
+        if (push_job(job)) {
+            pthread_cond_signal(&work_cond);
+            ok = 1;
+        } else {
+            free(payload);
+        }
     } else {
         free(payload);
     }

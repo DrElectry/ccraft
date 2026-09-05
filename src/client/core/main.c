@@ -313,7 +313,6 @@ int main(int argc, char* argv[]) {
     float time = 0.0f;
 
     while (!window_shouldclose()) {
-        printf("%f\n", player.camera.rot[1]);
 #ifdef DEBUG_PERF
         printf("\n\n\n\n\n\n");
 #endif

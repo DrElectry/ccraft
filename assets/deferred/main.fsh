@@ -3,7 +3,6 @@
 uniform sampler2D gAlbedo;
 uniform sampler2D gDepth;
 uniform sampler2D gNormal;
-uniform sampler2D gRoughness;
 uniform sampler2D dShadow1;
 uniform sampler2D dShadow2;
 uniform sampler2D dSSAO;
@@ -12,7 +11,6 @@ uniform sampler2D dSSR;
 uniform sampler2D gWaterAlbedo;
 uniform sampler2D gWaterDepth;
 uniform sampler2D gWaterNormal;
-uniform sampler2D gWaterRoughness;
 
 uniform sampler2D caustics;
 uniform sampler2D cloudAlbedo;
@@ -31,6 +29,7 @@ uniform float shadowSplitDistance;
 
 uniform float time;
 uniform int underwater;
+uniform float waterLevel;
 
 in vec2 out_uv;
 out vec4 fragColor;
@@ -44,13 +43,16 @@ const float FOG_END = 120.0;
 const vec3 SUN_COLOR = vec3(1.0, 0.95, 0.85);
 const float SUN_INTENSITY = 512.0;
 
-const float CAUSTICS_SCALE = 0.25;
+const float CAUSTICS_SCALE = 0.15;
 const float CAUSTICS_SPEED = 0.04;
-const float CAUSTICS_STRENGTH = 1.25;
+const float CAUSTICS_STRENGTH = 6.0;
 const float CAUSTICS_MAX_DEPTH = 24.0;
-const float CAUSTICS_CHROMATIC_ABERRATION = 0.004;
+const float CAUSTICS_CHROMATIC_ABERRATION = 0.008;
 
 const float CHROMATIC_ABERRATION_UNDERWATER = 0.0008;
+
+const vec3 WATER_DENSITY = vec3(0.48, 0.36, 0.24);
+const float WATER_DEPTH_MAX = 50.0;
 
 vec2 poissonDisk[32] = vec2[32](
     vec2( 0.476,  0.854), vec2(-0.659, -0.670),
@@ -98,6 +100,13 @@ vec3 reconstructWorldPositionUV(float depth, vec2 uv)
     vec4 viewPos = inv_projection * ndc;
     viewPos /= viewPos.w;
     return (inv_view * viewPos).xyz;
+}
+
+vec3 underwaterDepthFade(float depthBelow)
+{
+    float d = clamp(depthBelow, 0.0, WATER_DEPTH_MAX);
+    vec3 x = d * WATER_DENSITY;
+    return 1.0 / (1.0 + x + 0.5 * x * x);
 }
 
 vec3 getCameraPos()
@@ -302,58 +311,6 @@ vec3 getUnderwaterFogColor()
     return vec3(0.1, 0.3, 0.6);
 }
 
-float DistributionGGX(vec3 N, vec3 H, float roughness)
-{
-    float a = roughness * roughness;
-    float a2 = a * a;
-    float NdotH = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH * NdotH;
-    float denom = NdotH2 * (a2 - 1.0) + 1.0;
-    return a2 / (3.14159265 * denom * denom);
-}
-
-float GeometrySchlickGGX(float NdotV, float roughness)
-{
-    float r = roughness + 1.0;
-    float k = r * r / 8.0;
-    return NdotV / (NdotV * (1.0 - k) + k);
-}
-
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
-{
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx1 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx2 = GeometrySchlickGGX(NdotL, roughness);
-    return ggx1 * ggx2;
-}
-
-vec3 fresnelSchlick(float cosTheta, vec3 F0)
-{
-    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-}
-
-vec3 computeSpecular(vec3 albedo, float metallic, float roughness, vec3 N, vec3 V, vec3 L, vec3 lightCol, float shadow)
-{
-    vec3 H = normalize(V + L);
-    float NdotL = max(dot(N, L), 0.0);
-    float NdotV = max(dot(N, V), 0.0);
-
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
-
-    float D = DistributionGGX(N, H, roughness);
-    float G = GeometrySmith(N, V, L, roughness);
-    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-    vec3 numerator = D * G * F;
-    float denominator = 4.0 * NdotV * NdotL + 0.0001;
-    vec3 spec = numerator / denominator;
-
-    spec *= lightCol * NdotL * (1.0 - shadow);
-
-    return spec;
-}
-
 void main()
 {
     float terrainDepth = texture(gDepth, out_uv).r;
@@ -363,19 +320,13 @@ void main()
     float depth;
     vec3 albedo;
     vec3 normal;
-    float roughness;
-    float metallic;
     vec2 shadowUV = out_uv;
 
     vec3 waterAlbedo = texture(gWaterAlbedo, out_uv).rgb;
     vec3 waterNormal = normalize(texture(gWaterNormal, out_uv).rgb * 2.0 - 1.0);
-    float waterRoughness = texture(gWaterRoughness, out_uv).r;
-    float waterMetallic = 0.0;
 
     vec3 terrainAlbedo = texture(gAlbedo, out_uv).rgb;
     vec3 terrainNormal = normalize(texture(gNormal, out_uv).rgb * 2.0 - 1.0);
-    float terrainRoughness = 1.0-texture(gRoughness, out_uv).r;
-    float terrainMetallic = texture(gRoughness, out_uv).r;
 
     vec3 worldPos;
     vec3 color;
@@ -416,14 +367,10 @@ void main()
         float NdotL = max(dot(waterNormal, lightDir), 0.0);
         float ao = texture(dSSAO, out_uv).r;
 
-        vec3 viewDir = normalize(cameraPos - waterWorldPos);
-
         vec3 ambient = waterAlbedo * ao * 0.25;
         vec3 diffuse = waterAlbedo * light * NdotL * (1.0 - shadow);
 
-        vec3 specular = computeSpecular(waterAlbedo, waterMetallic, waterRoughness, waterNormal, viewDir, lightDir, light, shadow);
-
-        vec3 waterColor = ambient + diffuse + specular + waterSSR.rgb * waterSSR.a;
+        vec3 waterColor = ambient + diffuse + waterSSR.rgb * waterSSR.a;
 
         float distToCamera = length(waterWorldPos - cameraPos);
         float depthStrength = clamp(1.0 - (distToCamera - 10.0) / 40.0, 0.0, 1.0);
@@ -457,24 +404,16 @@ void main()
             float b = texture(gAlbedo, refractUV_b).b;
             vec3 terrainAlbedoAtWater = vec3(r, g, b);
             vec3 terrainNormalAtWater = normalize(texture(gNormal, refractUV).rgb * 2.0 - 1.0);
-            float terrainRoughnessAtWater = texture(gRoughness, refractUV).r;
-            float terrainMetallicAtWater = 0.0;
 
             float terrainShadow = calculateShadow(terrainWorldPosRefract, refractUV);
             vec3 terrainLightDir = lightDirAtDist(length(terrainWorldPosRefract - cameraPos));
             float terrainNdotL = max(dot(terrainNormalAtWater, terrainLightDir), 0.0);
             float terrainAO = texture(dSSAO, refractUV).r;
 
-            vec3 terrainViewDir = normalize(cameraPos - terrainWorldPosRefract);
-
             vec3 terrainAmbient = terrainAlbedoAtWater * terrainAO * 0.25;
             vec3 terrainDiffuse = terrainAlbedoAtWater * light * terrainNdotL * (1.0 - terrainShadow);
 
-            vec3 terrainSpecular = computeSpecular(terrainAlbedoAtWater, terrainMetallicAtWater, terrainRoughnessAtWater, terrainNormalAtWater, terrainViewDir, terrainLightDir, light, terrainShadow);
-
-            terrainColor = terrainAmbient + terrainDiffuse + terrainSpecular;
-            vec4 terrainSSR = texture(dSSR, refractUV);
-            terrainColor += terrainSSR.rgb * terrainSSR.a;
+            vec3 terrainLit = terrainDiffuse;
 
             float waterDepthHere = abs(terrainWorldPosRefract.y - waterWorldPos.y);
             float causticFactor = smoothstep(CAUSTICS_MAX_DEPTH, 0.0, waterDepthHere);
@@ -483,11 +422,18 @@ void main()
                 vec3 causticColor = sampleCausticsPlanarChromatic(terrainWorldPosRefract, terrainNormalAtWater, time);
                 causticColor = pow(causticColor, vec3(0.7));
                 causticColor = smoothstep(vec3(0.1), vec3(0.9), causticColor);
+                float causticIntensity = dot(causticColor, vec3(0.333));
                 float shadowFactor = 1.0 - smoothstep(0.1, 0.9, terrainShadow);
                 float causticUpFactor = max(terrainNormalAtWater.y, 0.0);
-                vec3 causticLight = causticColor * light * CAUSTICS_STRENGTH * causticFactor * shadowFactor * causticUpFactor;
-                terrainColor += causticLight;
+                float causticBoost = 1.0 + causticIntensity * CAUSTICS_STRENGTH * causticFactor * shadowFactor * causticUpFactor;
+                terrainLit *= causticBoost;
             }
+
+            terrainColor = terrainAmbient + terrainLit;
+            vec4 terrainSSR = texture(dSSR, refractUV);
+            terrainColor += terrainSSR.rgb * terrainSSR.a;
+
+            terrainColor *= underwaterDepthFade(waterDepthHere);
         }
 
         float distToTerrain = abs(terrainWorldPosRefract.y - waterWorldPos.y);
@@ -514,8 +460,6 @@ void main()
         depth = waterDepth;
         albedo = waterAlbedo;
         normal = waterNormal;
-        roughness = waterRoughness;
-        metallic = waterMetallic;
     }
     else
     {
@@ -537,8 +481,6 @@ void main()
         }
 
         normal = terrainNormal;
-        roughness = terrainRoughness;
-        metallic = terrainMetallic;
         shadowUV = out_uv;
         worldPos = reconstructWorldPosition(depth);
         isSky = depth > 0.99999;
@@ -549,18 +491,19 @@ void main()
         float ao = texture(dSSAO, out_uv).r;
         vec4 ssr = texture(dSSR, out_uv);
 
-        vec3 viewDir = normalize(cameraPos - worldPos);
-
         float ambientStrength = isUnderwater ? 0.45 : 0.25;
         vec3 ambient = terrainAlbedo * ao * ambientStrength;
         vec3 diffuse = terrainAlbedo * light * NdotL * (1.0 - shadow);
 
-        vec3 specular = computeSpecular(terrainAlbedo, metallic, roughness, normal, viewDir, lightDir, light, shadow);
-
-        color = ambient + diffuse + specular;
+        color = ambient + diffuse;
 
         if (!isSky)
             color += ssr.rgb * ssr.a;
+
+        if (isUnderwater && !isSky) {
+            float depthBelowWater = max(0.0, waterLevel - worldPos.y);
+            color *= underwaterDepthFade(depthBelowWater);
+        }
 
         float dist = length(worldPos - cameraPos);
         float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);

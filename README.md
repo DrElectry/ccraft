@@ -12,26 +12,38 @@ CCraft is a work-in-progress sandbox minecraft like voxel game, written fully in
 
 The goal of this project is to have a flexible, cross platform, easily moddable game with stable multiplayer support suitable for low end devices.
 
+### Status
+
+After 4 months of work on the project i already have some prototypes for HUD, deferred rendering, the "core minecraft" part and some item system experiments for future inventory system.
+
+The engine is still too fragile and unoptimized for all of my needs, specifically major refactoring of the chunks system and management is required for project to progress, i still haven't fully establised at least some idea of the visual part of the project.
+
+Multiplayer aspect of the game requires major refactoring too, for example generating chunks on the server, client prediction, and a bit of tweaks are ABSOLUTELY REQUIRED!
+
+I also got some laptop issues lately, which can delay the development.
+
 ### Things i already implemented
 
-- The core "minecraft" game (chunks management, placing and breaking blocks, player movement with physics, collisions, infinite world generation, lightmaps, etc),
+- Core "minecraft clone part" (chunks, placing and breaking blocks, player movement with physics, collisions, infinite world generation, lightmaps, etc),
 - Deferred rendering,
 - HUD,
 - Sounds, ambient,
 - WIP Multiplayer.
 
+Early prototypes for later features:
+
 - Skeletal animations,
-- Soft body experimental implementation.
+- Soft body experimental implementation,
 
 ### Planned features
 
 The list is huge, but things i need to implement ASAP:
 
 - Day-Night cycle,
-- Server rework to generate and send chunks on the server,
+- Decide the visual style of the game,
 - Rigidbody physics,
 - More optimizations,
-- GUI.
+- GUI, or at least some idea of it.
 
 ### Multiplayer
 

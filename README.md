@@ -14,8 +14,6 @@ The goal of this project is to have a flexible, cross platform, easily moddable 
 
 ### Status
 
-After 4 months of work on the project i already have some prototypes for HUD, deferred rendering, the "core minecraft" part and some item system experiments for future inventory system.
-
 The engine is still too fragile and unoptimized for all of my needs, specifically major refactoring of the chunks system and management is required for project to progress, i still haven't fully establised at least some idea of the visual part of the project.
 
 Multiplayer aspect of the game requires major refactoring too, for example generating chunks on the server, client prediction, and a bit of tweaks are ABSOLUTELY REQUIRED!

@@ -120,18 +120,38 @@ void fbo_create_depth(FBO* fbo, int width, int height)
         height,
         0,
         GL_DEPTH_COMPONENT,
-        GL_FLOAT,
+        GL_UNSIGNED_INT,
         NULL
     );
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // hardware PCF
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_COMPARE_MODE,
+        GL_COMPARE_REF_TO_TEXTURE
+    );
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_COMPARE_FUNC,
+        GL_LEQUAL
+    );
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 
-    float borderColor[] = {1.0, 1.0, 1.0, 1.0};
-    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+    const float borderColor[] = {
+        1.0f, 1.0f, 1.0f, 1.0f
+    };
+
+    glTexParameterfv(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_BORDER_COLOR,
+        borderColor
+    );
 
     glFramebufferTexture2D(
         GL_FRAMEBUFFER,
@@ -144,11 +164,12 @@ void fbo_create_depth(FBO* fbo, int width, int height)
     glDrawBuffer(GL_NONE);
     glReadBuffer(GL_NONE);
 
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    {
-        printf("DEPTH FBO ERROR: Framebuffer not complete!\n");
-    }
+    ASSERT(
+        glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
+        "Depth framebuffer not complete!"
+    );
 
+    glBindTexture(GL_TEXTURE_2D, 0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -239,6 +260,18 @@ void fbo_resize(FBO* fbo, int width, int height)
             fbo->color_attachments[i],
             0
         );
+    }
+
+    if (fbo->color_count == 0)
+    {
+        glDeleteTextures(1, &fbo->depth_attachment);
+        glDeleteFramebuffers(1, &fbo->id);
+
+        fbo->depth_attachment = 0;
+        fbo->id = 0;
+
+        fbo_create_depth(fbo, width, height);
+        return;
     }
 
     glGenTextures(1, &fbo->depth_attachment);

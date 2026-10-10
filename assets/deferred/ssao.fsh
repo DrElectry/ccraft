@@ -1,3 +1,4 @@
+
 #version 330 core
 
 uniform sampler2D gDepth;
@@ -63,12 +64,30 @@ void main()
 
     vec3 fragPos = texture(gPosition, uv).xyz;
 
-    vec3 normal = normalize(mat3(view) * normalize(texture(gNormal, uv).rgb * 2.0 - 1.0));
+    vec3 worldNormal = normalize(
+        texture(gNormal, uv).rgb * 2.0 - 1.0
+    );
 
-    vec3 randomVec = normalize(texture(gNoise, out_uv * 8.0).xyz * 2.0 - 1.0);
+    vec3 normal = normalize(mat3(view) * worldNormal);
 
-    vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
-    vec3 bitangent = cross(normal, tangent);
+    vec3 randomVec = normalize(
+        texture(gNoise, out_uv * 8.0).xyz * 2.0 - 1.0
+    );
+
+    vec3 tangent = randomVec - normal * dot(randomVec, normal);
+
+    if (dot(tangent, tangent) < 0.0001)
+    {
+        vec3 axis = abs(normal.z) < 0.99
+            ? vec3(0.0, 0.0, 1.0)
+            : vec3(0.0, 1.0, 0.0);
+
+        tangent = cross(axis, normal);
+    }
+
+    tangent = normalize(tangent);
+
+    vec3 bitangent = normalize(cross(normal, tangent));
     mat3 TBN = mat3(tangent, bitangent, normal);
 
     float occlusion = 0.0;
@@ -76,39 +95,52 @@ void main()
 
     for (int i = 0; i < kernelSize; ++i)
     {
-        vec3 samplePos = fragPos + (TBN * ssaoKernel[i]) * ssaoRadius;
+        vec3 samplePos =
+            fragPos + (TBN * ssaoKernel[i]) * ssaoRadius;
 
         vec4 offset = proj * vec4(samplePos, 1.0);
+
+        if (offset.w <= 0.0)
+            continue;
+
         offset.xyz /= offset.w;
         offset.xyz = offset.xyz * 0.5 + 0.5;
 
-        if (offset.x < 0.0 || offset.x > 1.0 || offset.y < 0.0 || offset.y > 1.0)
+        if (offset.x < 0.0 || offset.x > 1.0 ||
+            offset.y < 0.0 || offset.y > 1.0)
             continue;
 
-        if (texture(gDepth, offset.xy).r >= 0.9999)
+        vec2 sampleUV = offset.xy;
+
+        if (texture(gDepth, sampleUV).r >= 0.9999)
             continue;
 
-        float sampleDepth = texture(gPosition, offset.xy).z;
+        vec3 surfacePos = texture(gPosition, sampleUV).xyz;
+
+        vec3 toSurface = surfacePos - fragPos;
+
+        float normalCheck = smoothstep(
+            0.0,
+            0.05,
+            dot(normal, toSurface)
+        );
 
         float rangeCheck = smoothstep(
             0.0,
             1.0,
-            ssaoRadius / (abs(fragPos.z - sampleDepth) + 1e-4)
+            ssaoRadius / (abs(fragPos.z - surfacePos.z) + 1e-4)
         );
 
-        vec3 sampleDir = normalize(samplePos - fragPos);
-        float normalWeight = max(0.0, dot(normal, sampleDir));
+        float depthOcclusion =
+            surfacePos.z >= samplePos.z + bias ? 1.0 : 0.0;
 
-        float depthOcclusion = (sampleDepth - samplePos.z >= bias) ? 1.0 : 0.0;
-        float weight = rangeCheck * normalWeight;
-        occlusion += depthOcclusion * weight;
+        float weight = rangeCheck;
+
+        occlusion += depthOcclusion * normalCheck * weight;
         totalWeight += weight;
     }
 
-    if (totalWeight > 0.0)
-        occlusion = 1.0 - occlusion / totalWeight;
-    else
-        occlusion = 1.0;
-
-    fragColor = occlusion;
+    fragColor = totalWeight > 0.0
+        ? clamp(1.0 - occlusion / totalWeight, 0.0, 1.0)
+        : 1.0;
 }

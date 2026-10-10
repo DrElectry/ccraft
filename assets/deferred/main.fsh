@@ -3,8 +3,8 @@
 uniform sampler2D gAlbedo;
 uniform sampler2D gDepth;
 uniform sampler2D gNormal;
-uniform sampler2D dShadow1;
-uniform sampler2D dShadow2;
+uniform sampler2DShadow dShadow1;
+uniform sampler2DShadow dShadow2;
 uniform sampler2D dSSAO;
 uniform sampler2D dSSR;
 
@@ -139,92 +139,69 @@ vec3 getSun(vec3 rd, vec3 lightDir)
     return (diskColor * sunDisk + innerColor * innerGlow) * 4.0;
 }
 
-float pcf(vec4 fragPosLightSpace, sampler2D shadowMap, vec2 uv, float radiusMultiplier, vec3 lightDir, float receiverDist)
-{
+float pcf(
+    vec4 fragPosLightSpace,
+    sampler2DShadow shadowMap,
+    vec2 uv,
+    float radiusMultiplier,
+    vec3 lightDir,
+    float receiverDist
+) {
     vec3 proj = fragPosLightSpace.xyz / fragPosLightSpace.w;
     proj = proj * 0.5 + 0.5;
 
-    if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0)
+    if (proj.z <= 0.0 || proj.z >= 1.0 ||
+        proj.x <= 0.0 || proj.x >= 1.0 ||
+        proj.y <= 0.0 || proj.y >= 1.0)
         return 0.0;
 
-    if (proj.z > 1.0)
-        return 0.0;
-
-    float currentDepth = proj.z;
-    vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
-    mat2 rot = getRotation(uv);
+    vec2 texel = 1.0 / vec2(textureSize(shadowMap, 0));
 
     vec3 normal = normalize(texture(gNormal, uv).rgb * 2.0 - 1.0);
-    float NdotL = dot(normal, normalize(lightDir));
+    float ndotl = max(dot(normal, normalize(lightDir)), 0.0);
+
+    bool isFar = radiusMultiplier < 0.75;
 
     float bias;
-    if (radiusMultiplier > 0.5) {
-        bias = 0.00005 + 0.000015 * (1.0 - NdotL) + texelSize.x * 0.5;
-    } else {
-        bias = 0.001 + 0.0005 * (1.0 - NdotL) + texelSize.x * 3.0;
-    }
 
-    float occluderDist = 0.0;
-    int sampleCount = 8;
-    float nearestOccluder = 1.0;
-    
-    for (int i = 0; i < sampleCount; i++)
-    {
-        vec2 offset = rot * poissonDisk[i] * texelSize * 2.0;
-        float sampledDepth = texture(shadowMap, proj.xy + offset).r;
-        
-        if (sampledDepth + bias < currentDepth) {
-            float distToOccluder = currentDepth - sampledDepth;
-            nearestOccluder = min(nearestOccluder, distToOccluder);
+    if (isFar) {
+        bias = 0.0015 + 0.0030 * (1.0 - ndotl);
+    } else {
+        bias = 0.000015 + 0.0004 * (1.0 - ndotl);
+    }
+    float depth = proj.z - bias;
+
+    // near cascade 25 samples
+    // far cascade   9 samples
+    int halfSize = radiusMultiplier > 0.75 ? 2 : 1;
+
+    float radius = radiusMultiplier > 0.75 ? 1.0 : 1.5;
+
+    float visibility = 0.0;
+    float totalWeight = 0.0;
+
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
+
+            if (abs(x) > halfSize || abs(y) > halfSize)
+                continue;
+
+            vec2 offset = vec2(x, y) * radius * texel;
+
+            float weight = float(
+                (3 - abs(x)) * (3 - abs(y))
+            );
+
+            visibility += texture(
+                shadowMap,
+                vec3(proj.xy + offset, depth)
+            ) * weight;
+
+            totalWeight += weight;
         }
     }
-    
-    if (nearestOccluder < 1.0) {
-        occluderDist = nearestOccluder * 200.0;
-        occluderDist = clamp(occluderDist, 0.5, 10.0);
-    } else {
-        occluderDist = 1.0;
-    }
 
-    float cameraDistFactor = 1.0 + receiverDist * 0.008;
-    cameraDistFactor = clamp(cameraDistFactor, 0.5, 3.0);
-    
-    float radius = 2.0 * radiusMultiplier * occluderDist * cameraDistFactor;
-    radius = clamp(radius, 0.5, 126.0);
-
-    int totalSamples = 32;
-    if (radius < 2.0) {
-        totalSamples = 12;
-    } else if (radius < 4.0) {
-        totalSamples = 20;
-    } else if (radius < 7.0) {
-        totalSamples = 28;
-    } else {
-        totalSamples = 32;
-    }
-    int edgeSamples = 4;
-
-    float shadow = 0.0;
-    int i = 0;
-
-    for (; i < edgeSamples; i++)
-    {
-        vec2 offset = rot * poissonDisk[i] * texelSize * radius;
-        float closestDepth = texture(shadowMap, proj.xy + offset).r;
-        shadow += step(closestDepth + bias, currentDepth);
-    }
-
-    if (shadow == 0.0) return 0.0;
-    if (shadow == float(edgeSamples)) return 1.0;
-
-    for (; i < totalSamples; i++)
-    {
-        vec2 offset = rot * poissonDisk[i] * texelSize * radius;
-        float closestDepth = texture(shadowMap, proj.xy + offset).r;
-        shadow += step(closestDepth + bias, currentDepth);
-    }
-
-    return shadow / float(totalSamples);
+    return 1.0 - visibility / totalWeight;
 }
 
 float calculateShadow(vec3 worldPos, vec2 uv)
@@ -234,23 +211,25 @@ float calculateShadow(vec3 worldPos, vec2 uv)
     float blendStart = shadowSplitDistance - 12.0;
     float blendEnd = shadowSplitDistance + 12.0;
 
-    vec4 fragPosLightSpaceNear = light_space_matrix_near * vec4(worldPos, 1.0);
-    float shadowNear = pcf(fragPosLightSpaceNear, dShadow1, uv, 1.0, lightDir1, dist);
-
-    vec4 fragPosLightSpaceFar = light_space_matrix_far * vec4(worldPos, 1.0);
-    float shadowFar = pcf(fragPosLightSpaceFar, dShadow2, uv, 0.5, lightDir2, dist);
-
     if (dist <= blendStart) {
-        return shadowNear;
+        vec4 pos = light_space_matrix_near * vec4(worldPos, 1.0);
+        return pcf(pos, dShadow1, uv, 1.0, lightDir1, dist);
     }
-    else if (dist >= blendEnd) {
-        return shadowFar;
+
+    if (dist >= blendEnd) {
+        vec4 pos = light_space_matrix_far * vec4(worldPos, 1.0);
+        return pcf(pos, dShadow2, uv, 0.5, lightDir2, dist);
     }
-    else {
-        float t = (dist - blendStart) / (blendEnd - blendStart);
-        t = smoothstep(0.0, 1.0, t);
-        return mix(shadowNear, shadowFar, t);
-    }
+
+    vec4 nearPos = light_space_matrix_near * vec4(worldPos, 1.0);
+    vec4 farPos = light_space_matrix_far * vec4(worldPos, 1.0);
+
+    float nearShadow = pcf(nearPos, dShadow1, uv, 1.0, lightDir1, dist);
+    float farShadow = pcf(farPos, dShadow2, uv, 0.5, lightDir2, dist);
+
+    float t = smoothstep(blendStart, blendEnd, dist);
+
+    return mix(nearShadow, farShadow, t);
 }
 
 vec3 lightDirAtDist(float dist)

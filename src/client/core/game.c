@@ -27,6 +27,7 @@
 #include "network/remote.h"
 #include "core/particle.h"
 #include "physics/softbody.h"
+#include "core/world_gen.h"
 #include "core/item.h"
 #include <GLFW/glfw3.h>
 #include <string.h>
@@ -689,6 +690,8 @@ void game_tick(float dt_p) {
             last_send = now;
         }
     }
+
+    world_gen_print_stats();
 
     glm_mat4_inv(projection, inv_projection);
     glm_mat4_inv(view, inv_view);

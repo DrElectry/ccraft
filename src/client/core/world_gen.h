@@ -41,6 +41,8 @@ void world_gen_stop(void);
 int world_gen_submit(int cx, int cz);
 int world_gen_in_flight(int cx, int cz);
 int world_gen_poll(int* cx, int* cz, uint16_t** data);
+void world_gen_set_player_chunk(int cx, int cz);
+void world_gen_print_stats(void);
 
 int world_mesh_submit(struct World* world, int cx, int cz);
 int world_mesh_in_flight(int cx, int cz);

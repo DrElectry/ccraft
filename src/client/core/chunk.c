@@ -685,10 +685,8 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
 
     int render_front;
     if (is_liquid_block(tile_id)) {
-        // water culls by water
         render_front = !is_liquid_block(front);
     } else {
-        // non water blocks are never culled by water
         render_front = lookup_transparent[front] || (is_liquid_block(front) ? 1 : 0);
     }
     if (render_front) {
@@ -832,7 +830,7 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                             {0.0f, 1.0f, 0.0f}
                         };
                         
-int v_start = v_cursor / CHUNK_VERT_FLOATS;
+                        int v_start = v_cursor / CHUNK_VERT_FLOATS;
                         for (int i2 = 0; i2 < 4; i2++) {
                             int base = v_cursor;
                             model_vertices[base + 0] = verts1[i2][0] + pos[0];
@@ -840,7 +838,7 @@ int v_start = v_cursor / CHUNK_VERT_FLOATS;
                             model_vertices[base + 2] = verts1[i2][2] + pos[2];
                             model_vertices[base + 3] = uv[i2 * 2 + 0];
                             model_vertices[base + 4] = uv[i2 * 2 + 1];
-                            model_vertices[base + 5] = 0.707f;
+                            model_vertices[base + 5] = -0.707f;
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = 0.707f;
                             model_vertices[base + 8] = light;
@@ -869,7 +867,7 @@ int v_start = v_cursor / CHUNK_VERT_FLOATS;
                             model_vertices[base + 2] = verts1[i2][2] + pos[2];
                             model_vertices[base + 3] = uv[i2 * 2 + 0];
                             model_vertices[base + 4] = uv[i2 * 2 + 1];
-                            model_vertices[base + 5] = -0.707f;
+                            model_vertices[base + 5] = 0.707f;
                             model_vertices[base + 6] = 0.0f;
                             model_vertices[base + 7] = -0.707f;
                             model_vertices[base + 8] = light;
@@ -910,7 +908,7 @@ int v_start = v_cursor / CHUNK_VERT_FLOATS;
                             model_vertices[base + 4] = uv[i2 * 2 + 1];
                             model_vertices[base + 5] = -0.707f;
                             model_vertices[base + 6] = 0.0f;
-                            model_vertices[base + 7] = 0.707f;
+                            model_vertices[base + 7] = -0.707f;
                             model_vertices[base + 8] = light;
                             model_vertices[base + 9] = 1.0f;
                             model_vertices[base + 10] = 0.0f;
@@ -939,7 +937,7 @@ int v_start = v_cursor / CHUNK_VERT_FLOATS;
                             model_vertices[base + 4] = uv[i2 * 2 + 1];
                             model_vertices[base + 5] = 0.707f;
                             model_vertices[base + 6] = 0.0f;
-                            model_vertices[base + 7] = -0.707f;
+                            model_vertices[base + 7] = 0.707f;
                             model_vertices[base + 8] = light;
                             model_vertices[base + 9] = 1.0f;
                             model_vertices[base + 10] = 0.0f;

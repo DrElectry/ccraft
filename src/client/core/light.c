@@ -3,9 +3,16 @@
 #include "core/game.h"
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #define LIGHT_LEVELS 16
 #define MAX_LIGHT_BYTE 255
+
+#define PAD_W (3 * CHUNK_WIDTH)
+#define PAD_D (3 * CHUNK_DEPTH)
+#define PAD_H (CHUNK_HEIGHT)
+#define PAD_CELLS (PAD_W * PAD_H * PAD_D)
+#define PAD_PLANE (PAD_W * PAD_H)
 
 static inline int idx3(int x, int y, int z) {
     return x + CHUNK_WIDTH * (y + CHUNK_HEIGHT * z);
@@ -28,10 +35,15 @@ static inline int is_light_source(uint16_t id) {
     return id == LAVA;
 }
 
+static const uint8_t LIGHT_BYTE_LUT[LIGHT_LEVELS + 1] = {
+    0, 15, 31, 47, 63, 79, 95, 111, 127,
+    143, 159, 175, 191, 207, 223, 239, 255
+};
+
 static inline uint8_t light_to_byte(int lv) {
     if (lv <= 0) return 0;
     if (lv >= LIGHT_LEVELS) return MAX_LIGHT_BYTE;
-    return (uint8_t)((lv * (int)MAX_LIGHT_BYTE) / LIGHT_LEVELS);
+    return LIGHT_BYTE_LUT[lv];
 }
 
 void chunk_light_alloc(Chunk* chunk) {
@@ -60,222 +72,177 @@ typedef struct {
     int x, y, z;
 } Pos3; // shit
 
-static void compute_sky_light_full(uint8_t* sky_out, const ChunkNeighbors* n, int cx, int cz) {
+#if defined(_MSC_VER)
+#define LIGHT_TLS __declspec(thread)
+#elif defined(__GNUC__) || defined(__clang__)
+#define LIGHT_TLS __thread
+#else
+#define LIGHT_TLS
+#endif
+
+static LIGHT_TLS uint8_t pad_work[PAD_CELLS];
+static LIGHT_TLS uint8_t pad_flags[PAD_CELLS];
+static LIGHT_TLS uint32_t pad_queue[PAD_CELLS];
+static LIGHT_TLS int pad_first[PAD_W * PAD_D];
+
+static uint32_t capture_light_flags(const ChunkNeighbors* n, int cx, int cz) {
     int min_wx = (cx - 1) * CHUNK_WIDTH;
-    int max_wx = (cx + 2) * CHUNK_WIDTH - 1;
     int min_wz = (cz - 1) * CHUNK_DEPTH;
-    int max_wz = (cz + 2) * CHUNK_DEPTH - 1;
-    int width = 3 * CHUNK_WIDTH;
-    int depth = 3 * CHUNK_DEPTH;
-    int total_blocks = width * CHUNK_HEIGHT * depth;
+    uint32_t sources = 0;
+    for (int oz = 0; oz < PAD_D; oz++) {
+        int wz = min_wz + oz;
+        int zbase = oz * PAD_PLANE;
+        for (int ox = 0; ox < PAD_W; ox++) {
+            pad_first[oz * PAD_W + ox] = -1;
+        }
+        for (int wy = 0; wy < PAD_H; wy++) {
+            int base = zbase + wy * PAD_W;
+            for (int ox = 0; ox < PAD_W; ox++) {
+                int idx = base + ox;
+                uint16_t id = get_block(n, min_wx + ox, wy, wz);
+                int transparent = is_transparent_light(id);
+                pad_flags[idx] = (uint8_t)transparent;
+                if (!transparent) {
+                    pad_first[oz * PAD_W + ox] = wy;
+                }
+                if (is_light_source(id)) {
+                    pad_queue[sources++] = (uint32_t)idx;
+                }
+            }
+        }
+    }
+    return sources;
+}
 
-    uint8_t* work = (uint8_t*)calloc(total_blocks, 1);
-    Pos3* queue = (Pos3*)malloc(total_blocks * sizeof(Pos3));
-    int q_head = 0, q_tail = 0;
+static void flood_light(uint32_t q_tail) {
+    uint32_t q_head = 0;
+    while (q_head < q_tail) {
+        uint32_t idx = pad_queue[q_head++];
+        uint8_t level = pad_work[idx];
+        if (level <= 1) continue;
+        uint8_t next = (uint8_t)(level - 1);
+        uint32_t x = idx % PAD_W;
+        uint32_t yz = idx / PAD_W;
+        uint32_t y = yz % PAD_H;
+        uint32_t z = yz / PAD_H;
+#define VISIT(ni) do {                                     \
+    uint32_t at = (uint32_t)(ni);                         \
+    if (next > pad_work[at]) {                            \
+        pad_work[at] = next;                              \
+        if (pad_flags[at]) pad_queue[q_tail++] = at;       \
+    }                                                     \
+} while (0)
+        if (x + 1 < PAD_W) VISIT(idx + 1);
+        if (x > 0) VISIT(idx - 1);
+        if (y + 1 < PAD_H) VISIT(idx + PAD_W);
+        if (y > 0) VISIT(idx - PAD_W);
+        if (z + 1 < PAD_D) VISIT(idx + PAD_PLANE);
+        if (z > 0) VISIT(idx - PAD_PLANE);
+#undef VISIT
+    }
+}
 
+static void copy_center(uint8_t* out) {
+    for (int lz = 0; lz < CHUNK_DEPTH; lz++) {
+        int src_z = (lz + CHUNK_DEPTH) * PAD_PLANE;
+        int dst_z = lz * CHUNK_WIDTH * CHUNK_HEIGHT;
+        for (int wy = 0; wy < CHUNK_HEIGHT; wy++) {
+            int src = src_z + wy * PAD_W + CHUNK_WIDTH;
+            int dst = dst_z + wy * CHUNK_WIDTH;
+            for (int lx = 0; lx < CHUNK_WIDTH; lx++) {
+                out[dst + lx] = light_to_byte(pad_work[src + lx]);
+            }
+        }
+    }
+}
+
+static void compute_block_light_full(uint8_t* block_out, uint32_t sources) {
+    if (sources == 0) {
+        memset(block_out, 0, CHUNK_BLOCK_COUNT);
+        return;
+    }
+    memset(pad_work, 0, PAD_CELLS);
+    for (uint32_t i = 0; i < sources; i++) {
+        pad_work[pad_queue[i]] = LIGHT_LEVELS;
+    }
+    flood_light(sources);
+    copy_center(block_out);
+}
+
+static void compute_sky_light_full(uint8_t* sky_out) {
+    memset(pad_work, 0, PAD_CELLS);
     // vertical pass: full sky (15) from world top down through transparent blocks.
     // a single top seed + BFS cannot reach the surface (15 block limit
     // AND STILL NO ambient occlusion
-    for (int wx = min_wx; wx <= max_wx; wx++) {
-        for (int wz = min_wz; wz <= max_wz; wz++) {
-            int column_open = 1;
-            for (int wy = CHUNK_HEIGHT - 1; wy >= 0; wy--) {
-                if (!column_open)
-                    break;
-
-                uint16_t id = get_block(n, wx, wy, wz);
-                int ox = wx - min_wx;
-                int oz = wz - min_wz;
-                int idx = ox + width * (wy + CHUNK_HEIGHT * oz);
-
-                if (is_transparent_light(id)) {
-                    if (work[idx] < LIGHT_LEVELS) {
-                        work[idx] = LIGHT_LEVELS;
-                        queue[q_tail].x = wx;
-                        queue[q_tail].y = wy;
-                        queue[q_tail].z = wz;
-                        q_tail++;
-                    }
-                } else {
-                    if (work[idx] < LIGHT_LEVELS) {
-                        work[idx] = LIGHT_LEVELS;
-                        queue[q_tail].x = wx;
-                        queue[q_tail].y = wy;
-                        queue[q_tail].z = wz;
-                        q_tail++;
-                    }
-                    column_open = 0;
-                }
+    for (int oz = 0; oz < PAD_D; oz++) {
+        int zbase = oz * PAD_PLANE;
+        for (int ox = 0; ox < PAD_W; ox++) {
+            int first = pad_first[oz * PAD_W + ox];
+            int bottom = first < 0 ? 0 : first;
+            for (int wy = bottom; wy < PAD_H; wy++) {
+                pad_work[zbase + wy * PAD_W + ox] = LIGHT_LEVELS;
             }
         }
     }
-
-    const int dirs[6][3] = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
-    while (q_head < q_tail) {
-        int wx = queue[q_head].x;
-        int wy = queue[q_head].y;
-        int wz = queue[q_head].z;
-        q_head++;
-
-        int ox = wx - min_wx;
-        int oz = wz - min_wz;
-        int cur_idx = ox + width * (wy + CHUNK_HEIGHT * oz);
-        int cur_lv = work[cur_idx];
-        if (cur_lv <= 1) continue;
-
-        for (int di = 0; di < 6; di++) {
-            int nx = wx + dirs[di][0];
-            int ny = wy + dirs[di][1];
-            int nz = wz + dirs[di][2];
-            if (nx < min_wx || nx > max_wx || ny < 0 || ny >= CHUNK_HEIGHT || nz < min_wz || nz > max_wz)
-                continue;
-            uint16_t nid = get_block(n, nx, ny, nz);
-
-            int nox = nx - min_wx;
-            int noz = nz - min_wz;
-            int nidx = nox + width * (ny + CHUNK_HEIGHT * noz);
-            int next_lv = cur_lv - 1;
-            if (next_lv <= 0) continue;
-            if (next_lv > work[nidx]) {
-                work[nidx] = (uint8_t)next_lv;
-                if (is_transparent_light(nid)) {
-                    queue[q_tail].x = nx;
-                    queue[q_tail].y = ny;
-                    queue[q_tail].z = nz;
-                    q_tail++;
-                }
+    uint32_t q_tail = 0;
+#define SEED(ni) do {                                     \
+    uint32_t at = (uint32_t)(ni);                         \
+    if (pad_work[at] == 0) {                             \
+        pad_work[at] = LIGHT_LEVELS - 1;                 \
+        if (pad_flags[at]) pad_queue[q_tail++] = at;     \
+    }                                                    \
+} while (0)
+    for (int oz = 0; oz < PAD_D; oz++) {
+        int zbase = oz * PAD_PLANE;
+        for (int ox = 0; ox < PAD_W; ox++) {
+            int c = oz * PAD_W + ox;
+            int first = pad_first[c];
+            int bottom = first < 0 ? 0 : first;
+            if (first > 0) {
+                SEED(zbase + (first - 1) * PAD_W + ox);
             }
+#define SEED_COLUMN(height, delta) do {                    \
+    int limit = (height);                                 \
+    for (int wy = bottom; wy < limit; wy++) {             \
+        SEED(zbase + wy * PAD_W + ox + (delta));           \
+    }                                                     \
+} while (0)
+            if (ox > 0) {
+                int h = pad_first[c - 1];
+                SEED_COLUMN(h < 0 ? 0 : h, -1);
+            }
+            if (ox + 1 < PAD_W) {
+                int h = pad_first[c + 1];
+                SEED_COLUMN(h < 0 ? 0 : h, 1);
+            }
+            if (oz > 0) {
+                int h = pad_first[c - PAD_W];
+                SEED_COLUMN(h < 0 ? 0 : h, -PAD_PLANE);
+            }
+            if (oz + 1 < PAD_D) {
+                int h = pad_first[c + PAD_W];
+                SEED_COLUMN(h < 0 ? 0 : h, PAD_PLANE);
+            }
+#undef SEED_COLUMN
         }
     }
-
-    int center_min_wx = cx * CHUNK_WIDTH;
-    int center_max_wx = center_min_wx + CHUNK_WIDTH - 1;
-    int center_min_wz = cz * CHUNK_DEPTH;
-    int center_max_wz = center_min_wz + CHUNK_DEPTH - 1;
-    for (int wx = center_min_wx; wx <= center_max_wx; wx++) {
-        for (int wz = center_min_wz; wz <= center_max_wz; wz++) {
-            for (int wy = 0; wy < CHUNK_HEIGHT; wy++) {
-                int ox = wx - min_wx;
-                int oz = wz - min_wz;
-                int idx = ox + width * (wy + CHUNK_HEIGHT * oz);
-                uint8_t lv = work[idx];
-                int lx = wx - center_min_wx;
-                int lz = wz - center_min_wz;
-                int out_idx = lx + CHUNK_WIDTH * (wy + CHUNK_HEIGHT * lz);
-                sky_out[out_idx] = light_to_byte(lv);
-            }
-        }
-    }
-
-    free(work);
-    free(queue);
-}
-
-static void compute_block_light_full(uint8_t* block_out, const ChunkNeighbors* n, int cx, int cz) {
-    int min_wx = (cx - 1) * CHUNK_WIDTH;
-    int max_wx = (cx + 2) * CHUNK_WIDTH - 1;
-    int min_wz = (cz - 1) * CHUNK_DEPTH;
-    int max_wz = (cz + 2) * CHUNK_DEPTH - 1;
-    int width = 3 * CHUNK_WIDTH;
-    int depth = 3 * CHUNK_DEPTH;
-    int total_blocks = width * CHUNK_HEIGHT * depth;
-
-    uint8_t* work = (uint8_t*)calloc(total_blocks, 1);
-    Pos3* queue = (Pos3*)malloc(total_blocks * sizeof(Pos3));
-    int q_head = 0, q_tail = 0;
-
-    for (int wx = min_wx; wx <= max_wx; wx++) {
-        for (int wz = min_wz; wz <= max_wz; wz++) {
-            for (int wy = 0; wy < CHUNK_HEIGHT; wy++) {
-                uint16_t id = get_block(n, wx, wy, wz);
-                if (is_light_source(id)) {
-                    int ox = wx - min_wx;
-                    int oz = wz - min_wz;
-                    int idx = ox + width * (wy + CHUNK_HEIGHT * oz);
-                    if (work[idx] == 0) {
-                        work[idx] = LIGHT_LEVELS;
-                        queue[q_tail].x = wx;
-                        queue[q_tail].y = wy;
-                        queue[q_tail].z = wz;
-                        q_tail++;
-                    }
-                }
-            }
-        }
-    }
-
-    const int dirs[6][3] = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
-    while (q_head < q_tail) {
-        int wx = queue[q_head].x;
-        int wy = queue[q_head].y;
-        int wz = queue[q_head].z;
-        q_head++;
-
-        int ox = wx - min_wx;
-        int oz = wz - min_wz;
-        int cur_idx = ox + width * (wy + CHUNK_HEIGHT * oz);
-        int cur_lv = work[cur_idx];
-        if (cur_lv <= 1) continue;
-
-        for (int di = 0; di < 6; di++) {
-            int nx = wx + dirs[di][0];
-            int ny = wy + dirs[di][1];
-            int nz = wz + dirs[di][2];
-            if (nx < min_wx || nx > max_wx || ny < 0 || ny >= CHUNK_HEIGHT || nz < min_wz || nz > max_wz)
-                continue;
-            uint16_t nid = get_block(n, nx, ny, nz);
-
-            int nox = nx - min_wx;
-            int noz = nz - min_wz;
-            int nidx = nox + width * (ny + CHUNK_HEIGHT * noz);
-            int next_lv = cur_lv - 1;
-            if (next_lv <= 0) continue;
-            if (next_lv > work[nidx]) {
-                work[nidx] = (uint8_t)next_lv;
-                if (is_transparent_light(nid)) {
-                    queue[q_tail].x = nx;
-                    queue[q_tail].y = ny;
-                    queue[q_tail].z = nz;
-                    q_tail++;
-                }
-            }
-        }
-    }
-
-    int center_min_wx = cx * CHUNK_WIDTH;
-    int center_max_wx = center_min_wx + CHUNK_WIDTH - 1;
-    int center_min_wz = cz * CHUNK_DEPTH;
-    int center_max_wz = center_min_wz + CHUNK_DEPTH - 1;
-    for (int wx = center_min_wx; wx <= center_max_wx; wx++) {
-        for (int wz = center_min_wz; wz <= center_max_wz; wz++) {
-            for (int wy = 0; wy < CHUNK_HEIGHT; wy++) {
-                int ox = wx - min_wx;
-                int oz = wz - min_wz;
-                int idx = ox + width * (wy + CHUNK_HEIGHT * oz);
-                uint8_t lv = work[idx];
-                int lx = wx - center_min_wx;
-                int lz = wz - center_min_wz;
-                int out_idx = lx + CHUNK_WIDTH * (wy + CHUNK_HEIGHT * lz);
-                block_out[out_idx] = light_to_byte(lv);
-            }
-        }
-    }
-
-    free(work);
-    free(queue);
+#undef SEED
+    flood_light(q_tail);
+    copy_center(sky_out);
 }
 
 void chunk_light_compute_padded(uint8_t* sky_pad, uint8_t* block_pad,
-                                 uint8_t* sky_out, uint8_t* block_out,
-                                 const ChunkNeighbors* n, int cx, int cz) {
+                                uint8_t* sky_out, uint8_t* block_out,
+                                const ChunkNeighbors* n, int cx, int cz) {
     (void)sky_pad;
     (void)block_pad;
-    compute_sky_light_full(sky_out, n, cx, cz);
-    compute_block_light_full(block_out, n, cx, cz);
+    uint32_t sources = capture_light_flags(n, cx, cz);
+    compute_block_light_full(block_out, sources);
+    compute_sky_light_full(sky_out);
 }
 
 float chunk_light_vertex(const uint8_t* sky_light, const uint8_t* block_light,
-                          int lx, int ly, int lz) {
+                         int lx, int ly, int lz) {
     int i = idx3(lx, ly, lz);
     uint8_t s = sky_light ? sky_light[i] : 0;
     uint8_t b = block_light ? block_light[i] : 0;
@@ -284,19 +251,19 @@ float chunk_light_vertex(const uint8_t* sky_light, const uint8_t* block_light,
 }
 
 float chunk_light_face_vertex(const uint8_t* sky_light, const uint8_t* block_light,
-                               int lx, int ly, int lz, enum Tile_face face) {
+                              int lx, int ly, int lz, enum Tile_face face) {
     int sx = lx;
     int sy = ly;
     int sz = lz;
     int offset = 0;
 
     switch (face) {
-        case FRONT:  sz = lz + 1; break; // +Z
-        case BACK:   sz = lz - 1; offset = 1; break; // -Z
-        case RIGHT:  sx = lx + 1; offset = 1; break; // +X
-        case LEFT:   sx = lx - 1; offset = 1; break; // -X
-        case UP:     sy = ly + 1; break; // +Y
-        case DOWN:   sy = ly - 1; offset = 1; break; // -Y
+    case FRONT:  sz = lz + 1; break; // +Z
+    case BACK:   sz = lz - 1; offset = 1; break; // -Z
+    case RIGHT:  sx = lx + 1; offset = 1; break; // +X
+    case LEFT:   sx = lx - 1; offset = 1; break; // -X
+    case UP:     sy = ly + 1; break; // +Y
+    case DOWN:   sy = ly - 1; offset = 1; break; // -Y
     }
 
     if (sx < 0) sx = 0;
@@ -307,10 +274,8 @@ float chunk_light_face_vertex(const uint8_t* sky_light, const uint8_t* block_lig
     if (sz >= CHUNK_DEPTH) sz = CHUNK_DEPTH - 1;
 
     float light = chunk_light_vertex(sky_light, block_light, sx, sy, sz);
-    
     if (offset && potato_mode) {
         light = fminf(light - 0.4f, 1.0f);
     }
-    
     return light;
 }

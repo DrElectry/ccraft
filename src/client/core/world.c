@@ -691,10 +691,12 @@ void world_tick(World* world, vec3 ppos) {
     int pcx = floor_div((int)ppos[0], CHUNK_WIDTH);
     int pcz = floor_div((int)ppos[2], CHUNK_DEPTH);
 
+    world_gen_set_player_chunk(pcx, pcz);
+
     int render_dist = WORLD_RENDER_DISTANCE;
 
     int should_load_count = 0;
-    vec2 should_load[256];
+    vec2 should_load[1024]; // changed from 256 to 1024, big render distances before that overflow
 
     for (int cx = pcx - render_dist; cx <= pcx + render_dist; cx++) {
         for (int cz = pcz - render_dist; cz <= pcz + render_dist; cz++) {
@@ -711,6 +713,32 @@ void world_tick(World* world, vec3 ppos) {
         }
     }
 
+    for (int i = 0; i < should_load_count - 1; i++) {
+        int min_idx = i;
+        int mdx = (int)should_load[i][0] - pcx;
+        int mdz = (int)should_load[i][1] - pcz;
+        int min_dist = mdx * mdx + mdz * mdz;
+
+        for (int j = i + 1; j < should_load_count; j++) {
+            int dx = (int)should_load[j][0] - pcx;
+            int dz = (int)should_load[j][1] - pcz;
+            int d = dx * dx + dz * dz;
+            if (d < min_dist) {
+                min_dist = d;
+                min_idx = j;
+            }
+        }
+
+        if (min_idx != i) {
+            float tx = should_load[i][0];
+            float tz = should_load[i][1];
+            should_load[i][0] = should_load[min_idx][0];
+            should_load[i][1] = should_load[min_idx][1];
+            should_load[min_idx][0] = tx;
+            should_load[min_idx][1] = tz;
+        }
+    }
+
     for (int i = 0; i < MAX_LOADED_CHUNKS; i++) {
         if (world->index_map[i] != -1) {
             int cx = (int)world->positions_map[i][0];
@@ -722,31 +750,16 @@ void world_tick(World* world, vec3 ppos) {
             if (dx * dx + dz * dz > render_dist * render_dist) {
                 Chunk* chunk = &world->chunks_map[i];
 
-                if (chunk->data) {
-                    free(chunk->data);
-                    chunk->data = NULL;
-                }
+                if (chunk->data) { free(chunk->data); chunk->data = NULL; }
                 chunk_light_free(chunk);
-                if (chunk->model.data) {
-                    free(chunk->model.data);
-                    chunk->model.data = NULL;
-                }
-                if (chunk->model.triangles) {
-                    free(chunk->model.triangles);
-                    chunk->model.triangles = NULL;
-                }
+                if (chunk->model.data) { free(chunk->model.data); chunk->model.data = NULL; }
+                if (chunk->model.triangles) { free(chunk->model.triangles); chunk->model.triangles = NULL; }
                 vbo_free(&chunk->model.cache.vbo);
                 vao_free(&chunk->model.cache.vao);
                 ebo_free(&chunk->model.cache.ebo);
 
-                if (chunk->water_model.data) {
-                    free(chunk->water_model.data);
-                    chunk->water_model.data = NULL;
-                }
-                if (chunk->water_model.triangles) {
-                    free(chunk->water_model.triangles);
-                    chunk->water_model.triangles = NULL;
-                }
+                if (chunk->water_model.data) { free(chunk->water_model.data); chunk->water_model.data = NULL; }
+                if (chunk->water_model.triangles) { free(chunk->water_model.triangles); chunk->water_model.triangles = NULL; }
                 vbo_free(&chunk->water_model.cache.vbo);
                 vao_free(&chunk->water_model.cache.vao);
                 ebo_free(&chunk->water_model.cache.ebo);

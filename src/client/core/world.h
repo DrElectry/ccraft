@@ -18,7 +18,6 @@
 #define WORLD_RENDER_DISTANCE 8
 #endif
 
-
 typedef struct BlockChange {
     int x;
     int y;

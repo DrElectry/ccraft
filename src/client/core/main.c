@@ -44,6 +44,8 @@ FBO blurfb;
 FBO ffb;
 FBO underwaterfb;
 FBO clouds_fb;
+FBO buttons_fb;
+FBO glass_fb;
 
 vec3 wind_direction = (vec3){-1.0f, 0.0f, 0.5f};
 
@@ -70,13 +72,71 @@ void on_window_resize(int width, int height)
     fbo_resize(&ffb, width, height);
     fbo_resize(&underwaterfb, width, height);
     fbo_resize(&clouds_fb, width/4, height/4);
+    fbo_resize(&buttons_fb, width, height);
+    fbo_resize(&glass_fb, width/2, height/2);
 
     glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, crosshair_rq.pos);
-    glm_vec2_copy((vec2){4.0f, 4.0f}, crosshair_rq.scale);
+    glm_vec2_copy((vec2){64.0f, 64.0f}, crosshair_rq.scale);
     crosshair_rq.alpha = 0.75f;
     gfx_canvas_packet_static_request(&crosshair_rq);
 
     update_debug_texts();
+}
+
+static void draw_blurred_ui(Program* blur_prog, Program* glass, float time)
+{
+    float blur_ratio[2] = {(float)WIDTH / (float)(WIDTH / 2), (float)HEIGHT / (float)(HEIGHT / 2)};
+
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
+
+    fbo_bind(&blurfb);
+    program_use(blur_prog);
+    fbo_bind_texture(&prev_frame, 0, 0);
+    program_set_int(blur_prog, "image", 0);
+    program_set_vec2(blur_prog, "direction", (float[]){1.0f, 0.0f});
+    program_set_float(blur_prog, "blurScale", 3.0f);
+    program_set_vec2(blur_prog, "blur_ratio", blur_ratio);
+    gfx_draw_fullscreen_quad();
+    fbo_unbind();
+
+    fbo_bind(&glass_fb);
+    program_use(blur_prog);
+    fbo_bind_texture(&blurfb, 0, 0);
+    program_set_int(blur_prog, "image", 0);
+    program_set_vec2(blur_prog, "direction", (float[]){0.0f, 1.0f});
+    program_set_float(blur_prog, "blurScale", 3.0f);
+    program_set_vec2(blur_prog, "blur_ratio", blur_ratio);
+    gfx_draw_fullscreen_quad();
+    fbo_unbind();
+
+    fbo_bind(&buttons_fb);
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0.6f, 0.7f, 0.8f, 1.0f);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    game_draw_hud_buttons();
+    fbo_unbind();
+
+    program_use(glass);
+    fbo_bind_texture(&prev_frame, 0, 0);
+    fbo_bind_texture(&glass_fb, 0, 1);
+    fbo_bind_texture(&buttons_fb, 0, 2);
+    program_set_int(glass, "scene", 0);
+    program_set_int(glass, "blurred", 1);
+    program_set_int(glass, "buttons", 2);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    gfx_draw_fullscreen_quad();
+
+    game_draw_hud_contents();
+    glDepthMask(GL_TRUE);
 }
 
 int main(int argc, char* argv[]) {
@@ -195,9 +255,9 @@ int main(int argc, char* argv[]) {
     mat4 light_space_matrix_near;
     mat4 light_space_matrix_far;
 
-    Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, fxaa_f, underwf, cloudf;
-    Program main, ssao, pp, ssr, blur, bloom, fxaa, underwater_prog, cloud_prog;
-    File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, fxaa_ff, underwff, cloudff;
+    Shader mainv, mainf, ssaof, ppf, ssrf, bloomf, blurf, fxaa_f, underwf, cloudf, glassf;
+    Program main, ssao, pp, ssr, blur, bloom, fxaa, underwater_prog, cloud_prog, glass_prog;
+    File mainfv, mainff, ssaoff, ppff, ssrff, bloomff, blurff, fxaa_ff, underwff, cloudff, glassff;
 
     Texture caustics, dirt, cloud_map;
 
@@ -230,6 +290,7 @@ int main(int argc, char* argv[]) {
     fxaa_f.type = GL_FRAGMENT_SHADER;
     underwf.type = GL_FRAGMENT_SHADER;
     cloudf.type = GL_FRAGMENT_SHADER;
+    glassf.type = GL_FRAGMENT_SHADER;
 
     mainfv = file_open("assets/deferred/main.vsh");
     mainff = file_open("assets/deferred/main.fsh");
@@ -241,6 +302,7 @@ int main(int argc, char* argv[]) {
     fxaa_ff = file_open("assets/deferred/fxaa.fsh");
     underwff = file_open("assets/deferred/underwater.fsh");
     cloudff = file_open("assets/deferred/clouds.fsh");
+    glassff = file_open("assets/gui/hud_glass.fsh");
 
     shader_create(&mainv, mainfv.data);
     shader_create(&mainf, mainff.data);
@@ -252,6 +314,7 @@ int main(int argc, char* argv[]) {
     shader_create(&fxaa_f, fxaa_ff.data);
     shader_create(&underwf, underwff.data);
     shader_create(&cloudf, cloudff.data);
+    shader_create(&glassf, glassff.data);
 
     program_create(&main, &mainv, &mainf);
     program_create(&ssao, &mainv, &ssaof);
@@ -262,6 +325,7 @@ int main(int argc, char* argv[]) {
     program_create(&fxaa, &mainv, &fxaa_f);
     program_create(&underwater_prog, &mainv, &underwf);
     program_create(&cloud_prog, &mainv, &cloudf);
+    program_create(&glass_prog, &mainv, &glassf);
 
     ssrfb.color_formats[0] = FBO_COLOR_RGBA16F;
     bloomfb.color_formats[0] = FBO_COLOR_RGBA16F;
@@ -271,6 +335,8 @@ int main(int argc, char* argv[]) {
     underwaterfb.color_formats[0] = FBO_COLOR_RGBA16F;
     clouds_fb.color_formats[0] = FBO_COLOR_RGBA16F;
     clouds_fb.color_formats[1] = FBO_COLOR_R32F;
+    buttons_fb.color_formats[0] = FBO_COLOR_RGBA16F;
+    glass_fb.color_formats[0] = FBO_COLOR_RGBA16F;
 
     fbo_create(&ssaofb, WIDTH/2, HEIGHT/2, 1);
     fbo_create(&ssaoblurfb, WIDTH/2, HEIGHT/2, 1);
@@ -282,10 +348,14 @@ int main(int argc, char* argv[]) {
     fbo_create(&ffb, WIDTH, HEIGHT, 1);
     fbo_create(&underwaterfb, WIDTH, HEIGHT, 1);
     fbo_create(&clouds_fb, WIDTH/4, HEIGHT/4, 2);
+    fbo_create(&buttons_fb, WIDTH, HEIGHT, 1);
+    fbo_create(&glass_fb, WIDTH/2, HEIGHT/2, 1);
 
     fbo_set_filter(&ssrfb, 0, GL_LINEAR);
     fbo_set_filter(&ssaoblurfb, 0, GL_LINEAR); 
-    fbo_set_filter(&clouds_fb, 0, GL_LINEAR); 
+    fbo_set_filter(&clouds_fb, 0, GL_LINEAR);
+    fbo_set_filter(&glass_fb, 0, GL_LINEAR);
+    fbo_set_filter(&blurfb, 0, GL_LINEAR); 
 
     gbuffer.color_formats[0] = FBO_COLOR_RGBA16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
@@ -350,7 +420,13 @@ int main(int argc, char* argv[]) {
 
             game_draw(current_time);
 
-            game_draw_hud();
+            fbo_bind(&prev_frame);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prev_frame.id);
+            glBlitFramebuffer(0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+            fbo_unbind();
+
+            draw_blurred_ui(&blur, &glass_prog, time);
 
             glDisable(GL_BLEND);
 
@@ -380,6 +456,8 @@ int main(int argc, char* argv[]) {
         double t_start_water = glfwGetTime();
 #endif
         fbo_bind(&water_gbuffer);
+        glEnable(GL_DEPTH_TEST);
+        glDepthMask(GL_TRUE);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         window_update();
         window_draw();
@@ -693,9 +771,7 @@ int main(int argc, char* argv[]) {
         glBlitFramebuffer(0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_LINEAR);
         fbo_unbind();
 
-        glEnable(GL_BLEND);
-
-        game_draw_hud();
+        draw_blurred_ui(&blur, &glass_prog, time);
 
         glDisable(GL_BLEND);
 

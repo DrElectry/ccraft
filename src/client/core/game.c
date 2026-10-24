@@ -531,7 +531,7 @@ void game_init() {
     gfx_canvas_packet_static_request(&slot_select_rq);
 
     glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, crosshair_rq.pos);
-    glm_vec2_copy((vec2){4.0f, 4.0f}, crosshair_rq.scale);
+    glm_vec2_copy((vec2){64.0f, 64.0f}, crosshair_rq.scale);
     crosshair_rq.alpha = 0.75f;
     gfx_canvas_packet_static_request(&crosshair_rq);
 
@@ -1076,6 +1076,8 @@ void game_draw_water_gbuffer(float time) {
     program_set_mat4(&water_prog, "view", (float*)view);
     program_set_float(&water_prog, "time", time);
 
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
     glDisable(GL_CULL_FACE);
 
     world_render_water_only(&world, &water_prog, 1);
@@ -1152,33 +1154,6 @@ void game_draw(float time) {
 
     draw_held_hand(hand_model);
 
-    program_use(&cursora);
-    program_set_mat4(&cursora, "proj", (float*)projection);
-    program_set_mat4(&cursora, "view", (float*)view);
-    
-    mat4 model_matrix;
-
-    glm_mat4_identity(model_matrix);
-
-    glm_translate(model_matrix, cursor.pos);
-    
-    glm_rotate(model_matrix, cursor.rot[0], (vec3){1.0f, 0.0f, 0.0f});
-    glm_rotate(model_matrix, cursor.rot[1], (vec3){0.0f, 1.0f, 0.0f});
-    glm_rotate(model_matrix, cursor.rot[2], (vec3){0.0f, 0.0f, 1.0f});
-    
-    glm_scale(model_matrix, cursor.scale);
-
-    program_set_mat4(&cursora, "model", (float*)model_matrix);
-
-    GLint current_polygon_mode[2];
-
-    glGetIntegerv(GL_POLYGON_MODE, current_polygon_mode);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    vao_bind(&cursor.cache.vao);
-    glDrawElements(GL_LINES, cursor.tri_count * 2, GL_UNSIGNED_INT, NULL);
-    glPolygonMode(GL_FRONT_AND_BACK, current_polygon_mode[0]);
-
     glEnable(GL_CULL_FACE);
 }
 
@@ -1233,26 +1208,6 @@ void game_draw_misc() {
 
     draw_held_hand(hand_model);
 
-    program_use(&cursora);
-    program_set_mat4(&cursora, "proj", (float*)projection);
-    program_set_mat4(&cursora, "view", (float*)view);
-
-    mat4 model_matrix;
-    glm_mat4_identity(model_matrix);
-    glm_translate(model_matrix, cursor.pos);
-    glm_rotate(model_matrix, cursor.rot[0], (vec3){1.0f, 0.0f, 0.0f});
-    glm_rotate(model_matrix, cursor.rot[1], (vec3){0.0f, 1.0f, 0.0f});
-    glm_rotate(model_matrix, cursor.rot[2], (vec3){0.0f, 0.0f, 1.0f});
-    glm_scale(model_matrix, cursor.scale);
-    program_set_mat4(&cursora, "model", (float*)model_matrix);
-
-    GLint current_polygon_mode[2];
-    glGetIntegerv(GL_POLYGON_MODE, current_polygon_mode);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    vao_bind(&cursor.cache.vao);
-    glDrawElements(GL_LINES, cursor.tri_count * 2, GL_UNSIGNED_INT, NULL);
-    glPolygonMode(GL_FRONT_AND_BACK, current_polygon_mode[0]);
-
     glEnable(GL_CULL_FACE);
 }
 
@@ -1284,26 +1239,30 @@ static void project_point_to_screen(vec3 world_pos, float* out_x, float* out_y) 
     *out_y = (0.5f - ndc_y * 0.5f) * (float)HEIGHT;
 }
 
-void game_draw_hud() {
-    text_draw(&name);
-    text_draw(&fps);
-
-    if (__onserv || chat_is_typing()) {
-        chat_draw();
-    }
-
-    program_use(&canvas_program);
-
+void game_draw_hud_buttons() {
     float slot_y = (float)HEIGHT - 30.0f;
     for (int i = 0; i < 8; i++) {
         slots[i].pos[0] = 30.0f + ((float)i * 54.0f);
         slots[i].pos[1] = slot_y;
     }
 
+    program_use(&canvas_program);
     texture_bind(&slot, 0);
     program_set_int(&canvas_program, "tex", 0);
     gfx_set_screen_projection(&canvas_program);
     gfx_canvas_render_batch(slots, 8, &canvas_program);
+
+    texture_bind(&crosshair_tex, 0);
+    program_set_int(&canvas_program, "tex", 0);
+    gfx_set_screen_projection(&canvas_program);
+    gfx_canvas_render(&crosshair_rq, &canvas_program);
+}
+
+void game_draw_hud_contents() {
+    float slot_y = (float)HEIGHT - 30.0f;
+
+    program_use(&canvas_program);
+    gfx_set_screen_projection(&canvas_program);
 
     slot_select_rq.pos[0] = 30.0f + ((float)inventory_selected() * 54.0f);
     slot_select_rq.pos[1] = slot_y;
@@ -1313,13 +1272,12 @@ void game_draw_hud() {
 
     inventory_draw_icons(&canvas_program);
 
-    texture_bind(&crosshair_tex, 0);
-    program_set_int(&canvas_program, "tex", 0);
-    gfx_set_screen_projection(&canvas_program);
-    gfx_canvas_render(&crosshair_rq, &canvas_program);
+    text_draw(&name);
+    text_draw(&fps);
 
-    program_use(&canvas_program);
-    gfx_set_screen_projection(&canvas_program);
+    if (__onserv || chat_is_typing()) {
+        chat_draw();
+    }
 
     if (debug_texts_ready && debug) {
         for (int i = 0; i < 7; i++) {
@@ -1371,6 +1329,11 @@ void game_draw_hud() {
         text_draw(&remote_names[i]);
         text_set_size(&remote_names[i], 32);
     }
+}
+
+void game_draw_hud() {
+    game_draw_hud_buttons();
+    game_draw_hud_contents();
 }
 
 void game_destroy() {

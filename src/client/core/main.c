@@ -80,6 +80,23 @@ void on_window_resize(int width, int height)
 
 static void draw_blurred_ui(Program* blur_prog, Program* glass, float time)
 {
+    if (disable_hud_composite) {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, WIDTH, HEIGHT);
+
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
+        glDisable(GL_CULL_FACE);
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        game_draw_hud_buttons();
+        game_draw_hud_contents();
+
+        glDepthMask(GL_TRUE);
+        return;
+    }
     float blur_ratio[2] = {(float)WIDTH / (float)(WIDTH / 2), (float)HEIGHT / (float)(HEIGHT / 2)};
 
     glDisable(GL_DEPTH_TEST);

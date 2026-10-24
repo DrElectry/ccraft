@@ -13,6 +13,7 @@ extern vec3 light_dir;
 extern int wireframe;
 extern int potato_mode;
 extern int noclip;
+extern int disable_hud_composite;
 
 extern int underwater;
 

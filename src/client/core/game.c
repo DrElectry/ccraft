@@ -91,11 +91,13 @@ float dt = 0.0f;
 int wireframe = 0;
 int potato_mode = 0;
 int noclip = 0;
+int disable_hud_composite = 0;
 
 float wdelay = 0.0f;
 float pdelay = 0.0f;
 float ndelay = 0.0f;
 float ddelay = 0.0f;
+float dhdelay = 0.0f;
 
 static sound_t* tung_music;
 static sound_t* tung;
@@ -716,6 +718,7 @@ void game_tick(float dt_p) {
     pdelay -= dt;
     ndelay -= dt;
     ddelay -= dt;
+    dhdelay -= dt;
 
     sun_delay -= dt;
     if (sun_delay <= 0.0f) {
@@ -757,6 +760,10 @@ void game_tick(float dt_p) {
     if (input_down(&input_manager, GLFW_KEY_F3) && ddelay < 0) {
         debug = !debug;
         ddelay = 0.25f;
+    }
+    if (input_down(&input_manager, GLFW_KEY_F6) && dhdelay < 0) {
+        disable_hud_composite = !disable_hud_composite;
+        dhdelay = 0.25f;
     }
     if (input_down(&input_manager, GLFW_KEY_B) && ndelay < 0) {
         noclip = !noclip;
@@ -1350,7 +1357,10 @@ void game_draw_hud_contents() {
 }
 
 void game_draw_hud() {
-    game_draw_hud_buttons();
+    if (!disable_hud_composite) {
+        game_draw_hud_buttons();
+    }
+
     game_draw_hud_contents();
 }
 

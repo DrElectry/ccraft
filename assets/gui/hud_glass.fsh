@@ -1,3 +1,4 @@
+
 #version 330 core
 
 in vec2 out_uv;
@@ -15,9 +16,40 @@ float hash21(vec2 p) {
 
 void main() {
     vec4 btn = texture(buttons, out_uv);
-    if (btn.a < 0.02) discard;
 
     vec2 texel = 1.0 / vec2(textureSize(buttons, 0));
+
+    vec2 shadowOffset = vec2(0.0, 5.0) * texel;
+    vec2 shadowUV = out_uv + shadowOffset;
+
+    float shadowA = 0.0;
+    float shadowWeight = 0.0;
+
+    for (int x = -4; x <= 4; x++) {
+        for (int y = -4; y <= 4; y++) {
+            vec2 offset = vec2(float(x), float(y)) * texel * 2.5;
+            float weight = exp(-dot(vec2(x, y), vec2(x, y)) / 12.0);
+
+            shadowA += texture(buttons, shadowUV + offset).a * weight;
+            shadowWeight += weight;
+        }
+    }
+
+    shadowA /= shadowWeight;
+
+    float rawAlpha = clamp(btn.a, 0.0, 1.0);
+    float glassOpacity = pow(rawAlpha, 0.45);
+    float glassStrength = smoothstep(0.0, 0.45, rawAlpha);
+
+    float shadow = shadowA * (1.0 - rawAlpha) * 0.22;
+
+    if (rawAlpha < 0.02) {
+        if (shadow < 0.002)
+            discard;
+
+        fragColor = vec4(vec3(0.025, 0.035, 0.055), shadow);
+        return;
+    }
 
     float aC  = btn.a;
     float aL  = texture(buttons, out_uv + vec2(-texel.x, 0.0)).a;
@@ -33,7 +65,12 @@ void main() {
     float aDL = texture(buttons, out_uv + texel * vec2(-2.0, -2.0)).a;
     float aDR = texture(buttons, out_uv + texel * vec2( 2.0, -2.0)).a;
 
-    float smoothA = (aC * 4.0 + (aL + aR + aU + aD) * 2.0 + aLL + aRR + aUU + aDD + aUL + aUR + aDL + aDR) / 24.0;
+    float smoothA = (
+        aC * 4.0 +
+        (aL + aR + aU + aD) * 2.0 +
+        aLL + aRR + aUU + aDD +
+        aUL + aUR + aDL + aDR
+    ) / 24.0;
 
     vec2 gradA = vec2(
         (aR - aL) * 2.0 + (aRR - aLL) + (aUR - aUL) + (aDR - aDL),
@@ -53,11 +90,13 @@ void main() {
     vec3 TR = refract(I, N, 1.0 / (IOR + 0.02));
     vec3 TG = refract(I, N, 1.0 / IOR);
     vec3 TB = refract(I, N, 1.0 / (IOR - 0.02));
+
     if (dot(TR, TR) < 1e-5) TR = I;
     if (dot(TG, TG) < 1e-5) TG = I;
     if (dot(TB, TB) < 1e-5) TB = I;
 
-    float depthScale = 0.16;
+    float depthScale = 0.16 * glassStrength;
+
     vec2 offR = TR.xy / max(-TR.z, 0.15) * depthScale;
     vec2 offG = TG.xy / max(-TG.z, 0.15) * depthScale;
     vec2 offB = TB.xy / max(-TB.z, 0.15) * depthScale;
@@ -81,49 +120,97 @@ void main() {
 
     vec3 blurBase =
           texture(blurred, frostUV).rgb * 0.24
-        + (texture(blurred, frostUV + vec2( b1.x, 0.0)).rgb
-         + texture(blurred, frostUV + vec2(-b1.x, 0.0)).rgb
-         + texture(blurred, frostUV + vec2(0.0,  b1.y)).rgb
-         + texture(blurred, frostUV + vec2(0.0, -b1.y)).rgb) * 0.09
-        + (texture(blurred, frostUV + vec2( b1.x,  b1.y)).rgb
-         + texture(blurred, frostUV + vec2(-b1.x,  b1.y)).rgb
-         + texture(blurred, frostUV + vec2( b1.x, -b1.y)).rgb
-         + texture(blurred, frostUV + vec2(-b1.x, -b1.y)).rgb) * 0.06
-        + (texture(blurred, frostUV + vec2( b2.x, 0.0)).rgb
-         + texture(blurred, frostUV + vec2(-b2.x, 0.0)).rgb
-         + texture(blurred, frostUV + vec2(0.0,  b2.y)).rgb
-         + texture(blurred, frostUV + vec2(0.0, -b2.y)).rgb) * 0.04;
+        + (
+            texture(blurred, frostUV + vec2( b1.x, 0.0)).rgb
+          + texture(blurred, frostUV + vec2(-b1.x, 0.0)).rgb
+          + texture(blurred, frostUV + vec2(0.0,  b1.y)).rgb
+          + texture(blurred, frostUV + vec2(0.0, -b1.y)).rgb
+        ) * 0.09
+        + (
+            texture(blurred, frostUV + vec2( b1.x,  b1.y)).rgb
+          + texture(blurred, frostUV + vec2(-b1.x,  b1.y)).rgb
+          + texture(blurred, frostUV + vec2( b1.x, -b1.y)).rgb
+          + texture(blurred, frostUV + vec2(-b1.x, -b1.y)).rgb
+        ) * 0.06
+        + (
+            texture(blurred, frostUV + vec2( b2.x, 0.0)).rgb
+          + texture(blurred, frostUV + vec2(-b2.x, 0.0)).rgb
+          + texture(blurred, frostUV + vec2(0.0,  b2.y)).rgb
+          + texture(blurred, frostUV + vec2(0.0, -b2.y)).rgb
+        ) * 0.04;
+
+    blurBase /= 0.96;
 
     float edge = 1.0 - smoothA;
     float edgeMask = smoothstep(0.0, 0.7, edge);
 
-    vec3 col = mix(refracted, blurBase, 0.72 + edgeMask * 0.28);
+    float frostStrength = smoothstep(0.0, 0.85, rawAlpha);
+
+    vec3 frostedGlass = mix(
+        refracted,
+        blurBase,
+        0.65 + 0.35 * frostStrength
+    );
+
+    vec3 col = mix(
+        refracted,
+        frostedGlass,
+        frostStrength
+    );
 
     float cosI = clamp(N.z, 0.0, 1.0);
     float fresnel = pow(1.0 - cosI, 4.0);
 
-    vec3 envRefl = mix(vec3(0.86, 0.91, 0.98), vec3(1.0), cosI);
-    col = mix(col, envRefl, fresnel * 0.40 + 0.05);
+    vec3 envRefl = mix(
+        vec3(0.42, 0.47, 0.54),
+        vec3(0.72, 0.76, 0.82),
+        cosI
+    );
+
+    col = mix(
+        col,
+        envRefl,
+        (fresnel * 0.22 + 0.025) * glassStrength
+    );
 
     float curvature = length(gradH);
     float specSoft = smoothstep(0.4, 2.0, curvature);
-    col += vec3(0.95, 0.98, 1.0) * specSoft * (0.08 + fresnel * 0.22);
 
-    vec3 tint = mix(vec3(0.97, 0.98, 1.0), btn.rgb, 0.10);
+    col += vec3(0.65, 0.70, 0.76)
+         * specSoft
+         * (0.025 + fresnel * 0.08)
+         * glassStrength;
+
+    vec3 tint = mix(
+        vec3(0.88, 0.90, 0.93),
+        btn.rgb,
+        0.08
+    );
+
     col *= tint;
 
-    col = mix(col, vec3(0.93, 0.96, 1.0), 0.03);
-
     float thickness = smoothstep(0.6, 1.0, edge);
-    col += vec3(0.85, 0.92, 1.0) * thickness * 0.08;
 
-    col *= mix(1.0, 0.98, smoothstep(0.0, 0.3, smoothA));
-    col = mix(col, btn.rgb, 0.03);
+    col += vec3(0.55, 0.62, 0.70)
+         * thickness
+         * 0.025
+         * glassStrength;
 
-    col += (hash21(gl_FragCoord.xy) - 0.5) * 0.018;
+    col *= mix(
+        1.0,
+        0.98,
+        smoothstep(0.0, 0.3, smoothA) * glassStrength
+    );
 
-    float alpha = max(btn.a, 0.68 + edgeMask * 0.20 + fresnel * 0.12);
-    alpha = clamp(alpha, 0.0, 1.0);
+    col = mix(col, btn.rgb, 0.03 * glassStrength);
 
-    fragColor = vec4(col, alpha);
+    col += (hash21(gl_FragCoord.xy) - 0.5)
+         * 0.012
+         * glassStrength;
+
+    col *= 0.94;
+
+    float alpha = glassOpacity;
+
+    fragColor = vec4(clamp(col, 0.0, 1.0), alpha);
 }

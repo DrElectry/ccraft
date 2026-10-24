@@ -1,3 +1,4 @@
+
 #include "core/gfx.h"
 #include "gl/vao.h"
 #include "gl/vbo.h"
@@ -7,6 +8,10 @@
 #include "utils/file.h"
 #include "core/main.h"
 #include <cglm/cglm.h>
+#include <math.h>
+
+#define UI_WIDTH 1280.0f
+#define UI_HEIGHT 720.0f
 
 void gfx_packet_static_request(Render_request* r) { // pos, rot and scale will be ignored, this is only cache setup
     VBO vbo;
@@ -15,7 +20,6 @@ void gfx_packet_static_request(Render_request* r) { // pos, rot and scale will b
 
     vao_create(&vao);
     vao_bind(&vao);
-    
     vbo_create(&vbo, r->data, r->data_size);
     ebo_create(&ebo, r->triangles, r->tri_count * 3 * sizeof(int));
 
@@ -23,7 +27,6 @@ void gfx_packet_static_request(Render_request* r) { // pos, rot and scale will b
     vbo_attr(0, 3, 8 * sizeof(float), 0);
     vbo_attr(1, 2, 8 * sizeof(float), 3);
     vbo_attr(2, 3, 8 * sizeof(float), 5);
-
 
     r->cache.vbo = vbo;
     r->cache.vao = vao;
@@ -37,7 +40,6 @@ void gfx_chunk_packet_static_request(Render_request* r) {
 
     vao_create(&vao);
     vao_bind(&vao);
-    
     vbo_create(&vbo, r->data, r->data_size);
     ebo_create(&ebo, r->triangles, r->tri_count * 3 * sizeof(int));
 
@@ -78,11 +80,9 @@ void gfx_render(Render_request *r, Program* active_program) {
     glm_mat4_identity(model_matrix);
 
     glm_translate(model_matrix, r->pos);
-    
     glm_rotate(model_matrix, r->rot[0], (vec3){1.0f, 0.0f, 0.0f});
     glm_rotate(model_matrix, r->rot[1], (vec3){0.0f, 1.0f, 0.0f});
     glm_rotate(model_matrix, r->rot[2], (vec3){0.0f, 0.0f, 1.0f});
-    
     glm_scale(model_matrix, r->scale);
 
     program_use(active_program);
@@ -104,7 +104,6 @@ void gfx_skinned_render(Skinned_render_request* r, Program* active_program) {
     skinned_render(sk, active_program, 0.0f, &r->look);
 }
 
-
 void gfx_draw_fullscreen_quad() {
     static VAO vao;
     static VBO vbo;
@@ -116,7 +115,7 @@ void gfx_draw_fullscreen_quad() {
             -1.0f,  1.0f,  0.0f, 1.0f,
             -1.0f, -1.0f,  0.0f, 0.0f,
              1.0f, -1.0f,  1.0f, 0.0f,
-             1.0f,  1.0f,  1.0f, 1.0f 
+             1.0f,  1.0f,  1.0f, 1.0f
         };
 
         int indices[] = {
@@ -143,7 +142,7 @@ void gfx_draw_fullscreen_quad() {
 
 void gfx_canvas_packet_static_request(Canvas_Render_Request* r) {
     if (r->initialized) return;
-    
+
     VBO vbo;
     VAO vao;
     EBO ebo;
@@ -162,7 +161,6 @@ void gfx_canvas_packet_static_request(Canvas_Render_Request* r) {
 
     vao_create(&vao);
     vao_bind(&vao);
-    
     vbo_create(&vbo, vertices, sizeof(vertices));
     ebo_create(&ebo, indices, sizeof(indices));
 
@@ -177,11 +175,39 @@ void gfx_canvas_packet_static_request(Canvas_Render_Request* r) {
 }
 
 void gfx_set_screen_projection(Program* program) {
+    if (WIDTH <= 0 || HEIGHT <= 0) return;
+
+    float sx = (float)WIDTH / UI_WIDTH;
+    float sy = (float)HEIGHT / UI_HEIGHT;
+    float scale = fminf(sx, sy);
+
+    float offset_x = ((float)WIDTH - UI_WIDTH * scale) * 0.5f;
+    float offset_y = ((float)HEIGHT - UI_HEIGHT * scale) * 0.5f;
+
     mat4 projection;
-    glm_mat4_identity(projection);
-    
-    glm_ortho(0.0f, (float)WIDTH, (float)HEIGHT, 0.0f, -1.0f, 1.0f, projection);
-    
+    glm_ortho(
+        0.0f, (float)WIDTH,
+        (float)HEIGHT, 0.0f,
+        -1.0f, 1.0f,
+        projection
+    );
+
+    mat4 ui_transform;
+    glm_mat4_identity(ui_transform);
+
+    glm_translate(
+        ui_transform,
+        (vec3){offset_x, offset_y, 0.0f}
+    );
+
+    glm_scale(
+        ui_transform,
+        (vec3){scale, scale, 1.0f}
+    );
+
+    glm_mat4_mul(projection, ui_transform, projection);
+
+    program_use(program);
     program_set_mat4(program, "projection", (float*)projection);
 }
 
@@ -189,46 +215,46 @@ void gfx_canvas_render(Canvas_Render_Request* r, Program* active_program) {
     if (!r->initialized) {
         gfx_canvas_packet_static_request(r);
     }
-    
+
     mat4 model_matrix;
     glm_mat4_identity(model_matrix);
-    
+
     glm_translate(model_matrix, (vec3){r->pos[0], r->pos[1], 0.0f});
     glm_rotate(model_matrix, r->rotation, (vec3){0.0f, 0.0f, 1.0f});
     glm_scale(model_matrix, (vec3){r->scale[0], r->scale[1], 1.0f});
-    
+
     program_use(active_program);
     program_set_mat4(active_program, "model", (float*)model_matrix);
     program_set_float(active_program, "alpha", r->alpha);
     program_set_float(active_program, "flip_v", (float)r->flip_v);
-    
+
     vao_bind(&r->cache.vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
 }
 
 void gfx_canvas_render_batch(Canvas_Render_Request* requests, int count, Program* active_program) {
     if (!requests || count <= 0) return;
-    
+
     program_use(active_program);
-    
+
     for (int i = 0; i < count; i++) {
         Canvas_Render_Request* r = &requests[i];
-        
+
         if (!r->initialized) {
             gfx_canvas_packet_static_request(r);
         }
-        
+
         mat4 model_matrix;
         glm_mat4_identity(model_matrix);
-        
+
         glm_translate(model_matrix, (vec3){r->pos[0], r->pos[1], 0.0f});
         glm_rotate(model_matrix, r->rotation, (vec3){0.0f, 0.0f, 1.0f});
         glm_scale(model_matrix, (vec3){r->scale[0], r->scale[1], 1.0f});
-        
+
         program_set_mat4(active_program, "model", (float*)model_matrix);
         program_set_float(active_program, "alpha", r->alpha);
         program_set_float(active_program, "flip_v", (float)r->flip_v);
-        
+
         vao_bind(&r->cache.vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
     }

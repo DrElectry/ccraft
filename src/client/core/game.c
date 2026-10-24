@@ -369,7 +369,7 @@ void game_init() {
     
     texture_create(&player_tex, "assets/textures/player.png");
     texture_create(&player_shininess, "assets/textures/txt_shininess.png");
-    texture_create(&test_panel, "assets/textures/test_panel.png");
+    texture_create(&test_panel, "assets/textures/slot.png");
 
     texture_create(&slot, "assets/textures/slot.png");
     texture_create(&slot_select, "assets/textures/slot_select.png");
@@ -536,9 +536,9 @@ void game_init() {
     glm_vec2_copy((vec2){48.0f, 48.0f}, slot_select_rq.scale);
     slot_select_rq.alpha = 0.75f;
     gfx_canvas_packet_static_request(&slot_select_rq);
-    glm_vec2_copy((vec2){300.0f, 150.0f}, g_test_panel.scale);
+    glm_vec2_copy((vec2){600.0f, 300.0f}, g_test_panel.scale);
     glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, g_test_panel.pos);
-    g_test_panel.alpha = 0.75f;
+    g_test_panel.alpha = 1.0f;
     gfx_canvas_packet_static_request(&g_test_panel);
 
     glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, crosshair_rq.pos);

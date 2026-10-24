@@ -528,7 +528,7 @@ void game_init() {
     for (int i = 0; i < 8; i++) {
         glm_vec2_copy((vec2){30.0f+((float)i*54.0f), HEIGHT-30.0f}, slots[i].pos);
         glm_vec2_copy((vec2){48.0f, 48.0f}, slots[i].scale);
-        slots[i].alpha = 0.75f;
+        slots[i].alpha = 1.0f;
 
         gfx_canvas_packet_static_request(&slots[i]);
     }

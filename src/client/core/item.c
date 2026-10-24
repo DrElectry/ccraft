@@ -231,6 +231,29 @@ static void default_block_spec(ItemSpec* spec, uint16_t id) {
     }
 }
 
+static void default_cross_spec(ItemSpec* spec, uint16_t id) {
+    memset(spec, 0, sizeof(ItemSpec));
+    spec->id = id;
+    spec->stack_size = 64;
+    spec->rarity = RARITY_COMMON;
+    spec->viewmodel = tile_render_cache[id];
+    spec->inventory_slot.id = tile_fbos[id].color_attachments[0];
+    spec->viewmodel_offset[0] = 0.35f;
+    spec->viewmodel_offset[1] = -0.35f;
+    spec->viewmodel_offset[2] = 0.60f;
+    spec->viewmodel_rotation[1] = 0.0f;
+    spec->viewmodel_scale[0] = 0.25f;
+    spec->viewmodel_scale[1] = 0.25f;
+    spec->viewmodel_scale[2] = 0.25f;
+    spec->on_render = item_render_block;
+    spec->on_use = item_use_block;
+
+    if (id <= LAST_TILE && tile_names[id]) {
+        strncpy(spec->name, tile_names[id], MAX_NICKNAME - 1);
+        spec->name[MAX_NICKNAME - 1] = '\0';
+    }
+}
+
 void items_init(void) {
     item_count = 0;
 
@@ -245,7 +268,11 @@ void items_init(void) {
     item_register(&spec);
 
     for (uint16_t id = FIRST_TILE; id <= LAST_TILE; id++) {
-        default_block_spec(&spec, id);
+        if (lookup_cross[id] == 0) {
+            default_block_spec(&spec, id);
+        } else {
+            default_cross_spec(&spec, id);
+        }
         item_register(&spec);
     }
 }
@@ -263,6 +290,7 @@ void inventory_init(void) {
         gfx_canvas_packet_static_request(&inventory[i].request);
     }
 
+    inventory_set(0, item_get(GRASS_CROSS), INFINITE_AMOUNT);
     inventory_set(1, item_get(GLASS), INFINITE_AMOUNT);
     inventory_set(2, item_get(ROSE), INFINITE_AMOUNT);
     inventory_set(3, item_get(IRON_BLOCK), INFINITE_AMOUNT);

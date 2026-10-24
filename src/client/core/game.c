@@ -528,7 +528,7 @@ void game_init() {
     for (int i = 0; i < 8; i++) {
         glm_vec2_copy((vec2){30.0f+((float)i*54.0f), HEIGHT-30.0f}, slots[i].pos);
         glm_vec2_copy((vec2){48.0f, 48.0f}, slots[i].scale);
-        slots[i].alpha = 0.5f;
+        slots[i].alpha = 0.75f;
 
         gfx_canvas_packet_static_request(&slots[i]);
     }
@@ -1260,6 +1260,7 @@ void game_draw_hud_buttons() {
     program_use(&canvas_program);
     texture_bind(&slot, 0);
     program_set_int(&canvas_program, "tex", 0);
+    program_set_float(&canvas_program, "radius", 10.0f);
     gfx_set_screen_projection(&canvas_program);
     gfx_canvas_render_batch(slots, 8, &canvas_program);
 
@@ -1279,6 +1280,7 @@ void game_draw_hud_contents() {
     slot_select_rq.pos[1] = slot_y;
     texture_bind(&slot_select, 0);
     program_set_int(&canvas_program, "tex", 0);
+    program_set_float(&canvas_program, "radius", 0.0f);
     gfx_canvas_render(&slot_select_rq, &canvas_program);
 
     inventory_draw_icons(&canvas_program);

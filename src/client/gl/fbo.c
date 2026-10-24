@@ -1,5 +1,7 @@
 #include "gl/fbo.h"
+
 #include "glad.h"
+
 #include "utils/log.h"
 
 #include <stdio.h>
@@ -14,7 +16,7 @@ void fbo_create(FBO* fbo, int width, int height, int color_count)
     for (int i = 0; i < color_count; i++)
     {
         int format, channels;
-        
+
         if (fbo->color_formats[i] == FBO_COLOR_R32F) {
             format = GL_R32F;
             channels = GL_RED;
@@ -183,6 +185,17 @@ void fbo_unbind()
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void fbo_set_filter(FBO* fbo, int attachment_index, GLenum filter)
+{
+    ASSERT(fbo && fbo->id != 0, "FBO is NULL or has invalid ID");
+    ASSERT(attachment_index >= 0 && attachment_index < fbo->color_count,
+           "Invalid attachment index");
+
+    glBindTexture(GL_TEXTURE_2D, fbo->color_attachments[attachment_index]);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+}
+
 void fbo_bind_texture(FBO* fbo, int attachment_index, unsigned int unit)
 {
     glActiveTexture(GL_TEXTURE0 + unit);
@@ -200,9 +213,15 @@ void fbo_resize(FBO* fbo, int width, int height)
     ASSERT(fbo && fbo->id != 0, "FBO is NULL or has invalid ID");
 
     int color_formats[MAX_FBO_ATTACHMENTS];
+    GLint min_filters[MAX_FBO_ATTACHMENTS];
+    GLint mag_filters[MAX_FBO_ATTACHMENTS];
+
     for (int i = 0; i < fbo->color_count; i++)
     {
         color_formats[i] = fbo->color_formats[i];
+        glBindTexture(GL_TEXTURE_2D, fbo->color_attachments[i]);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &min_filters[i]);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, &mag_filters[i]);
     }
 
     for (int i = 0; i < fbo->color_count; i++)
@@ -210,6 +229,7 @@ void fbo_resize(FBO* fbo, int width, int height)
         glDeleteTextures(1, &fbo->color_attachments[i]);
         fbo->color_attachments[i] = 0;
     }
+
     glDeleteTextures(1, &fbo->depth_attachment);
     fbo->depth_attachment = 0;
 
@@ -218,7 +238,7 @@ void fbo_resize(FBO* fbo, int width, int height)
     for (int i = 0; i < fbo->color_count; i++)
     {
         int format, channels;
-        
+
         if (color_formats[i] == FBO_COLOR_R32F) {
             format = GL_R32F;
             channels = GL_RED;
@@ -248,8 +268,8 @@ void fbo_resize(FBO* fbo, int width, int height)
             NULL
         );
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filters[i]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_filters[i]);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
@@ -310,7 +330,7 @@ void fbo_resize(FBO* fbo, int width, int height)
 
     glDrawBuffers(fbo->color_count, attachments);
 
-    ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE, 
+    ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
            "Framebuffer not complete during resize");
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);

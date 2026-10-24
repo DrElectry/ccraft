@@ -283,6 +283,10 @@ int main(int argc, char* argv[]) {
     fbo_create(&underwaterfb, WIDTH, HEIGHT, 1);
     fbo_create(&clouds_fb, WIDTH/4, HEIGHT/4, 2);
 
+    fbo_set_filter(&ssrfb, 0, GL_LINEAR);
+    fbo_set_filter(&ssaoblurfb, 0, GL_LINEAR); 
+    fbo_set_filter(&clouds_fb, 0, GL_LINEAR); 
+
     gbuffer.color_formats[0] = FBO_COLOR_RGBA16F;
     gbuffer.color_formats[1] = FBO_COLOR_RGB16F;
     gbuffer.color_formats[2] = FBO_COLOR_RGBA16F;

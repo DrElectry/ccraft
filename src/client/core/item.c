@@ -290,7 +290,7 @@ void inventory_init(void) {
         gfx_canvas_packet_static_request(&inventory[i].request);
     }
 
-    inventory_set(0, item_get(GRASS_CROSS), INFINITE_AMOUNT);
+    inventory_set(0, item_get(LAVA), INFINITE_AMOUNT);
     inventory_set(1, item_get(GLASS), INFINITE_AMOUNT);
     inventory_set(2, item_get(ROSE), INFINITE_AMOUNT);
     inventory_set(3, item_get(IRON_BLOCK), INFINITE_AMOUNT);

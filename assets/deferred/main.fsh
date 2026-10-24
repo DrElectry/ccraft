@@ -36,6 +36,11 @@ out vec4 fragColor;
 
 // too lazy to use uniforms
 
+const float PLANET_SIZE = 6371000.0;        // Earth-like radius in world units
+const float PLANET_SURFACE_Y = 0.0; 
+
+const float HORIZON_DROP_RATE = 0.5;
+
 const vec3 FOG_COLOR = vec3(0.6, 0.7, 0.8); // will remove this when i switch to biomes
 const float FOG_START = 110.0;
 const float FOG_END = 120.0;
@@ -290,6 +295,20 @@ vec3 getUnderwaterFogColor()
     return vec3(0.1, 0.3, 0.6);
 }
 
+float getHorizonBlend(vec3 rd, vec3 cameraPos)
+{
+    float altitude = max(0.0, cameraPos.y - PLANET_SURFACE_Y);
+    
+    // horizon dip angle how far below horizontal the horizon appears
+    // for a sphere cos(dip) = R / (R + altitude), so dip = acos(R / (R + altitude))
+    float dip = acos(clamp(PLANET_SIZE / (PLANET_SIZE + altitude), -1.0, 1.0));
+    
+    float horizonAngle = -dip * HORIZON_DROP_RATE;
+    
+    float blend = 1.0 - smoothstep(horizonAngle, horizonAngle + 0.3, rd.y);
+    return clamp(blend, 0.0, 1.0);
+}
+
 void main()
 {
     float terrainDepth = texture(gDepth, out_uv).r;
@@ -503,7 +522,7 @@ void main()
     {
         vec3 sunColor = getSun(rd, lightDir);
         
-        float horizonBlend = 1.0 - max(0.0, rd.y);
+        float horizonBlend = getHorizonBlend(rd, cameraPos);
         vec3 horizonColor = vec3(0.6, 0.7, 0.8);
         vec3 zenithColor = vec3(0.45, 0.56, 0.66);
         vec3 skyGradient = mix(zenithColor, horizonColor, horizonBlend);
@@ -531,10 +550,11 @@ void main()
             vec3 cloudAmbient = cloudColor.rgb * cloudAO * 0.35;
             vec3 cloudDiffuse = cloudColor.rgb * light * cloudNdotL * (1.0 - cloudShadow) * 0.8;
             
-            // Calculate fog color for clouds based on their position
             vec3 cloudRd = normalize(cloudWorldPos - cameraPos);
-            float cloudHorizonBlend = 1.0 - max(0.0, cloudRd.y);
-            vec3 cloudFogColor = isUnderwater ? fogColor : mix(fogZenithColor, fogHorizonColor, cloudHorizonBlend);
+            float cloudHorizonBlend = getHorizonBlend(cloudRd, cameraPos);
+            vec3 cloudFogColor = isUnderwater
+                ? fogColor
+                : mix(fogZenithColor, fogHorizonColor, cloudHorizonBlend);
             
             float cloudFogFactor = clamp((fogEnd - cloudDist) / (fogEnd - fogStart), 0.0, 1.0);
             vec3 cloudFogged = mix(cloudFogColor, cloudAmbient + cloudDiffuse, cloudFogFactor);

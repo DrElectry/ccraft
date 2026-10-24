@@ -81,7 +81,7 @@ void main()
 
     vec3 finalCol = sum + bloom * 0.55;
 
-    float vignette = 1.0 - pow(distance(out_uv, vec2(0.5)), 2.0) * 1.25;
+    float vignette = 1.0 - pow(distance(out_uv, vec2(0.5)), 4.0) * 2.5;
     vignette = clamp(vignette, 0.0, 1.0);
 
     fragColor = vec4(finalCol * vignette, 1.0);

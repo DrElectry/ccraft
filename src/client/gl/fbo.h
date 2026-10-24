@@ -2,6 +2,7 @@
 #define FBO_H
 
 #include <stddef.h>
+#include "glad.h"
 
 #define MAX_FBO_ATTACHMENTS 8
 

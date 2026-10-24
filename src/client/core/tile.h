@@ -8,7 +8,7 @@
 #include "gl/shader.h"
 #include "gl/tex.h"
 
-#define TILE_ICON_SIZE 64
+#define TILE_ICON_SIZE 128
 
 extern const float face_vertices[];
 extern const unsigned int face_indices[];

@@ -139,7 +139,7 @@ static int debug_texts_ready = 0;
 static float debug_current_fps = 0.0f;
 
 // pickup / grab item name fadeout text
-static HText g_pickup_text, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12;
+static HText g_pickup_text;
 static float g_pickup_alpha = 0.0f;
 static int g_pickup_active = 0;
 static const float g_pickup_lifetime = 1.5f;
@@ -423,31 +423,6 @@ void game_init() {
     font_load("minecraft_default_regular", "assets/fonts/MinecraftDefault-Regular.ttf");
     text_create(&name, "INDEV", 0x0F, 1.0f, 0, 0);
     text_create(&fps, "FPS: 0", 0x0F, 1.0f, 0, 16);
-    text_create(&t1, "The quick brown fox jumps over the lazy dog", 0x01, 1.0f, 500, 200);
-    text_create(&t2, "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG", 0x03, 1.0f, 500, 216);
-    text_create(&t3, "0123456789 !@#$%^&*()_+-=[]{}|;:',.<>/?", 0x05, 1.0f, 500, 232);
-    text_create(&t4, "© ® ™ € £ ¥ ¢ § ¶ ° ± × ÷ µ", 0x07, 1.0f, 500, 248);
-    text_create(&t5, "À Á Â Ã Ä Å Æ Ç È É Ê Ë Ì Í Î Ï", 0x09, 1.0f, 500, 264);
-    text_create(&t6, "Ñ Ò Ó Ô Õ Ö Ø Ù Ú Û Ü Ý ß æ œ", 0x0B, 1.0f, 500, 280);
-    text_create(&t7, "ąćęłńóśźż ĄĆĘŁŃÓŚŹŻ", 0x0D, 1.0f, 500, 296);
-    text_create(&t8, "– — ‘ ’ “ ” « » … • † ‡ ‰ №", 0x0F, 1.0f, 500, 312);
-    text_create(&t9, "α β γ δ ε θ λ μ π σ φ ω Ω Δ Σ", 0x11, 1.0f, 500, 328);
-    text_create(&t10, "← ↑ → ↓ ↔ ↕ ∞ ≠ ≤ ≥ ≈ √ ∑ ∫", 0x13, 1.0f, 500, 344);
-    text_create(&t11, "¼ ½ ¾ ² ³ ¹ ⁰ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹", 0x15, 1.0f, 500, 360);
-    text_create(&t12, "■ □ ▲ △ ● ○ ★ ☆ ♠ ♣ ♥ ♦ ✓", 0x17, 1.0f, 500, 376);
-
-    text_set_font(&t1, "minecraft_default_regular");
-    text_set_font(&t2, "minecraft_default_regular");
-    text_set_font(&t3, "minecraft_default_regular");
-    text_set_font(&t4, "minecraft_default_regular");
-    text_set_font(&t5, "minecraft_default_regular");
-    text_set_font(&t6, "minecraft_default_regular");
-    text_set_font(&t7, "minecraft_default_regular");
-    text_set_font(&t8, "minecraft_default_regular");
-    text_set_font(&t9, "minecraft_default_regular");
-    text_set_font(&t10, "minecraft_default_regular");
-    text_set_font(&t11, "minecraft_default_regular");
-    text_set_font(&t12, "minecraft_default_regular");
 
     player_get_pos(&player, body_pos);
 
@@ -569,6 +544,9 @@ void game_init() {
     inventory_init();
     inventory_select(0);
 
+    g_tung_slot_tex.mag_filter = GL_NEAREST;
+    g_tung_slot_tex.min_filter = GL_NEAREST;
+
     g_tung_model = obj_load_render_request("assets/models/tung_tung_tung_sahur.obj");
     if (!g_tung_model) {
         printf("Failed to load tung_tung_tung_sahur.obj\n");
@@ -684,18 +662,6 @@ void game_tick(float dt_p) {
     text_free(&fps);
     text_create(&fps, fps_text, 0x0F, 1.0f, 0, 32);
     text_create(&name, "INDEV", 0x0F, 1.0f, 0, 0);
-    text_create(&t1, "The quick brown fox jumps over the lazy dog", 0x01, 1.0f, 500, 200);
-    text_create(&t2, "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG", 0x02, 1.0f, 500, 216);
-    text_create(&t3, "0123456789 !@#$%^&*()_+-=[]{}|;:',.<>/?", 0x03, 1.0f, 500, 232);
-    text_create(&t4, "© ® ™ € £ ¥ ¢ § ¶ ° ± × ÷ µ", 0x04, 1.0f, 500, 248);
-    text_create(&t5, "À Á Â Ã Ä Å Æ Ç È É Ê Ë Ì Í Î Ï", 0x05, 1.0f, 500, 264);
-    text_create(&t6, "Ñ Ò Ó Ô Õ Ö Ø Ù Ú Û Ü Ý ß æ œ", 0x0A, 1.0f, 500, 280);
-    text_create(&t7, "ąćęłńóśźż ĄĆĘŁŃÓŚŹŻ", 0x0B, 1.0f, 500, 296);
-    text_create(&t8, "– — ‘ ’ “ ” « » … • † ‡ ‰ №", 0x0C, 1.0f, 500, 312);
-    text_create(&t9, "α β γ δ ε θ λ μ π σ φ ω Ω Δ Σ", 0x0D, 1.0f, 500, 328);
-    text_create(&t10, "← ↑ → ↓ ↔ ↕ ∞ ≠ ≤ ≥ ≈ √ ∑ ∫", 0x0E, 1.0f, 500, 344);
-    text_create(&t11, "¼ ½ ¾ ² ³ ¹ ⁰ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹", 0x0F, 1.0f, 500, 360);
-    text_create(&t12, "■ □ ▲ △ ● ○ ★ ☆ ♠ ♣ ♥ ♦ ✓", 0x00, 1.0f, 500, 376);
     text_set_size(&fps, 32);
     text_set_size(&name, 32);
 
@@ -1371,19 +1337,6 @@ void game_draw_hud() {
         text_create(&g_pickup_text, g_pickup_name, g_pickup_color, g_pickup_alpha, x, y);
         text_draw(&g_pickup_text);
     }
-
-    text_draw(&t1);
-    text_draw(&t2);
-    text_draw(&t3);
-    text_draw(&t4);
-    text_draw(&t5);
-    text_draw(&t6);
-    text_draw(&t7);
-    text_draw(&t8);
-    text_draw(&t9);
-    text_draw(&t10);
-    text_draw(&t11);
-    text_draw(&t12);
 
     if (!__onserv) return;
 

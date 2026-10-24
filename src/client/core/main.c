@@ -76,7 +76,7 @@ void on_window_resize(int width, int height)
     fbo_resize(&glass_fb, width/2, height/2);
 
     glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, crosshair_rq.pos);
-    glm_vec2_copy((vec2){64.0f, 64.0f}, crosshair_rq.scale);
+    glm_vec2_copy((vec2){4.0f, 4.0f}, crosshair_rq.scale);
     crosshair_rq.alpha = 0.75f;
     gfx_canvas_packet_static_request(&crosshair_rq);
 

@@ -7,6 +7,12 @@ uniform sampler2D scene;
 uniform sampler2D blurred;
 uniform sampler2D buttons;
 
+float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}
+
 void main() {
     vec4 btn = texture(buttons, out_uv);
     if (btn.a < 0.02) discard;
@@ -51,7 +57,7 @@ void main() {
     if (dot(TG, TG) < 1e-5) TG = I;
     if (dot(TB, TB) < 1e-5) TB = I;
 
-    float depthScale = 0.55;
+    float depthScale = 0.16;
     vec2 offR = TR.xy / max(-TR.z, 0.15) * depthScale;
     vec2 offG = TG.xy / max(-TG.z, 0.15) * depthScale;
     vec2 offB = TB.xy / max(-TB.z, 0.15) * depthScale;
@@ -65,33 +71,58 @@ void main() {
     refracted.g = texture(scene, uvG).g;
     refracted.b = texture(scene, uvB).b;
 
-    vec3 blurBase = texture(blurred, uvG).rgb;
+    vec2 btexel = 1.0 / vec2(textureSize(blurred, 0));
+
+    float jitter = hash21(gl_FragCoord.xy * 0.71) - 0.5;
+    vec2 frostUV = uvG + vec2(jitter, -jitter) * btexel * 2.0;
+
+    vec2 b1 = btexel * 10.0;
+    vec2 b2 = btexel * 24.0;
+
+    vec3 blurBase =
+          texture(blurred, frostUV).rgb * 0.24
+        + (texture(blurred, frostUV + vec2( b1.x, 0.0)).rgb
+         + texture(blurred, frostUV + vec2(-b1.x, 0.0)).rgb
+         + texture(blurred, frostUV + vec2(0.0,  b1.y)).rgb
+         + texture(blurred, frostUV + vec2(0.0, -b1.y)).rgb) * 0.09
+        + (texture(blurred, frostUV + vec2( b1.x,  b1.y)).rgb
+         + texture(blurred, frostUV + vec2(-b1.x,  b1.y)).rgb
+         + texture(blurred, frostUV + vec2( b1.x, -b1.y)).rgb
+         + texture(blurred, frostUV + vec2(-b1.x, -b1.y)).rgb) * 0.06
+        + (texture(blurred, frostUV + vec2( b2.x, 0.0)).rgb
+         + texture(blurred, frostUV + vec2(-b2.x, 0.0)).rgb
+         + texture(blurred, frostUV + vec2(0.0,  b2.y)).rgb
+         + texture(blurred, frostUV + vec2(0.0, -b2.y)).rgb) * 0.04;
 
     float edge = 1.0 - smoothA;
     float edgeMask = smoothstep(0.0, 0.7, edge);
 
-    vec3 col = mix(refracted, blurBase, edgeMask * 0.75 + 0.15);
+    vec3 col = mix(refracted, blurBase, 0.72 + edgeMask * 0.28);
 
     float cosI = clamp(N.z, 0.0, 1.0);
     float fresnel = pow(1.0 - cosI, 4.0);
 
     vec3 envRefl = mix(vec3(0.86, 0.91, 0.98), vec3(1.0), cosI);
-    col = mix(col, envRefl, fresnel * 0.6 + 0.04);
+    col = mix(col, envRefl, fresnel * 0.40 + 0.05);
 
     float curvature = length(gradH);
     float specSoft = smoothstep(0.4, 2.0, curvature);
-    col += vec3(0.95, 0.98, 1.0) * specSoft * (0.2 + fresnel * 0.5);
+    col += vec3(0.95, 0.98, 1.0) * specSoft * (0.08 + fresnel * 0.22);
 
-    vec3 tint = mix(vec3(0.94, 0.97, 1.0), btn.rgb, 0.25);
+    vec3 tint = mix(vec3(0.97, 0.98, 1.0), btn.rgb, 0.10);
     col *= tint;
 
+    col = mix(col, vec3(0.93, 0.96, 1.0), 0.03);
+
     float thickness = smoothstep(0.6, 1.0, edge);
-    col += vec3(0.85, 0.92, 1.0) * thickness * 0.15;
+    col += vec3(0.85, 0.92, 1.0) * thickness * 0.08;
 
-    col *= mix(1.0, 0.92, smoothstep(0.0, 0.3, smoothA));
-    col = mix(col, btn.rgb, 0.08);
+    col *= mix(1.0, 0.98, smoothstep(0.0, 0.3, smoothA));
+    col = mix(col, btn.rgb, 0.03);
 
-    float alpha = max(btn.a, smoothstep(0.0, 0.5, edge) * 0.6 + fresnel * 0.4);
+    col += (hash21(gl_FragCoord.xy) - 0.5) * 0.018;
+
+    float alpha = max(btn.a, 0.68 + edgeMask * 0.20 + fresnel * 0.12);
     alpha = clamp(alpha, 0.0, 1.0);
 
     fragColor = vec4(col, alpha);

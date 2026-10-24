@@ -5,9 +5,9 @@
 
 #include <stdint.h>
 
-#define FONT_DEFAULT "Arial"
+#define FONT_DEFAULT "NotoSans"
 #define FONT_DEFAULT_SIZE 16
-#define FONT_DEFAULT_PATH "assets/fonts/Arial.ttf"
+#define FONT_DEFAULT_PATH "assets/fonts/NotoSans-Regular.ttf"
 
 #define MAX_GLYPHS_PER_TEXT 256
 #define MAX_TEXTS 256

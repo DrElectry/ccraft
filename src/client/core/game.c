@@ -113,7 +113,7 @@ int ff[24 * 15] = {0};
 int cc, dd, gg, hh; // for block in our hand
 
 Input input_manager;
-Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, normal, slot, slot_select;
+Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, normal, slot, slot_select, test_panel;
 
 Render_request block, cursor; // in your hand
 
@@ -124,6 +124,7 @@ static float g_footstep_delay = 0.0f;
 
 Canvas_Render_Request slots[8] = {0};
 Canvas_Render_Request slot_select_rq = {0};
+Canvas_Render_Request g_test_panel = {0};
 
 Texture crosshair_tex;
 Canvas_Render_Request crosshair_rq;
@@ -341,6 +342,11 @@ void game_init() {
     player_shininess.wrap_s = GL_REPEAT;
     player_shininess.wrap_t = GL_REPEAT;
 
+    test_panel.mag_filter = GL_NEAREST;
+    test_panel.min_filter = GL_NEAREST;
+    test_panel.wrap_s = GL_REPEAT;
+    test_panel.wrap_t = GL_REPEAT;
+
     normal.mag_filter = GL_NEAREST;
     normal.min_filter = GL_NEAREST;
     normal.wrap_s = GL_REPEAT;
@@ -363,6 +369,7 @@ void game_init() {
     
     texture_create(&player_tex, "assets/textures/player.png");
     texture_create(&player_shininess, "assets/textures/txt_shininess.png");
+    texture_create(&test_panel, "assets/textures/test_panel.png");
 
     texture_create(&slot, "assets/textures/slot.png");
     texture_create(&slot_select, "assets/textures/slot_select.png");
@@ -529,9 +536,13 @@ void game_init() {
     glm_vec2_copy((vec2){48.0f, 48.0f}, slot_select_rq.scale);
     slot_select_rq.alpha = 0.75f;
     gfx_canvas_packet_static_request(&slot_select_rq);
+    glm_vec2_copy((vec2){300.0f, 150.0f}, g_test_panel.scale);
+    glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, g_test_panel.pos);
+    g_test_panel.alpha = 0.75f;
+    gfx_canvas_packet_static_request(&g_test_panel);
 
     glm_vec2_copy((vec2){(float)WIDTH/2 - 2.0f, (float)HEIGHT/2 - 2.0f}, crosshair_rq.pos);
-    glm_vec2_copy((vec2){64.0f, 64.0f}, crosshair_rq.scale);
+    glm_vec2_copy((vec2){4.0f, 4.0f}, crosshair_rq.scale);
     crosshair_rq.alpha = 0.75f;
     gfx_canvas_packet_static_request(&crosshair_rq);
 
@@ -1252,10 +1263,10 @@ void game_draw_hud_buttons() {
     gfx_set_screen_projection(&canvas_program);
     gfx_canvas_render_batch(slots, 8, &canvas_program);
 
-    texture_bind(&crosshair_tex, 0);
+    texture_bind(&test_panel, 0);
     program_set_int(&canvas_program, "tex", 0);
     gfx_set_screen_projection(&canvas_program);
-    gfx_canvas_render(&crosshair_rq, &canvas_program);
+    gfx_canvas_render(&g_test_panel, &canvas_program);
 }
 
 void game_draw_hud_contents() {
@@ -1271,6 +1282,11 @@ void game_draw_hud_contents() {
     gfx_canvas_render(&slot_select_rq, &canvas_program);
 
     inventory_draw_icons(&canvas_program);
+
+    texture_bind(&crosshair_tex, 0);
+    program_set_int(&canvas_program, "tex", 0);
+    gfx_set_screen_projection(&canvas_program);
+    gfx_canvas_render(&crosshair_rq, &canvas_program);
 
     text_draw(&name);
     text_draw(&fps);

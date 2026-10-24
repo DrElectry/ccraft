@@ -31,9 +31,9 @@ typedef enum : uint16_t {
     PLANKS = 18,
 } Tile;
 
-#define FIRST_TILE 1 // so we dont place air on the right button press
+#define FIRST_TILE 1 // so we dont place air on the right button press (unused now)
 
-#define LAST_TILE 18
+#define LAST_TILE 18 // actually unused right now
 
 typedef struct {
     uint16_t* data; // 2 bytes for block id meaning that we have 65535 possible unique blocks

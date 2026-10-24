@@ -30,9 +30,7 @@ static void chat_sanitize_char(char* dst, size_t dst_len, char c) {
     if (len + 1 >= dst_len) return;
 
     unsigned char uc = (unsigned char)c;
-    if (uc >= 'a' && uc <= 'z') {
-        uc = (unsigned char)(uc - 'a' + 'A');
-    }
+    if (uc < 32 || uc == 127) return;
     dst[len] = (char)uc;
     dst[len + 1] = '\0';
 }
@@ -74,9 +72,10 @@ static void chat_expire_old(void) {
 }
 
 static int chat_compose_screen_y(void) {
-    int y = (int)HEIGHT - CHAT_MARGIN_Y - 5 * CHAR_HEIGHT;
+    int lh = text_default_line_height();
+    int y = (int)HEIGHT - CHAT_MARGIN_Y - 5 * lh;
     if (chat_line_count > 0) {
-        y -= chat_line_count * (CHAR_HEIGHT + CHAT_LINE_GAP);
+        y -= chat_line_count * (lh + CHAT_LINE_GAP);
     }
     return y;
 }
@@ -98,7 +97,8 @@ static void chat_sync_compose_hud(void) {
 }
 
 static void chat_layout_and_sync(void) {
-    int y = (int)HEIGHT - CHAT_MARGIN_Y - 5 * CHAR_HEIGHT;
+    int lh = text_default_line_height();
+    int y = (int)HEIGHT - CHAT_MARGIN_Y - 5 * lh;
 
     for (int i = chat_line_count - 1; i >= 0; i--) {
         if (!chat_lines[i].active) continue;
@@ -108,7 +108,7 @@ static void chat_layout_and_sync(void) {
         text_create(&chat_lines[i].hud, chat_lines[i].text, chat_lines[i].color, 1.0f,
                     chat_lines[i].hud.x, chat_lines[i].hud.y);
 
-        y -= CHAR_HEIGHT + CHAT_LINE_GAP;
+        y -= lh + CHAT_LINE_GAP;
     }
 
     chat_sync_compose_hud();
@@ -209,7 +209,7 @@ void chat_push_line(const char* line, uint16_t color) {
     slot->color = color ? color : CHAT_DEFAULT_COLOR;
     slot->active = 1;
 
-    int y = (int)HEIGHT - CHAT_MARGIN_Y - 5 * CHAR_HEIGHT;
+    int y = (int)HEIGHT - CHAT_MARGIN_Y - 5 * text_default_line_height();
     text_create(&slot->hud, slot->text, slot->color, 1.0f, CHAT_MARGIN_X, y);
 }
 

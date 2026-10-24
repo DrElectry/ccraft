@@ -139,7 +139,7 @@ static int debug_texts_ready = 0;
 static float debug_current_fps = 0.0f;
 
 // pickup / grab item name fadeout text
-static HText g_pickup_text;
+static HText g_pickup_text, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12;
 static float g_pickup_alpha = 0.0f;
 static int g_pickup_active = 0;
 static const float g_pickup_lifetime = 1.5f;
@@ -220,12 +220,11 @@ void update_debug_texts(void) {
     
     const int global_x = 10;
     const int global_y = 600;
-    const int line_height = 16;
-    const float font_scale = 0.5f;
+    const int line_height = text_default_line_height();
     
     snprintf(buf, sizeof(buf), "%s", get_cpu_model());
     text_free(&debug_texts[0]);
-    text_create(&debug_texts[0], buf, 0x0F, font_scale, global_x + 0, global_y + 0);
+    text_create(&debug_texts[0], buf, 0x0F, 1.0f, global_x + 0, global_y + 0);
 
     static char gpu_str[256] = "";
     if (gpu_str[0] == '\0') {
@@ -233,31 +232,31 @@ void update_debug_texts(void) {
         snprintf(gpu_str, sizeof(gpu_str), "%s", renderer ? renderer : "Unknown");
     }
     text_free(&debug_texts[1]);
-    text_create(&debug_texts[1], gpu_str, 0x0F, font_scale, global_x + 0, global_y + (1 * line_height));
+    text_create(&debug_texts[1], gpu_str, 0x0F, 1.0f, global_x + 0, global_y + (1 * line_height));
 
     snprintf(buf, sizeof(buf), "FPS: %.0f", debug_current_fps);
     text_free(&debug_texts[2]);
-    text_create(&debug_texts[2], buf, 0x0F, font_scale, global_x + 0, global_y + (2 * line_height));
+    text_create(&debug_texts[2], buf, 0x0F, 1.0f, global_x + 0, global_y + (2 * line_height));
 
     snprintf(buf, sizeof(buf), "X: %.2f Y: %.2f Z: %.2f",
              player.camera.pos[0], player.camera.pos[1], player.camera.pos[2]);
     text_free(&debug_texts[3]);
-    text_create(&debug_texts[3], buf, 0x0F, font_scale, global_x + 0, global_y + (3 * line_height));
+    text_create(&debug_texts[3], buf, 0x0F, 1.0f, global_x + 0, global_y + (3 * line_height));
 
     snprintf(buf, sizeof(buf), "%.2f %.2f %.2f",
              player.camera.rot[0], player.camera.rot[1], player.camera.rot[2]);
     text_free(&debug_texts[4]);
-    text_create(&debug_texts[4], buf, 0x0F, font_scale, global_x + 0, global_y + (4 * line_height));
+    text_create(&debug_texts[4], buf, 0x0F, 1.0f, global_x + 0, global_y + (4 * line_height));
 
     int line_index = 5;
     if (__onserv) {
         snprintf(buf, sizeof(buf), "CONNECTED TO %s:%d", __servip, __servport);
         text_free(&debug_texts[5]);
-        text_create(&debug_texts[5], buf, 0x0F, font_scale, global_x + 0, global_y + (line_index++ * line_height));
+        text_create(&debug_texts[5], buf, 0x0F, 1.0f, global_x + 0, global_y + (line_index++ * line_height));
     }
     snprintf(buf, sizeof(buf), "PLAYING AS %s", __nickname);
     text_free(&debug_texts[6]);
-    text_create(&debug_texts[6], buf, 0x0F, font_scale, global_x + 0, global_y + (line_index * line_height));
+    text_create(&debug_texts[6], buf, 0x0F, 1.0f, global_x + 0, global_y + (line_index * line_height));
 
     debug_texts_ready = 1;
 }
@@ -419,10 +418,36 @@ void game_init() {
     glm_mat4_identity(hand_model);
     glm_translate(hand_model, (vec3){50.0f, 50.0f, 50.0f});
 
-    text_init("assets/gui/text.vsh", "assets/gui/text.fsh", "assets/textures/text.png");
+    text_init("assets/gui/text.vsh", "assets/gui/text.fsh");
     chat_init();
+    font_load("minecraft_default_regular", "assets/fonts/MinecraftDefault-Regular.ttf");
     text_create(&name, "INDEV", 0x0F, 1.0f, 0, 0);
     text_create(&fps, "FPS: 0", 0x0F, 1.0f, 0, 16);
+    text_create(&t1, "The quick brown fox jumps over the lazy dog", 0x01, 1.0f, 500, 200);
+    text_create(&t2, "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG", 0x03, 1.0f, 500, 216);
+    text_create(&t3, "0123456789 !@#$%^&*()_+-=[]{}|;:',.<>/?", 0x05, 1.0f, 500, 232);
+    text_create(&t4, "© ® ™ € £ ¥ ¢ § ¶ ° ± × ÷ µ", 0x07, 1.0f, 500, 248);
+    text_create(&t5, "À Á Â Ã Ä Å Æ Ç È É Ê Ë Ì Í Î Ï", 0x09, 1.0f, 500, 264);
+    text_create(&t6, "Ñ Ò Ó Ô Õ Ö Ø Ù Ú Û Ü Ý ß æ œ", 0x0B, 1.0f, 500, 280);
+    text_create(&t7, "ąćęłńóśźż ĄĆĘŁŃÓŚŹŻ", 0x0D, 1.0f, 500, 296);
+    text_create(&t8, "– — ‘ ’ “ ” « » … • † ‡ ‰ №", 0x0F, 1.0f, 500, 312);
+    text_create(&t9, "α β γ δ ε θ λ μ π σ φ ω Ω Δ Σ", 0x11, 1.0f, 500, 328);
+    text_create(&t10, "← ↑ → ↓ ↔ ↕ ∞ ≠ ≤ ≥ ≈ √ ∑ ∫", 0x13, 1.0f, 500, 344);
+    text_create(&t11, "¼ ½ ¾ ² ³ ¹ ⁰ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹", 0x15, 1.0f, 500, 360);
+    text_create(&t12, "■ □ ▲ △ ● ○ ★ ☆ ♠ ♣ ♥ ♦ ✓", 0x17, 1.0f, 500, 376);
+
+    text_set_font(&t1, "minecraft_default_regular");
+    text_set_font(&t2, "minecraft_default_regular");
+    text_set_font(&t3, "minecraft_default_regular");
+    text_set_font(&t4, "minecraft_default_regular");
+    text_set_font(&t5, "minecraft_default_regular");
+    text_set_font(&t6, "minecraft_default_regular");
+    text_set_font(&t7, "minecraft_default_regular");
+    text_set_font(&t8, "minecraft_default_regular");
+    text_set_font(&t9, "minecraft_default_regular");
+    text_set_font(&t10, "minecraft_default_regular");
+    text_set_font(&t11, "minecraft_default_regular");
+    text_set_font(&t12, "minecraft_default_regular");
 
     player_get_pos(&player, body_pos);
 
@@ -657,8 +682,22 @@ void game_tick(float dt_p) {
     static char fps_text[32];
     snprintf(fps_text, sizeof(fps_text), "FPS: %.0f", debug_current_fps);
     text_free(&fps);
-    text_create(&fps, fps_text, 0x0F, 1.0f, 0, 16);
+    text_create(&fps, fps_text, 0x0F, 1.0f, 0, 32);
     text_create(&name, "INDEV", 0x0F, 1.0f, 0, 0);
+    text_create(&t1, "The quick brown fox jumps over the lazy dog", 0x01, 1.0f, 500, 200);
+    text_create(&t2, "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG", 0x02, 1.0f, 500, 216);
+    text_create(&t3, "0123456789 !@#$%^&*()_+-=[]{}|;:',.<>/?", 0x03, 1.0f, 500, 232);
+    text_create(&t4, "© ® ™ € £ ¥ ¢ § ¶ ° ± × ÷ µ", 0x04, 1.0f, 500, 248);
+    text_create(&t5, "À Á Â Ã Ä Å Æ Ç È É Ê Ë Ì Í Î Ï", 0x05, 1.0f, 500, 264);
+    text_create(&t6, "Ñ Ò Ó Ô Õ Ö Ø Ù Ú Û Ü Ý ß æ œ", 0x0A, 1.0f, 500, 280);
+    text_create(&t7, "ąćęłńóśźż ĄĆĘŁŃÓŚŹŻ", 0x0B, 1.0f, 500, 296);
+    text_create(&t8, "– — ‘ ’ “ ” « » … • † ‡ ‰ №", 0x0C, 1.0f, 500, 312);
+    text_create(&t9, "α β γ δ ε θ λ μ π σ φ ω Ω Δ Σ", 0x0D, 1.0f, 500, 328);
+    text_create(&t10, "← ↑ → ↓ ↔ ↕ ∞ ≠ ≤ ≥ ≈ √ ∑ ∫", 0x0E, 1.0f, 500, 344);
+    text_create(&t11, "¼ ½ ¾ ² ³ ¹ ⁰ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹", 0x0F, 1.0f, 500, 360);
+    text_create(&t12, "■ □ ▲ △ ● ○ ★ ☆ ♠ ♣ ♥ ♦ ✓", 0x00, 1.0f, 500, 376);
+    text_set_size(&fps, 32);
+    text_set_size(&name, 32);
 
     vec3 player_pos;
     player_get_pos(&player, player_pos);
@@ -800,10 +839,12 @@ void game_tick(float dt_p) {
 
                 if (!g_pickup_text_ready) {
                     text_create(&g_pickup_text, g_pickup_name, g_pickup_color, 1.0f, 0, 0);
+                    text_set_size(&g_pickup_text, 32);
                     g_pickup_text_ready = 1;
                 } else {
                     text_free(&g_pickup_text);
                     text_create(&g_pickup_text, g_pickup_name, g_pickup_color, 1.0f, 0, 0);
+                    text_set_size(&g_pickup_text, 32);
                 }
                 g_pickup_alpha = 1.0f;
                 g_pickup_active = 1;
@@ -1321,14 +1362,28 @@ void game_draw_hud() {
     }
 
     if (g_pickup_active && g_pickup_text_ready) {
-        int len = (int)strlen(g_pickup_name);
-        int text_w = len * CHAR_WIDTH;
+        text_create(&g_pickup_text, g_pickup_name, g_pickup_color, g_pickup_alpha, 0, 0);
+        int text_w = text_measure_width(&g_pickup_text);
+        int text_h = text_measure_height(&g_pickup_text);
         int x = (_win->width - text_w) / 2;
-        int y = (_win->height - CHAR_HEIGHT) / 2 + HEIGHT/3;
+        int y = (_win->height - text_h) / 2 + HEIGHT/3;
 
         text_create(&g_pickup_text, g_pickup_name, g_pickup_color, g_pickup_alpha, x, y);
         text_draw(&g_pickup_text);
     }
+
+    text_draw(&t1);
+    text_draw(&t2);
+    text_draw(&t3);
+    text_draw(&t4);
+    text_draw(&t5);
+    text_draw(&t6);
+    text_draw(&t7);
+    text_draw(&t8);
+    text_draw(&t9);
+    text_draw(&t10);
+    text_draw(&t11);
+    text_draw(&t12);
 
     if (!__onserv) return;
 
@@ -1353,15 +1408,15 @@ void game_draw_hud() {
         vec3 wp = { remotes[i].pos[0], remotes[i].pos[1] + 2.0f, remotes[i].pos[2] };
         project_point_to_screen(wp, &sx, &sy);
 
-        int text_length = strlen(remote_nick_buf[i]);
-        int text_width = text_length * CHAR_WIDTH;
-        int text_height = CHAR_HEIGHT;
+        int tw = text_measure_width(&remote_names[i]);
+        int th = text_measure_height(&remote_names[i]);
         
-        remote_names[i].x = (int)sx - (text_width / 2);
-        remote_names[i].y = (int)sy - text_height - 4;
+        remote_names[i].x = (int)sx - (tw / 2);
+        remote_names[i].y = (int)sy - th - 4;
 
         text_create(&remote_names[i], remote_nick_buf[i], 0x0F, 1.0f, remote_names[i].x, remote_names[i].y);
         text_draw(&remote_names[i]);
+        text_set_size(&remote_names[i], 32);
     }
 }
 
@@ -1402,4 +1457,5 @@ void game_destroy() {
     for (int i = 0; i < 7; i++) {
         text_free(&debug_texts[i]);
     }
+    text_destroy();
 }

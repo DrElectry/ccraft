@@ -15,8 +15,6 @@
 
 #include <stdint.h>
 
-#define __ALIAS_C(sym)		__asm("_" __STRING(sym))
-
 typedef struct s_img
 {
 	void		*img;
@@ -35,7 +33,18 @@ typedef struct s_pointi2
 	int			x;
 	int			y;
 }				t_pointi2;
-typedef struct s_glyph						t_ttf_glyph;
+
+typedef struct s_glyph
+{
+	int			index;
+	int16_t		x_min;
+	int16_t		y_min;
+	int16_t		x_max;
+	int16_t		y_max;
+	uint16_t	advance_width;
+	int16_t		left_side_bearing;
+}				t_ttf_glyph;
+
 typedef struct s_true_type_font_family
 {
 	uint16_t	format;
@@ -44,6 +53,7 @@ typedef struct s_true_type_font_family
 	char		*full_name;
 	char		*postscript_name;
 }		t_ttf_familly;
+
 typedef struct s_true_type_font_props
 {
 	uint32_t	scalar_type;
@@ -84,35 +94,54 @@ typedef struct s_true_type_font_props
 	uint16_t	num_of_long_hor_metrics;
 }		t_ttf_props;
 
-int				create_new_font(const char *, char *, const char *) __ALIAS_C(ft_create_new_font);
-int				delete_font(const char *) __ALIAS_C(ft_delete_font);
+typedef struct s_baked_glyph
+{
+	unsigned short	x0, y0, x1, y1;
+	float			xoff, yoff, xadvance;
+	float			xoff2, yoff2;
+}		t_baked_glyph;
+
+typedef struct s_glyph_quad
+{
+	float	x0, y0, x1, y1;
+	float	s0, t0, s1, t1;
+}		t_glyph_quad;
+
+int				create_new_font(const char *path, char *name, const char *style);
+int				delete_font(const char *name);
 
 void			*get_font(const char *name);
 t_ttf_glyph		*get_glyph(const char *name, char c);
 t_ttf_familly	*get_font_family(const char *name);
 t_ttf_props		*get_font_props(const char *name);
+const char		*get_font_path(const char *name);
 
-uint16_t		text_width(void *, const char *, uint32_t) __ALIAS_C(get_text_width);
-uint16_t		text_height(void *, const char *, uint32_t) __ALIAS_C(get_text_height);
+uint16_t		text_width(void *font, const char *str, uint32_t size);
+uint16_t		text_height(void *font, const char *str, uint32_t size);
 
-int				glyph_index(void *, uint8_t) __ALIAS_C(map_code);
-uint16_t		horizontal_metrics(void *, uint16_t) __ALIAS_C(get_horizontal_metrics);
-t_pointi2		next_kern(void *, uint16_t) __ALIAS_C(next_kern);
-t_pointi2		reset_kerns(void *) __ALIAS_C(reset_kerns);
+int				glyph_index(void *font, uint8_t c);
+uint16_t		horizontal_metrics(void *font, uint16_t glyph);
+t_pointi2		next_kern(void *font, uint16_t glyph);
+t_pointi2		reset_kerns(void *font);
 
-t_ttf_familly	*font_family(void *);
-t_ttf_props		*font_props(void *);
+t_ttf_familly	*font_family(void *font);
+t_ttf_props		*font_props(void *font);
 
-/* mlx render */
+float			font_pixel_scale(void *font, float pixel_height);
+void			font_vmetrics(void *font, float pixel_height, float *ascent, float *descent, float *line_gap);
+float			font_kern(void *font, int ch0, int ch1, float pixel_height);
+unsigned char	*font_glyph_bitmap(void *font, int codepoint, float pixel_height, int *w, int *h, int *xoff, int *yoff);
 
-t_img	*ft_create_string(void *mlx, void *image, const char *text,
-			uint32_t size, uint32_t color, const char *font_name, int *width, int *height);
+int				font_bake(void *font, float pixel_height, unsigned char *pixels, int pw, int ph,
+					int first_char, int num_chars, t_baked_glyph *out);
+void			font_quad(t_baked_glyph *glyphs, int pw, int ph, int index,
+					float *xpos, float *ypos, t_glyph_quad *q, int align);
 
-/* images */
-
-t_img		*ft_new_image(void *, int, int);
-void		ft_delete_image(void *, t_img **);
-void		ft_pixel_put(t_img *, int, int, uint32_t);
-uint32_t	ft_get_pixel(t_img *, int, int);
+t_img			*ft_create_string(void *mlx, void *image, const char *text,
+					uint32_t size, uint32_t color, const char *font_name, int *width, int *height);
+t_img			*ft_new_image(void *mlx, int w, int h);
+void			ft_delete_image(void *mlx, t_img **img);
+void			ft_pixel_put(t_img *img, int x, int y, uint32_t color);
+uint32_t		ft_get_pixel(t_img *img, int x, int y);
 
 #endif /* FONT_H */

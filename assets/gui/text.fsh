@@ -37,13 +37,12 @@ void main() {
     uint fg = packed_data & 0x0Fu;
     uint bg = (packed_data >> 4) & 0x0Fu;
 
-    vec4 sample_color = texture(tex_atlas, v_uv);
+    float cover = texture(tex_atlas, v_uv).r;
+    if (cover < 0.02) {
+        if (bg == 0u) discard;
+        frag_color = vec4(vga_color(bg), alpha);
+        return;
+    }
 
-    vec3 color = vga_color(fg);
-
-    if (sample_color.rgb != vec3(1.0))
-       if (bg == 0u) { discard; }
-       color = vga_color(fg);
-
-    frag_color = vec4(color, alpha);
+    frag_color = vec4(vga_color(fg), cover * alpha);
 }

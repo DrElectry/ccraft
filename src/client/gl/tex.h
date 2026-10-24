@@ -17,6 +17,9 @@ typedef struct
 } Texture;
 
 void texture_create(Texture* tex, char* src);
+void texture_create_raw(Texture* tex, unsigned char* data, int w, int h, int channels);
+void texture_update(Texture* tex, unsigned char* data);
+void texture_free(Texture* tex);
 void texture_bind(Texture* tex, int unit);
 
 #endif

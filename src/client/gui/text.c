@@ -16,6 +16,19 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+// to use any font, you have to load it first
+// for example
+// font_load("minecraft_default_regular", "assets/fonts/MinecraftDefault-Regular.ttf");
+// will create a font named "minecraft_default_regular", which you can use on any htext by using
+
+// text_set_font(HText* text, const char* font_name);
+// so in our example we will use
+// text_set_font(&test, "minecraft_default_regular");
+// and it will render our text with our amazing minecraft font, isnt it awesome?
+// im proud of myself, because the result is amazing, it finally supports lowercase letters, ascii symbols, you can even draw ascii art using this
+
+// the default font is NotoSans, but this is customizable in text.h
+
 #define BAKE_FIRST 32
 #define BAKE_COUNT 224
 

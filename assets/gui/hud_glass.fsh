@@ -3,6 +3,8 @@
 in vec2 out_uv;
 out vec4 fragColor;
 
+// dunno why do i decided to do this, but i like the result
+
 uniform sampler2D scene;
 uniform sampler2D blurred;
 uniform sampler2D buttons;

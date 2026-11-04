@@ -1270,11 +1270,11 @@ void game_draw_hud_buttons() {
     program_set_float(&canvas_program, "radius", 10.0f);
     gfx_set_screen_projection(&canvas_program);
     gfx_canvas_render_batch(slots, 8, &canvas_program);
-
-    texture_bind(&test_panel, 0);
-    program_set_int(&canvas_program, "tex", 0);
-    gfx_set_screen_projection(&canvas_program);
-    gfx_canvas_render(&g_test_panel, &canvas_program);
+    
+    //texture_bind(&test_panel, 0);
+    //program_set_int(&canvas_program, "tex", 0);
+    //gfx_set_screen_projection(&canvas_program);
+    //gfx_canvas_render(&g_test_panel, &canvas_program);
 }
 
 void game_draw_hud_contents() {

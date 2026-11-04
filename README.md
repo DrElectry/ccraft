@@ -14,21 +14,18 @@ The goal of this project is to have a flexible, cross platform, easily moddable 
 
 ### Status
 
-The engine is still too fragile and unoptimized for all of my needs, specifically major refactoring of the chunks system and management is required for project to progress, i still haven't fully establised at least some idea of the visual part of the project.
-
-Multiplayer aspect of the game requires major refactoring too, for example generating chunks on the server, client prediction, and a bit of tweaks are ABSOLUTELY REQUIRED!
-
-I also got some laptop issues lately, which can delay the development.
+The engine is still a prototype, meaning that some things are still not done or have optimization issues, also my laptop died, so that would delay the development a bit.
+But i promise that i will fix everything eventually.
 
 ### Things i already implemented
 
-- Core "minecraft clone part" (chunks, placing and breaking blocks, player movement with physics, collisions, infinite world generation, lightmaps, etc),
+- Core "minecraft clone part" (chunks management, world modifications, etc),
 - Deferred rendering,
 - HUD,
 - Sounds, ambient,
 - WIP Multiplayer.
 
-Early prototypes for later features:
+Early prototypes for later:
 
 - Skeletal animations,
 - Soft body experimental implementation,
@@ -38,10 +35,9 @@ Early prototypes for later features:
 The list is huge, but things i need to implement ASAP:
 
 - Day-Night cycle,
-- Decide the visual style of the game,
 - Rigidbody physics,
-- More optimizations,
-- GUI, or at least some idea of it.
+- Major fixing in chunk.c and world.c (optimization issues on mid range cpus)
+- Major rework of the multiplayer
 
 ### Multiplayer
 
@@ -61,10 +57,6 @@ The server runs on 32 TPS with interpolation.
 ### License
 
 MIT license, because sharing is caring.
-
-### Contribution
-
-Anyone can contribute or fork the project, any help will be greeted with open hands.
 
 ## CREDITS
 

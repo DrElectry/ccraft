@@ -35,6 +35,16 @@ void tile_push_face(float* vertices,
                     int face,
                     int atlas_id,
                     float light);
+
+void tile_push_face_smooth(float* vertices,
+                           unsigned int* indices,
+                           float* pos,
+                           int* v_cursor,
+                           int* i_cursor,
+                           int face,
+                           int atlas_id,
+                           const float light[4],
+                           int flip);
                     
 void tile_push_cube(float* vertices, unsigned int* indices, float* pos, int* v_cursor, int* i_cursor);
 void tile_create_cube_from_tile(uint16_t block_id, Render_request* out);

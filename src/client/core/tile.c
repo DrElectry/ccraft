@@ -76,7 +76,21 @@ void tile_push_face(float* vertices,
                     int face,
                     int atlas_id,
                     float light)
+{
+    float lights[4] = {light, light, light, light};
+    tile_push_face_smooth(vertices, indices, pos, v_cursor, i_cursor,
+                          face, atlas_id, lights, 0);
+}
 
+void tile_push_face_smooth(float* vertices,
+                           unsigned int* indices,
+                           float* pos,
+                           int* v_cursor,
+                           int* i_cursor,
+                           int face,
+                           int atlas_id,
+                           const float light[4],
+                           int flip)
 {
     float uv[8];
     tile_atlas_getuv(atlas_id, uv);
@@ -125,7 +139,7 @@ void tile_push_face(float* vertices,
         vertices[base + 5] = nx;
         vertices[base + 6] = ny;
         vertices[base + 7] = nz;
-        vertices[base + 8] = light;
+        vertices[base + 8] = light[i];
 
         vertices[base + 9] = tx;
         vertices[base + 10] = ty;
@@ -138,12 +152,21 @@ void tile_push_face(float* vertices,
         *v_cursor += CHUNK_VERT_FLOATS;
     }
 
-    indices[*i_cursor + 0] = v_start + 0;
-    indices[*i_cursor + 1] = v_start + 1;
-    indices[*i_cursor + 2] = v_start + 2;
-    indices[*i_cursor + 3] = v_start + 2;
-    indices[*i_cursor + 4] = v_start + 3;
-    indices[*i_cursor + 5] = v_start + 0;
+    if (flip) {
+        indices[*i_cursor + 0] = v_start + 0;
+        indices[*i_cursor + 1] = v_start + 1;
+        indices[*i_cursor + 2] = v_start + 3;
+        indices[*i_cursor + 3] = v_start + 1;
+        indices[*i_cursor + 4] = v_start + 2;
+        indices[*i_cursor + 5] = v_start + 3;
+    } else {
+        indices[*i_cursor + 0] = v_start + 0;
+        indices[*i_cursor + 1] = v_start + 1;
+        indices[*i_cursor + 2] = v_start + 2;
+        indices[*i_cursor + 3] = v_start + 2;
+        indices[*i_cursor + 4] = v_start + 3;
+        indices[*i_cursor + 5] = v_start + 0;
+    }
 
     *i_cursor += 6;
 }

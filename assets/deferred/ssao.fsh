@@ -1,4 +1,3 @@
-
 #version 330 core
 
 uniform sampler2D gDepth;
@@ -119,11 +118,7 @@ void main()
 
         vec3 toSurface = surfacePos - fragPos;
 
-        float normalCheck = smoothstep(
-            0.0,
-            0.05,
-            dot(normal, toSurface)
-        );
+        float normalCheck = smoothstep(-0.5, 0.0, dot(normal, toSurface));
 
         float rangeCheck = smoothstep(
             0.0,

@@ -365,7 +365,7 @@ void main()
         float NdotL = max(dot(waterNormal, lightDir), 0.0);
         float ao = texture(dSSAO, out_uv).r;
 
-        vec3 ambient = waterAlbedo * ao * 0.25;
+        vec3 ambient = waterAlbedo * ao * 0.5;
         vec3 diffuse = waterAlbedo * light * NdotL * (1.0 - shadow);
 
         vec3 waterColor = ambient + diffuse + waterSSR.rgb * waterSSR.a;
@@ -489,7 +489,7 @@ void main()
         float ao = texture(dSSAO, out_uv).r;
         vec4 ssr = texture(dSSR, out_uv);
 
-        float ambientStrength = isUnderwater ? 0.45 : 0.25;
+        float ambientStrength = isUnderwater ? 0.65 : 0.45;
         vec3 ambient = terrainAlbedo * ao * ambientStrength;
         vec3 diffuse = terrainAlbedo * light * NdotL * (1.0 - shadow);
 

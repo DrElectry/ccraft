@@ -10,9 +10,9 @@ out vec4 fragColor;
 
 // reluctantly borrowed this from Veloren game project
 
-#define FXAA_REDUCE_MIN   (1.0 / 256.0)
-#define FXAA_REDUCE_MUL   (1.0 / 2.0)
-#define FXAA_SPAN_MAX     36.0
+#define FXAA_REDUCE_MIN (1.0 / 128.0)
+#define FXAA_REDUCE_MUL (1.0 / 8.0)
+#define FXAA_SPAN_MAX     8.0
 
 void main() {
     vec2 resolution = vec2(width, height);

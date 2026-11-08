@@ -17,6 +17,8 @@
 #include "network/net_platform.h"
 #include <time.h>
 
+#define DEBUG_PERF
+
 uint64_t __servseed;
 uint8_t __worldtype;
 
@@ -537,7 +539,7 @@ int main(int argc, char* argv[]) {
         program_set_int(&blur, "image", 0);
         program_set_vec2(&blur, "direction", (float[]){1.0f, 0.0f});
         program_set_vec2(&blur, "blur_ratio", ssao_ratio);
-        program_set_float(&blur, "blurScale", 1.0f);
+        program_set_float(&blur, "blurScale", 0.1f);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
 #ifdef DEBUG_PERF
@@ -553,7 +555,7 @@ int main(int argc, char* argv[]) {
         fbo_bind_texture(&ssaoblurfb, 0, 0);
         program_set_int(&blur, "image", 0);
         program_set_vec2(&blur, "direction", (float[]){0.0f, 1.0f});
-        program_set_float(&blur, "blurScale", 1.0f);
+        program_set_float(&blur, "blurScale", 0.1f);
         program_set_vec2(&blur, "blur_ratio", ssao_ratio);
         gfx_draw_fullscreen_quad();
         fbo_unbind();

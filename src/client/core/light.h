@@ -24,6 +24,11 @@ float chunk_light_vertex(const uint8_t* sky_light, const uint8_t* block_light,
 float chunk_light_face_vertex(const uint8_t* sky_light, const uint8_t* block_light,
                                int lx, int ly, int lz, enum Tile_face face);
 
+void chunk_light_smooth_face(const uint8_t* sky_light, const uint8_t* block_light,
+                             const ChunkNeighbors* n,
+                             int lx, int ly, int lz, enum Tile_face face,
+                             float out_light[4], int* flip);
+
 #endif
 
 

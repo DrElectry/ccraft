@@ -34,7 +34,7 @@
 #include <stdio.h>
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! READ THIS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// If you want to modify the game rendering code, you have to understand that
+// If you want to modify the game rendering code
 // Deferred renderer uses functions game_draw_misc() game_shadow_pass() game_draw_water_gbuffer() game_draw_terrain_gbuffer()
 // Potato mode renderer uses only game_draw(), which is unused in the deferred renderer
 // amazing code, i know
@@ -530,7 +530,7 @@ void game_init() {
     for (int i = 0; i < 8; i++) {
         glm_vec2_copy((vec2){30.0f+((float)i*54.0f), HEIGHT-30.0f}, slots[i].pos);
         glm_vec2_copy((vec2){48.0f, 48.0f}, slots[i].scale);
-        slots[i].alpha = 1.0f;
+        slots[i].alpha = 0.5f;
 
         gfx_canvas_packet_static_request(&slots[i]);
     }
@@ -708,9 +708,6 @@ void game_tick(float dt_p) {
             last_send = now;
         }
     }
-
-    world_gen_print_stats();
-
     glm_mat4_inv(projection, inv_projection);
     glm_mat4_inv(view, inv_view);
 

@@ -690,11 +690,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         render_front = lookup_transparent[front] || (is_liquid_block(front) ? 1 : 0);
     }
     if (render_front) {
-        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, FRONT);
+        float lf[4];
+        int flip = 0;
+        chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, FRONT, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, FRONT, atlas_lookup(tile_id, FRONT), lf);
+            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, FRONT, atlas_lookup(tile_id, FRONT), lf, flip);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, FRONT, atlas_lookup(tile_id, FRONT), lf);
+            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, FRONT, atlas_lookup(tile_id, FRONT), lf, flip);
         }
     }
 
@@ -705,11 +707,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         render_back = lookup_transparent[back] || (is_liquid_block(back) ? 1 : 0);
     }
     if (render_back) {
-        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, BACK);
+        float lf[4];
+        int flip = 0;
+        chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, BACK, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, BACK, atlas_lookup(tile_id, BACK), lf);
+            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, BACK, atlas_lookup(tile_id, BACK), lf, flip);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, BACK, atlas_lookup(tile_id, BACK), lf);
+            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, BACK, atlas_lookup(tile_id, BACK), lf, flip);
         }
     }
 
@@ -720,11 +724,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         render_left = lookup_transparent[left] || (is_liquid_block(left) ? 1 : 0);
     }
     if (render_left) {
-        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, LEFT);
+        float lf[4];
+        int flip = 0;
+        chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, LEFT, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, LEFT, atlas_lookup(tile_id, LEFT), lf);
+            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, LEFT, atlas_lookup(tile_id, LEFT), lf, flip);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, LEFT, atlas_lookup(tile_id, LEFT), lf);
+            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, LEFT, atlas_lookup(tile_id, LEFT), lf, flip);
         }
     }
 
@@ -735,11 +741,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         render_right = lookup_transparent[right] || (is_liquid_block(right) ? 1 : 0);
     }
     if (render_right) {
-        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, RIGHT);
+        float lf[4];
+        int flip = 0;
+        chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, RIGHT, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, RIGHT, atlas_lookup(tile_id, RIGHT), lf);
+            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, RIGHT, atlas_lookup(tile_id, RIGHT), lf);
+            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip);
         }
     }
 
@@ -750,11 +758,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         render_up = lookup_transparent[up] || (is_liquid_block(up) ? 1 : 0);
     }
     if (render_up) {
-        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, UP);
+        float lf[4];
+        int flip = 0;
+        chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, UP, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, UP, atlas_lookup(tile_id, UP), lf);
+            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, UP, atlas_lookup(tile_id, UP), lf, flip);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, UP, atlas_lookup(tile_id, UP), lf);
+            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, UP, atlas_lookup(tile_id, UP), lf, flip);
         }
     }
 
@@ -765,11 +775,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         render_down = lookup_transparent[down] || (is_liquid_block(down) ? 1 : 0);
     }
     if (render_down) {
-        float lf = chunk_light_face_vertex(sky_light, block_light, lx, ly, lz, DOWN);
+        float lf[4];
+        int flip = 0;
+        chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, DOWN, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, DOWN, atlas_lookup(tile_id, DOWN), lf);
+            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, DOWN, atlas_lookup(tile_id, DOWN), lf, flip);
         } else {
-            tile_push_face(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, DOWN, atlas_lookup(tile_id, DOWN), lf);
+            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, DOWN, atlas_lookup(tile_id, DOWN), lf, flip);
         }
     }
 }

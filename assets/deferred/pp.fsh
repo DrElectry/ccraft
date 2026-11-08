@@ -14,7 +14,7 @@ void main()
     float aperture = 0.10;
     float blurIntensity = blurStrength;
 
-    float nearFocus = 0.95;
+    float nearFocus = 0.985;
     float farFocus  = 0.99;
 
     vec2 texel = 1.0 / vec2(textureSize(colorTexture, 0));

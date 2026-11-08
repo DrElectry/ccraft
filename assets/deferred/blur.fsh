@@ -8,7 +8,7 @@ uniform vec2 direction;
 uniform vec2 blur_ratio;
 
 uniform float blurScale;
-const int samples = 11;
+const int samples = 17;
 
 void main()
 {
@@ -16,9 +16,14 @@ void main()
     vec2 texelSize = (1.0 / textureSize(image, 0)) * blurScale;
     
     float weights[] = float[](
-        0.0565, 0.0940, 0.1195, 0.1308, 0.1195, 0.0940,
-        0.0565, 0.0325, 0.0150, 0.0055, 0.0015
+        0.0276, 0.0376, 0.0489, 0.0607, 0.0719, 0.0816,
+        0.0886, 0.0921, 0.0916, 0.0874, 0.0798, 0.0696,
+        0.0578, 0.0458, 0.0347, 0.0251, 0.0173
     );
+    
+    float wsum = weights[0];
+    for (int i = 1; i < samples; i++)
+        wsum += 2.0 * weights[i];
     
     vec3 result = vec3(0.0);
     
@@ -33,5 +38,5 @@ void main()
     
     result -= texture(image, scaled_uv).rgb * weights[0];
     
-    fragColor = vec4(result, 1.0);
+    fragColor = vec4(result / wsum, 1.0);
 }

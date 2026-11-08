@@ -24,6 +24,10 @@ const float RIM_FAR = 5.0;
 const float INTERIOR_FROST = 0.42;
 const float RIM_FROST = 0.48;
 
+// how much extra refraction/thickness the faint (low-alpha) part gets —
+// thin glass edges bend light more, they don't disappear
+const float FAINT_EXTRA_REFRACT = 0.0;
+
 float hash21(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
     p += dot(p, p + 45.32);
@@ -124,12 +128,25 @@ void main() {
     float shadowA = shadowBlur(shadowUV, texel);
 
     float rawAlpha = clamp(btn.a, 0.0, 1.0);
-    float glassOpacity = rawAlpha;
+
+    // --- iOS-style alpha semantics ---------------------------------------
+    // Two separate concepts:
+    //   coverage    = how much glass surface is "there" (surface visibility)
+    //   transparency= how much background shows through the glass
+    //
+    // Low mask alpha => more transparent glass (more background), NOT less
+    // visible glass. The surface itself stays visible via rim/highlights.
+    // ---------------------------------------------------------------------
+    float coverage = smoothstep(0.0, 0.12, rawAlpha);
+    float transparency = 1.0 - rawAlpha;
+
+    // glass surface visibility is driven by coverage, not rawAlpha
+    float glassOpacity = coverage;
 
     float shadowCore = pow(shadowA, 1.35);
     float shadow = shadowCore * (1.0 - rawAlpha) * 0.38;
 
-    if (rawAlpha < 0.02) {
+    if (rawAlpha < 0.005) {
         if (shadow < 0.002)
             discard;
 
@@ -218,6 +235,11 @@ void main() {
         rimGlass
     );
 
+    // faint glass = more transparent = more background visible.
+    // Its thin body bends light a little extra (classic edge look) instead
+    // of vanishing. Driven by `transparency`, not by removing visibility.
+    depthScale *= 1.0 + FAINT_EXTRA_REFRACT * transparency;
+
     const float Z_FLOOR = 0.35;
 
     vec2 offR = TR.xy / max(-TR.z, Z_FLOOR) * depthScale;
@@ -252,6 +274,9 @@ void main() {
         rot
     );
 
+    // frost = "solidity" of the glass body. Low alpha => more transparent
+    // glass, so less frost (clearer, more see-through). This is the
+    // transparency knob, NOT a visibility knob.
     float frostAmount = mix(
         INTERIOR_FROST,
         RIM_FROST,
@@ -272,11 +297,10 @@ void main() {
         frostAmount
     );
 
-    float opaqueStrength = clamp(
-        (1.0 - rawAlpha) * 0.0,
-        0.0,
-        1.0
-    );
+    // Tint toward the mask color where the glass is "denser". This used to
+    // be gated on (1.0 - rawAlpha) which would tint the FAINT parts — but
+    // faint parts should be MORE transparent, so tint is driven by alpha.
+    float opaqueStrength = clamp(rawAlpha * 0.0, 0.0, 1.0);
 
     glassBody = mix(
         glassBody,

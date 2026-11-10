@@ -13,6 +13,9 @@
 #define UI_WIDTH 1280.0f
 #define UI_HEIGHT 720.0f
 
+uint32_t gfx_tris_rendered;
+uint32_t gfx_draw_calls;
+
 void gfx_packet_static_request(Render_request* r) { // pos, rot and scale will be ignored, this is only cache setup
     VBO vbo;
     VAO vao;
@@ -87,6 +90,9 @@ void gfx_render(Render_request *r, Program* active_program) {
     } else {
         glDrawElements(GL_TRIANGLES, r->tri_count * 3, GL_UNSIGNED_INT, NULL);
     }
+
+    gfx_tris_rendered+=r->tri_count;
+    gfx_draw_calls++;
 }
 
 void gfx_skinned_render(Skinned_render_request* r, Program* active_program) {
@@ -99,6 +105,9 @@ void gfx_skinned_render(Skinned_render_request* r, Program* active_program) {
 
     program_use(active_program);
     skinned_render(sk, active_program, 0.0f, &r->look);
+
+    gfx_tris_rendered+=r->tri_count;
+    gfx_draw_calls++;
 }
 
 void gfx_draw_fullscreen_quad() {
@@ -135,6 +144,9 @@ void gfx_draw_fullscreen_quad() {
     vao_bind(&vao);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL); // i like how render() function in vao.h IS NOW useless
+
+    gfx_tris_rendered+=2;
+    gfx_draw_calls++;
 }
 
 void gfx_canvas_packet_static_request(Canvas_Render_Request* r) {
@@ -228,6 +240,8 @@ void gfx_canvas_render(Canvas_Render_Request* r, Program* active_program) {
 
     vao_bind(&r->cache.vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
+    gfx_tris_rendered+=2;
+    gfx_draw_calls++;
 }
 
 void gfx_canvas_render_batch(Canvas_Render_Request* requests, int count, Program* active_program) {
@@ -256,5 +270,7 @@ void gfx_canvas_render_batch(Canvas_Render_Request* requests, int count, Program
 
         vao_bind(&r->cache.vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
+        gfx_tris_rendered+=2;
     }
+    gfx_draw_calls++;
 }

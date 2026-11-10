@@ -19,6 +19,9 @@
 
 #define DEBUG_PERF
 
+extern uint32_t gfx_tris_rendered;
+extern uint32_t gfx_draw_calls;
+
 uint64_t __servseed;
 uint8_t __worldtype;
 
@@ -401,6 +404,8 @@ int main(int argc, char* argv[]) {
     float time = 0.0f;
 
     while (!window_shouldclose()) {
+        gfx_tris_rendered=0;
+        gfx_draw_calls=0;
 #ifdef DEBUG_PERF
         printf("\n\n\n\n\n\n");
 #endif
@@ -790,6 +795,9 @@ int main(int argc, char* argv[]) {
         glDisable(GL_BLEND);
 
         glfwSwapBuffers(_win->glwin);
+#ifdef DEBUG_PERF
+    printf("Rendered triangles this frame: %u (%u draw calls)\n", gfx_tris_rendered, gfx_draw_calls);
+#endif
     }
 
     game_destroy();

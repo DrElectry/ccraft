@@ -105,14 +105,10 @@ static sound_t* tung;
 int sun_time = 0;
 float sun_delay = 0.0f;
 
-float aa[24 * 15] = {0};
-float ee[24 * 15] = {0};
-int bb[24 * 15] = {0};
-int ff[24 * 15] = {0};
+ChunkFace aa[6] = {0};
+ChunkFace ee[6] = {0};
 
-// shitcode
-
-int cc, dd, gg, hh; // for block in our hand
+int cc, dd, gg, hh; // face counts for block in our hand / cursor
 
 Input input_manager;
 Texture texture_atlas, roughness, brightt, textt, player_tex, player_shininess, normal, slot, slot_select, test_panel;
@@ -400,18 +396,18 @@ void game_init() {
 
     input_init(&input_manager, _win->glwin);
 
-    tile_push_cube(aa, bb, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd);
-    tile_push_cube(ee, ff, (vec3){0.0f, 0.0f, 0.0f}, &gg, &hh);
+    tile_push_cube((float*)aa, NULL, (vec3){0.0f, 0.0f, 0.0f}, &cc, &dd);
+    tile_push_cube((float*)ee, NULL, (vec3){0.0f, 0.0f, 0.0f}, &gg, &hh);
 
-    block.data = aa;
-    block.data_size = cc*sizeof(float);
-    block.triangles = bb;
-    block.tri_count = dd;
+    block.data = (float*)aa;
+    block.data_size = cc * (int)sizeof(ChunkFace);
+    block.triangles = NULL;
+    block.tri_count = cc;
 
-    cursor.data = ee;
-    cursor.data_size = gg*sizeof(float);
-    cursor.triangles = ff;
-    cursor.tri_count = hh;
+    cursor.data = (float*)ee;
+    cursor.data_size = gg * (int)sizeof(ChunkFace);
+    cursor.triangles = NULL;
+    cursor.tri_count = gg;
 
     gfx_chunk_packet_static_request(&block);
     gfx_chunk_packet_static_request(&cursor);

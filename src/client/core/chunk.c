@@ -540,26 +540,26 @@ static void free_render_request(Render_request* r) {
     ebo_free(&r->cache.ebo);
 }
 
-static void assign_render_request(Render_request* r, float* vertices, int* indices, int v_cursor, int i_cursor) {
-    if (v_cursor > 0) {
-        vertices = (float*)realloc(vertices, v_cursor * sizeof(float));
-        indices = (int*)realloc(indices, i_cursor * sizeof(int));
+static void assign_render_request(Render_request* r, ChunkFace* faces, int face_count) {
+    if (face_count > 0) {
+        faces = (ChunkFace*)realloc(faces, (size_t)face_count * sizeof(ChunkFace));
 
-        r->data = vertices;
-        r->triangles = indices;
-        r->data_size = v_cursor * sizeof(float);
-        r->tri_count = i_cursor / 3;
+        r->data = (float*)faces;
+        r->triangles = NULL;
+        r->data_size = face_count * (int)sizeof(ChunkFace);
+        r->tri_count = face_count;
+        r->packed = 1;
 
         glm_vec3_copy((vec3){0.0f,0.0f,0.0f}, r->rot);
         glm_vec3_copy((vec3){1.0f,1.0f,1.0f}, r->scale);
     } else {
-        free(vertices);
-        free(indices);
+        free(faces);
 
         r->data = NULL;
         r->triangles = NULL;
         r->data_size = 0;
         r->tri_count = 0;
+        r->packed = 0;
     }
 }
 
@@ -615,10 +615,8 @@ uint16_t chunk_neighbors_get(const ChunkNeighbors* n, int wx, int wy, int wz) {
 void chunk_mesh_result_free(ChunkMeshResult* mesh) {
     if (!mesh)
         return;
-    free(mesh->model_verts);
-    free(mesh->model_inds);
-    free(mesh->water_verts);
-    free(mesh->water_inds);
+    free(mesh->model_faces);
+    free(mesh->water_faces);
     free(mesh->sky_light);
     free(mesh->block_light);
     free(mesh);
@@ -636,10 +634,8 @@ void chunk_apply_mesh(Chunk* chunk, ChunkMeshResult* mesh) {
     free_render_request(&chunk->model);
     free_render_request(&chunk->water_model);
 
-    assign_render_request(&chunk->model, mesh->model_verts, mesh->model_inds,
-                          mesh->model_v, mesh->model_i);
-    assign_render_request(&chunk->water_model, mesh->water_verts, mesh->water_inds,
-                          mesh->water_v, mesh->water_i);
+    assign_render_request(&chunk->model, mesh->model_faces, mesh->model_face_count);
+    assign_render_request(&chunk->water_model, mesh->water_faces, mesh->water_face_count);
 
     if (chunk->model.data)
         gfx_chunk_packet_static_request(&chunk->model);
@@ -653,27 +649,8 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
                                   const uint8_t* sky_light, const uint8_t* block_light,
                                   int lx, int ly, int lz,
                                   const ChunkNeighbors* n, int wx, int wy, int wz,
-                                  float* model_verts, int* model_inds, int* v_cur, int* i_cur,
-                                  float* water_verts, int* water_inds, int* w_v_cur, int* w_i_cur) {
-    (void)tile_id;
-    (void)pos;
-    (void)sky_light;
-    (void)block_light;
-    (void)lx;
-    (void)ly;
-    (void)lz;
-    (void)n;
-    (void)wx;
-    (void)wy;
-    (void)wz;
-    (void)model_verts;
-    (void)model_inds;
-    (void)v_cur;
-    (void)i_cur;
-    (void)water_verts;
-    (void)water_inds;
-    (void)w_v_cur;
-    (void)w_i_cur;
+                                  float* model_verts, int* v_cur,
+                                  float* water_verts, int* w_v_cur) {
 
     uint16_t front = chunk_neighbors_get(n, wx, wy, wz + 1);
     uint16_t back  = chunk_neighbors_get(n, wx, wy, wz - 1);
@@ -694,9 +671,9 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, FRONT, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, FRONT, atlas_lookup(tile_id, FRONT), lf, flip);
+            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, FRONT, atlas_lookup(tile_id, FRONT), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, FRONT, atlas_lookup(tile_id, FRONT), lf, flip);
+            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, FRONT, atlas_lookup(tile_id, FRONT), lf, flip);
         }
     }
 
@@ -711,9 +688,9 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, BACK, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, BACK, atlas_lookup(tile_id, BACK), lf, flip);
+            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, BACK, atlas_lookup(tile_id, BACK), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, BACK, atlas_lookup(tile_id, BACK), lf, flip);
+            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, BACK, atlas_lookup(tile_id, BACK), lf, flip);
         }
     }
 
@@ -728,9 +705,9 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, LEFT, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, LEFT, atlas_lookup(tile_id, LEFT), lf, flip);
+            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, LEFT, atlas_lookup(tile_id, LEFT), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, LEFT, atlas_lookup(tile_id, LEFT), lf, flip);
+            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, LEFT, atlas_lookup(tile_id, LEFT), lf, flip);
         }
     }
 
@@ -745,9 +722,9 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, RIGHT, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip);
+            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip);
+            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip);
         }
     }
 
@@ -762,9 +739,9 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, UP, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, UP, atlas_lookup(tile_id, UP), lf, flip);
+            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, UP, atlas_lookup(tile_id, UP), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, UP, atlas_lookup(tile_id, UP), lf, flip);
+            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, UP, atlas_lookup(tile_id, UP), lf, flip);
         }
     }
 
@@ -779,9 +756,9 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, DOWN, lf, &flip);
         if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, (unsigned int*)water_inds, pos, w_v_cur, w_i_cur, DOWN, atlas_lookup(tile_id, DOWN), lf, flip);
+            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, DOWN, atlas_lookup(tile_id, DOWN), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, (unsigned int*)model_inds, pos, v_cur, i_cur, DOWN, atlas_lookup(tile_id, DOWN), lf, flip);
+            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, DOWN, atlas_lookup(tile_id, DOWN), lf, flip);
         }
     }
 }
@@ -789,18 +766,13 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
 void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                       const uint8_t* sky_light, const uint8_t* block_light,
                       const ChunkNeighbors* n, int cx, int cz) {
-    int max_blocks = CHUNK_BLOCK_COUNT;
-    int max_faces = max_blocks * 6;
-    int max_vertices = max_faces * 4;
-    int max_indices = max_faces * 6;
+    int max_faces = CHUNK_BLOCK_COUNT * 6;
 
-    float* model_vertices = (float*)malloc(max_vertices * CHUNK_VERT_FLOATS * sizeof(float));
-    int* model_indices = (int*)malloc(max_indices * sizeof(int));
-    float* water_vertices = (float*)malloc(max_vertices * CHUNK_VERT_FLOATS * sizeof(float));
-    int* water_indices = (int*)malloc(max_indices * sizeof(int));
+    ChunkFace* model_faces = (ChunkFace*)malloc((size_t)max_faces * sizeof(ChunkFace));
+    ChunkFace* water_faces = (ChunkFace*)malloc((size_t)max_faces * sizeof(ChunkFace));
 
-    int v_cursor = 0, i_cursor = 0;
-    int w_v_cursor = 0, w_i_cursor = 0;
+    int v_cursor = 0;
+    int w_v_cursor = 0;
 
     int wx_offset = cx * CHUNK_WIDTH;
     int wz_offset = cz * CHUNK_DEPTH;
@@ -826,166 +798,34 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                     uint16_t back  = chunk_neighbors_get(n, wx, wy, wz - 1);
                     uint16_t left  = chunk_neighbors_get(n, wx - 1, wy, wz);
                     uint16_t right = chunk_neighbors_get(n, wx + 1, wy, wz);
-                    
-                    if (lookup_transparent[front] || lookup_transparent[back] || 
+
+                    if (lookup_transparent[front] || lookup_transparent[back] ||
                         lookup_transparent[left] || lookup_transparent[right]) {
-                        
-                        float uv[8];
-                        
-                        int atlas_tex1 = atlas_lookup(tile_id, FRONT);
-                        tile_atlas_getuv(atlas_tex1, uv);
-                        
-                        float verts1[4][3] = {
-                            {0.0f, 0.0f, 0.0f},
-                            {1.0f, 0.0f, 1.0f},
-                            {1.0f, 1.0f, 1.0f},
-                            {0.0f, 1.0f, 0.0f}
-                        };
-                        
-                        int v_start = v_cursor / CHUNK_VERT_FLOATS;
-                        for (int i2 = 0; i2 < 4; i2++) {
-                            int base = v_cursor;
-                            model_vertices[base + 0] = verts1[i2][0] + pos[0];
-                            model_vertices[base + 1] = verts1[i2][1] + pos[1];
-                            model_vertices[base + 2] = verts1[i2][2] + pos[2];
-                            model_vertices[base + 3] = uv[i2 * 2 + 0];
-                            model_vertices[base + 4] = uv[i2 * 2 + 1];
-                            model_vertices[base + 5] = -0.707f;
-                            model_vertices[base + 6] = 0.0f;
-                            model_vertices[base + 7] = 0.707f;
-                            model_vertices[base + 8] = light;
-                            model_vertices[base + 9] = 1.0f;
-                            model_vertices[base + 10] = 0.0f;
-                            model_vertices[base + 11] = 0.0f;
-                            model_vertices[base + 12] = 0.0f;
-                            model_vertices[base + 13] = 1.0f;
-                            model_vertices[base + 14] = 0.0f;
-                            v_cursor += CHUNK_VERT_FLOATS;
-                        }
-
-                        model_indices[i_cursor + 0] = v_start + 0;
-                        model_indices[i_cursor + 1] = v_start + 1;
-                        model_indices[i_cursor + 2] = v_start + 2;
-                        model_indices[i_cursor + 3] = v_start + 2;
-                        model_indices[i_cursor + 4] = v_start + 3;
-                        model_indices[i_cursor + 5] = v_start + 0;
-                        i_cursor += 6;
-
-                        v_start = v_cursor / CHUNK_VERT_FLOATS;
-                        for (int i2 = 0; i2 < 4; i2++) {
-                            int base = v_cursor;
-                            model_vertices[base + 0] = verts1[i2][0] + pos[0];
-                            model_vertices[base + 1] = verts1[i2][1] + pos[1];
-                            model_vertices[base + 2] = verts1[i2][2] + pos[2];
-                            model_vertices[base + 3] = uv[i2 * 2 + 0];
-                            model_vertices[base + 4] = uv[i2 * 2 + 1];
-                            model_vertices[base + 5] = 0.707f;
-                            model_vertices[base + 6] = 0.0f;
-                            model_vertices[base + 7] = -0.707f;
-                            model_vertices[base + 8] = light;
-                            model_vertices[base + 9] = 1.0f;
-                            model_vertices[base + 10] = 0.0f;
-                            model_vertices[base + 11] = 0.0f;
-                            model_vertices[base + 12] = 0.0f;
-                            model_vertices[base + 13] = 1.0f;
-                            model_vertices[base + 14] = 0.0f;
-                            v_cursor += CHUNK_VERT_FLOATS;
-                        }
-
-                        model_indices[i_cursor + 0] = v_start + 0;
-                        model_indices[i_cursor + 1] = v_start + 2;
-                        model_indices[i_cursor + 2] = v_start + 1;
-                        model_indices[i_cursor + 3] = v_start + 2;
-                        model_indices[i_cursor + 4] = v_start + 0;
-                        model_indices[i_cursor + 5] = v_start + 3;
-                        i_cursor += 6;
-
-                        int atlas_tex2 = atlas_lookup(tile_id, BACK);
-                        tile_atlas_getuv(atlas_tex2, uv);
-
-                        float verts2[4][3] = {
-                            {1.0f, 0.0f, 0.0f},
-                            {0.0f, 0.0f, 1.0f},
-                            {0.0f, 1.0f, 1.0f},
-                            {1.0f, 1.0f, 0.0f}
-                        };
-
-                        v_start = v_cursor / CHUNK_VERT_FLOATS;
-                        for (int i2 = 0; i2 < 4; i2++) {
-                            int base = v_cursor;
-                            model_vertices[base + 0] = verts2[i2][0] + pos[0];
-                            model_vertices[base + 1] = verts2[i2][1] + pos[1];
-                            model_vertices[base + 2] = verts2[i2][2] + pos[2];
-                            model_vertices[base + 3] = uv[i2 * 2 + 0];
-                            model_vertices[base + 4] = uv[i2 * 2 + 1];
-                            model_vertices[base + 5] = -0.707f;
-                            model_vertices[base + 6] = 0.0f;
-                            model_vertices[base + 7] = -0.707f;
-                            model_vertices[base + 8] = light;
-                            model_vertices[base + 9] = 1.0f;
-                            model_vertices[base + 10] = 0.0f;
-                            model_vertices[base + 11] = 0.0f;
-                            model_vertices[base + 12] = 0.0f;
-                            model_vertices[base + 13] = 1.0f;
-                            model_vertices[base + 14] = 0.0f;
-                            v_cursor += CHUNK_VERT_FLOATS;
-                        }
-
-                        model_indices[i_cursor + 0] = v_start + 0;
-                        model_indices[i_cursor + 1] = v_start + 1;
-                        model_indices[i_cursor + 2] = v_start + 2;
-                        model_indices[i_cursor + 3] = v_start + 2;
-                        model_indices[i_cursor + 4] = v_start + 3;
-                        model_indices[i_cursor + 5] = v_start + 0;
-                        i_cursor += 6;
-
-                        v_start = v_cursor / CHUNK_VERT_FLOATS;
-                        for (int i2 = 0; i2 < 4; i2++) {
-                            int base = v_cursor;
-                            model_vertices[base + 0] = verts2[i2][0] + pos[0];
-                            model_vertices[base + 1] = verts2[i2][1] + pos[1];
-                            model_vertices[base + 2] = verts2[i2][2] + pos[2];
-                            model_vertices[base + 3] = uv[i2 * 2 + 0];
-                            model_vertices[base + 4] = uv[i2 * 2 + 1];
-                            model_vertices[base + 5] = 0.707f;
-                            model_vertices[base + 6] = 0.0f;
-                            model_vertices[base + 7] = 0.707f;
-                            model_vertices[base + 8] = light;
-                            model_vertices[base + 9] = 1.0f;
-                            model_vertices[base + 10] = 0.0f;
-                            model_vertices[base + 11] = 0.0f;
-                            model_vertices[base + 12] = 0.0f;
-                            model_vertices[base + 13] = 1.0f;
-                            model_vertices[base + 14] = 0.0f;
-                            v_cursor += CHUNK_VERT_FLOATS;
-                        }
-
-                        model_indices[i_cursor + 0] = v_start + 0;
-                        model_indices[i_cursor + 1] = v_start + 2;
-                        model_indices[i_cursor + 2] = v_start + 1;
-                        model_indices[i_cursor + 3] = v_start + 2;
-                        model_indices[i_cursor + 4] = v_start + 0;
-                        model_indices[i_cursor + 5] = v_start + 3;
-                        i_cursor += 6;
-
+                        float lf[4] = {light, light, light, light};
+                        int atlas_a = atlas_lookup(tile_id, FRONT);
+                        int atlas_b = atlas_lookup(tile_id, BACK);
+                        tile_push_face_smooth((float*)model_faces, NULL, pos, &v_cursor, NULL,
+                                              CROSS_A, atlas_a, lf, 0);
+                        tile_push_face_smooth((float*)model_faces, NULL, pos, &v_cursor, NULL,
+                                              CROSS_A_BACK, atlas_a, lf, 0);
+                        tile_push_face_smooth((float*)model_faces, NULL, pos, &v_cursor, NULL,
+                                              CROSS_B, atlas_b, lf, 0);
+                        tile_push_face_smooth((float*)model_faces, NULL, pos, &v_cursor, NULL,
+                                              CROSS_B_BACK, atlas_b, lf, 0);
                     }
                 } else {
                     push_face_to_buffer(tile_id, pos, sky_light, block_light, x, y, z, n, wx, wy, wz,
-                                      model_vertices, model_indices, &v_cursor, &i_cursor,
-                                      water_vertices, water_indices, &w_v_cursor, &w_i_cursor);
+                                      (float*)model_faces, &v_cursor,
+                                      (float*)water_faces, &w_v_cursor);
                 }
             }
         }
     }
 
-    out->model_verts = model_vertices;
-    out->model_inds = model_indices;
-    out->model_v = v_cursor;
-    out->model_i = i_cursor;
-    out->water_verts = water_vertices;
-    out->water_inds = water_indices;
-    out->water_v = w_v_cursor;
-    out->water_i = w_i_cursor;
+    out->model_faces = model_faces;
+    out->model_face_count = v_cursor;
+    out->water_faces = water_faces;
+    out->water_face_count = w_v_cursor;
 
     shadow_dirty = 1;
 }

@@ -68,6 +68,35 @@ void tile_atlas_getuv(int atlas_number, float* uv)
     uv[6] = u0; uv[7] = v0;
 }
 
+static uint32_t quant_light6(float l) {
+    if (l < 0.0f) l = 0.0f;
+    if (l > 1.0f) l = 1.0f;
+    return (uint32_t)(l * 63.0f + 0.5f);
+}
+
+void tile_pack_face(ChunkFace* out, int x, int y, int z, int face, int atlas,
+                    const float light[4], int flip, uint8_t special)
+{
+    uint32_t a = 0;
+    a |= (uint32_t)x & 15u;
+    a |= ((uint32_t)z & 15u) << 4;
+    a |= ((uint32_t)y & 255u) << 8;
+    a |= ((uint32_t)face & 15u) << 16;
+    a |= ((uint32_t)atlas & 255u) << 20;
+    if (flip)
+        a |= 1u << 28;
+
+    uint32_t b = 0;
+    b |= quant_light6(light[0]);
+    b |= quant_light6(light[1]) << 6;
+    b |= quant_light6(light[2]) << 12;
+    b |= quant_light6(light[3]) << 18;
+    b |= (uint32_t)special << 24;
+
+    out->a = a;
+    out->b = b;
+}
+
 void tile_push_face(float* vertices,
                     unsigned int* indices,
                     float* pos,
@@ -92,148 +121,14 @@ void tile_push_face_smooth(float* vertices,
                            const float light[4],
                            int flip)
 {
-    float uv[8];
-    tile_atlas_getuv(atlas_id, uv);
-
-    float nx = face_normals[face * 3 + 0];
-    float ny = face_normals[face * 3 + 1];
-    float nz = face_normals[face * 3 + 2];
-
-    float tx = 0.0f, ty = 0.0f, tz = 0.0f;
-    float bx = 0.0f, by = 0.0f, bz = 0.0f;
-
-    if (face == FRONT) {
-        tx = 1.0f; ty = 0.0f; tz = 0.0f;
-        bx = 0.0f; by = 1.0f; bz = 0.0f;
-    } else if (face == BACK) {
-        tx = -1.0f; ty = 0.0f; tz = 0.0f;
-        bx = 0.0f; by = 1.0f; bz = 0.0f;
-    } else if (face == RIGHT) {
-        tx = 0.0f; ty = 0.0f; tz = -1.0f;
-        bx = 0.0f; by = 1.0f; bz = 0.0f;
-    } else if (face == LEFT) {
-        tx = 0.0f; ty = 0.0f; tz = 1.0f;
-        bx = 0.0f; by = 1.0f; bz = 0.0f;
-    } else if (face == UP) {
-        tx = 1.0f; ty = 0.0f; tz = 0.0f;
-        bx = 0.0f; by = 0.0f; bz = -1.0f;
-    } else {
-        tx = 1.0f; ty = 0.0f; tz = 0.0f;
-        bx = 0.0f; by = 0.0f; bz = 1.0f;
-    }
-
-    int v_start = *v_cursor / CHUNK_VERT_FLOATS;
-    int offset = face * 12;
-
-    for (int i = 0; i < 4; i++)
-    {
-        int base = *v_cursor;
-
-        vertices[base + 0] = face_vertices[offset + i * 3 + 0] + pos[0];
-        vertices[base + 1] = face_vertices[offset + i * 3 + 1] + pos[1];
-        vertices[base + 2] = face_vertices[offset + i * 3 + 2] + pos[2];
-
-        vertices[base + 3] = uv[i * 2 + 0];
-        vertices[base + 4] = uv[i * 2 + 1];
-
-        vertices[base + 5] = nx;
-        vertices[base + 6] = ny;
-        vertices[base + 7] = nz;
-        vertices[base + 8] = light[i];
-
-        vertices[base + 9] = tx;
-        vertices[base + 10] = ty;
-        vertices[base + 11] = tz;
-
-        vertices[base + 12] = bx;
-        vertices[base + 13] = by;
-        vertices[base + 14] = bz;
-
-        *v_cursor += CHUNK_VERT_FLOATS;
-    }
-
-    if (flip) {
-        indices[*i_cursor + 0] = v_start + 0;
-        indices[*i_cursor + 1] = v_start + 1;
-        indices[*i_cursor + 2] = v_start + 3;
-        indices[*i_cursor + 3] = v_start + 1;
-        indices[*i_cursor + 4] = v_start + 2;
-        indices[*i_cursor + 5] = v_start + 3;
-    } else {
-        indices[*i_cursor + 0] = v_start + 0;
-        indices[*i_cursor + 1] = v_start + 1;
-        indices[*i_cursor + 2] = v_start + 2;
-        indices[*i_cursor + 3] = v_start + 2;
-        indices[*i_cursor + 4] = v_start + 3;
-        indices[*i_cursor + 5] = v_start + 0;
-    }
-
-    *i_cursor += 6;
-}
-
-void tile_push_cross_face(float* vertices,
-                          unsigned int* indices,
-                          float* pos,
-                          int* v_cursor,
-                          int* i_cursor,
-                          int cross_face,
-                          int atlas_id,
-                          float light)
-{
-    float uv[8];
-    tile_atlas_getuv(atlas_id, uv);
-
-    float nx = cross_normals[cross_face * 3 + 0];
-    float ny = cross_normals[cross_face * 3 + 1];
-    float nz = cross_normals[cross_face * 3 + 2];
-
-    float tx, ty, tz, bx, by, bz;
-    if (cross_face == 0) {
-        tx = 1.0f; ty = 0.0f; tz = 0.0f;
-        bx = 0.0f; by = 1.0f; bz = 0.0f;
-    } else {
-        tx = 0.0f; ty = 0.0f; tz = 1.0f;
-        bx = 0.0f; by = 1.0f; bz = 0.0f;
-    }
-
-    int v_start = *v_cursor / CHUNK_VERT_FLOATS;
-    int offset = cross_face * 12;
-
-    for (int i = 0; i < 4; i++)
-    {
-        int base = *v_cursor;
-
-        vertices[base + 0] = cross_vertices[offset + i * 3 + 0] + pos[0];
-        vertices[base + 1] = cross_vertices[offset + i * 3 + 1] + pos[1];
-        vertices[base + 2] = cross_vertices[offset + i * 3 + 2] + pos[2];
-
-        vertices[base + 3] = uv[i * 2 + 0];
-        vertices[base + 4] = uv[i * 2 + 1];
-
-        vertices[base + 5] = nx;
-        vertices[base + 6] = ny;
-        vertices[base + 7] = nz;
-        vertices[base + 8] = light;
-
-        vertices[base + 9] = tx;
-        vertices[base + 10] = ty;
-        vertices[base + 11] = tz;
-
-        vertices[base + 12] = bx;
-        vertices[base + 13] = by;
-        vertices[base + 14] = bz;
-
-        *v_cursor += CHUNK_VERT_FLOATS;
-    }
-
-    indices[*i_cursor + 0] = v_start + 0;
-    indices[*i_cursor + 1] = v_start + 1;
-    indices[*i_cursor + 2] = v_start + 2;
-    indices[*i_cursor + 3] = v_start + 2;
-    indices[*i_cursor + 4] = v_start + 3;
-    indices[*i_cursor + 5] = v_start + 0;
-
-    *i_cursor += 6;
+    (void)indices;
+    ChunkFace* faces = (ChunkFace*)vertices;
+    tile_pack_face(&faces[*v_cursor],
+                   (int)pos[0], (int)pos[1], (int)pos[2],
+                   face, atlas_id, light, flip, 0);
+    (*v_cursor)++;
+    if (i_cursor)
+        *i_cursor = *v_cursor;
 }
 
 void tile_push_cross(float* vertices,
@@ -244,17 +139,20 @@ void tile_push_cross(float* vertices,
                      int atlas_id,
                      float light)
 {
-    tile_push_cross_face(vertices, indices, pos, v_cursor, i_cursor, 0, atlas_id, light);
-    tile_push_cross_face(vertices, indices, pos, v_cursor, i_cursor, 1, atlas_id, light);
+    float lights[4] = {light, light, light, light};
+    tile_push_face_smooth(vertices, indices, pos, v_cursor, i_cursor,
+                          CROSS_A, atlas_id, lights, 0);
+    tile_push_face_smooth(vertices, indices, pos, v_cursor, i_cursor,
+                          CROSS_B, atlas_id, lights, 0);
 }
 
 void tile_push_cube(float* vertices, unsigned int* indices, float* pos, int* v_cursor, int* i_cursor) {
-    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, FRONT, 0, 15);
-    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, BACK, 0, 15);
-    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, RIGHT, 0, 15);
-    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, LEFT, 0, 15);
-    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, UP, 0, 15);
-    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, DOWN, 0, 15);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, FRONT, 0, 1.0f);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, BACK, 0, 1.0f);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, RIGHT, 0, 1.0f);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, LEFT, 0, 1.0f);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, UP, 0, 1.0f);
+    tile_push_face(vertices, indices, pos, v_cursor, i_cursor, DOWN, 0, 1.0f);
 }
 
 Render_request tile_render_cache[19];
@@ -267,12 +165,8 @@ void tile_create_cube_from_tile(uint16_t block_id, Render_request* out)
     }
     
     int max_faces = is_cross ? 2 : 6;
-    const int max_vertices = max_faces * 4;
-    const int max_indices = max_faces * 6;
 
-    float* verts = (float*)malloc(max_vertices * CHUNK_VERT_FLOATS * sizeof(float));
-    int* inds = (int*)malloc(max_indices * sizeof(int));
-
+    ChunkFace* verts = (ChunkFace*)malloc((size_t)max_faces * sizeof(ChunkFace));
     int v_cursor = 0;
     int i_cursor = 0;
 
@@ -280,33 +174,34 @@ void tile_create_cube_from_tile(uint16_t block_id, Render_request* out)
 
     if (is_cross) {
         int atlas_id = lookup_atlas[block_id * 6 + FRONT];
-        tile_push_cross(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, atlas_id, 15.0f);
+        tile_push_cross((float*)verts, NULL, pos, &v_cursor, &i_cursor, atlas_id, 1.0f);
     } else {
         int atlas_id;
 
         atlas_id = lookup_atlas[block_id * 6 + FRONT];
-        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, FRONT, atlas_id, 15.0f);
+        tile_push_face((float*)verts, NULL, pos, &v_cursor, &i_cursor, FRONT, atlas_id, 1.0f);
 
         atlas_id = lookup_atlas[block_id * 6 + BACK];
-        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, BACK, atlas_id, 15.0f);
+        tile_push_face((float*)verts, NULL, pos, &v_cursor, &i_cursor, BACK, atlas_id, 1.0f);
 
         atlas_id = lookup_atlas[block_id * 6 + RIGHT];
-        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, RIGHT, atlas_id, 15.0f);
+        tile_push_face((float*)verts, NULL, pos, &v_cursor, &i_cursor, RIGHT, atlas_id, 1.0f);
 
         atlas_id = lookup_atlas[block_id * 6 + LEFT];
-        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, LEFT, atlas_id, 15.0f);
+        tile_push_face((float*)verts, NULL, pos, &v_cursor, &i_cursor, LEFT, atlas_id, 1.0f);
 
         atlas_id = lookup_atlas[block_id * 6 + UP];
-        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, UP, atlas_id, 15.0f);
+        tile_push_face((float*)verts, NULL, pos, &v_cursor, &i_cursor, UP, atlas_id, 1.0f);
 
         atlas_id = lookup_atlas[block_id * 6 + DOWN];
-        tile_push_face(verts, (unsigned int*)inds, pos, &v_cursor, &i_cursor, DOWN, atlas_id, 15.0f);
+        tile_push_face((float*)verts, NULL, pos, &v_cursor, &i_cursor, DOWN, atlas_id, 1.0f);
     }
 
-    out->data = verts;
-    out->triangles = inds;
-    out->data_size = v_cursor * sizeof(float);
-    out->tri_count = i_cursor / 3;
+    out->data = (float*)verts;
+    out->triangles = NULL;
+    out->data_size = v_cursor * (int)sizeof(ChunkFace);
+    out->tri_count = v_cursor;
+    out->packed = 1;
 
     glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, out->pos);
     glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, out->rot);
@@ -363,7 +258,7 @@ void tile_pre_render_all(Program* prog, Texture* atlas, Texture* roug_tex, Textu
         glDisable(GL_CULL_FACE);
 
         vao_bind(&tile_render_cache[id].cache.vao);
-        glDrawElements(GL_TRIANGLES, tile_render_cache[id].tri_count * 3, GL_UNSIGNED_INT, NULL);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, tile_render_cache[id].tri_count);
 
         glEnable(GL_CULL_FACE);
 

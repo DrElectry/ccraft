@@ -46,8 +46,6 @@ typedef struct {
 } Chunk;
 
 #define CHUNK_BLOCK_COUNT (CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH)
-#define CHUNK_VERT_FLOATS 15
-
 typedef struct {
     int cx;
     int cz;
@@ -56,14 +54,10 @@ typedef struct {
 } ChunkNeighbors;
 
 typedef struct {
-    float* model_verts;
-    int* model_inds;
-    int model_v;
-    int model_i;
-    float* water_verts;
-    int* water_inds;
-    int water_v;
-    int water_i;
+    ChunkFace* model_faces;
+    int model_face_count;
+    ChunkFace* water_faces;
+    int water_face_count;
     uint8_t* sky_light;
     uint8_t* block_light;
     uint32_t generation;

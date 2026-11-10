@@ -36,25 +36,18 @@ void gfx_packet_static_request(Render_request* r) { // pos, rot and scale will b
 void gfx_chunk_packet_static_request(Render_request* r) {
     VBO vbo;
     VAO vao;
-    EBO ebo;
 
     vao_create(&vao);
     vao_bind(&vao);
     vbo_create(&vbo, r->data, r->data_size);
-    ebo_create(&ebo, r->triangles, r->tri_count * 3 * sizeof(int));
 
-    // vertex format (tangent space packed by chunk builder):
-    // pos (3) uv (2) norm (3) light(1) tangent(3) bitangent(3) => 15 floats
-    vbo_attr(0, 3, 15 * sizeof(float), 0);
-    vbo_attr(1, 2, 15 * sizeof(float), 3);
-    vbo_attr(2, 3, 15 * sizeof(float), 5);
-    vbo_attr(3, 1, 15 * sizeof(float), 8);
-    vbo_attr(4, 3, 15 * sizeof(float), 9);
-    vbo_attr(5, 3, 15 * sizeof(float), 12);
+    // uvec2 packed face, one instance per quad. gl_VertexID 0-5 expands the quad.
+    vbo_attr_iu(0, 2, (int)sizeof(ChunkFace), 0, 1);
 
     r->cache.vbo = vbo;
     r->cache.vao = vao;
-    r->cache.ebo = ebo;
+    r->cache.ebo.id = 0;
+    r->packed = 1;
 }
 
 void gfx_program_create(Program* a, char* vsrc, char* fsrc) {
@@ -89,7 +82,11 @@ void gfx_render(Render_request *r, Program* active_program) {
     program_set_mat4(active_program, "model", (float*)model_matrix);
 
     vao_bind(&r->cache.vao);
-    glDrawElements(GL_TRIANGLES, r->tri_count * 3, GL_UNSIGNED_INT, NULL);
+    if (r->packed) {
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, r->tri_count);
+    } else {
+        glDrawElements(GL_TRIANGLES, r->tri_count * 3, GL_UNSIGNED_INT, NULL);
+    }
 }
 
 void gfx_skinned_render(Skinned_render_request* r, Program* active_program) {

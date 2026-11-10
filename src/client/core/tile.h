@@ -19,7 +19,11 @@ enum Tile_face {
     LEFT,
     RIGHT,
     UP,
-    DOWN
+    DOWN,
+    CROSS_A,
+    CROSS_A_BACK,
+    CROSS_B,
+    CROSS_B_BACK
 };
 
 extern Render_request tile_render_cache[19];
@@ -27,6 +31,8 @@ extern FBO tile_fbos[19];
 extern Canvas_Render_Request tile_icons[19];
 
 void tile_atlas_getuv(int atlas_number, float* uv);
+void tile_pack_face(ChunkFace* out, int x, int y, int z, int face, int atlas,
+                    const float light[4], int flip, uint8_t special);
 void tile_push_face(float* vertices,
                     unsigned int* indices,
                     float* pos,

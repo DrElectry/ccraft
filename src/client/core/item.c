@@ -118,7 +118,11 @@ void item_render_block(Item* item, Program* active_program, mat4 model) {
 
     glDisable(GL_CULL_FACE);
     vao_bind(&item->viewmodel.cache.vao);
-    glDrawElements(GL_TRIANGLES, item->viewmodel.tri_count * 3, GL_UNSIGNED_INT, NULL);
+    if (item->viewmodel.packed) {
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, item->viewmodel.tri_count);
+    } else {
+        glDrawElements(GL_TRIANGLES, item->viewmodel.tri_count * 3, GL_UNSIGNED_INT, NULL);
+    }
     glEnable(GL_CULL_FACE);
 }
 

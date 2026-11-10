@@ -9,6 +9,29 @@
 #include "core/skin.h"
 
 #include <cglm/cglm.h>
+#include <stdint.h>
+
+/*
+ * Packed chunk face (8 bytes). GPU expands each instance into a quad.
+ *
+ * a:
+ *   [0:4)   x          block 0-15
+ *   [4:8)   z          block 0-15
+ *   [8:16)  y          block 0-255
+ *   [16:20) face       0-5 cube, 6-9 cross
+ *   [20:28) atlas      16x16 tile index
+ *   [28]    ao_flip
+ * b:
+ *   [0:6)   light0     0-63
+ *   [6:12)  light1
+ *   [12:18) light2
+ *   [18:24) light3
+ *   [24:32) special    reserved
+ */
+typedef struct {
+    uint32_t a;
+    uint32_t b;
+} ChunkFace;
 
 typedef struct {
     VBO vbo;
@@ -22,6 +45,7 @@ typedef struct {
 
     int data_size;
     int tri_count;
+    int packed;
 
     vec3 pos;
     vec3 rot;

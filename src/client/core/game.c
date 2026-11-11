@@ -372,6 +372,18 @@ void game_init() {
     texture_create(&normal, "assets/textures/normal.png");
 
     player_init(&player);
+    vec3 spawn_before;
+    player_get_pos(&player, spawn_before);
+
+    if (!__onserv) {
+        world_load(&world, "worlds/main");
+    }
+
+    vec3 spawn_after;
+    player_get_pos(&player, spawn_after);
+    printf("spawn: before=(%.1f %.1f %.1f) after=(%.1f %.1f %.1f)\n",
+        spawn_before[0], spawn_before[1], spawn_before[2],
+        spawn_after[0],  spawn_after[1],  spawn_after[2]);
 
     gfx_program_create(&skinned_prog, "assets/misc/skin.vsh", "assets/misc/skin.fsh");
     gfx_program_create(&model_program, "assets/misc/model.vsh", "assets/misc/model.fsh");

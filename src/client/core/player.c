@@ -68,6 +68,16 @@ void player_jump(World* world, Player* p) {
         p->camera.vel[1] = JUMP_SPEED;
 }
 
+void player_set_pos_rot(Player* p, vec3 pos, float pitch, float yaw) {
+    glm_vec3_copy(pos, p->camera.pos);
+    p->camera.rot[0] = pitch;
+    p->camera.rot[1] = yaw;
+    p->camera.rot[2] = 0.0f;
+    glm_vec3_zero(p->camera.vel);
+    camera_calculate(&p->camera);
+    sync_aabb(p);
+}
+
 void player_set_noclip(Player* p, int enabled) {
     p->noclip = enabled;
     if (enabled)

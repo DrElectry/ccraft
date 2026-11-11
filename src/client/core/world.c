@@ -11,6 +11,7 @@
 #include "utils/noise.h"
 #include "utils/file.h"
 #include "core/game.h"
+#include "core/player.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -226,9 +227,12 @@ static int world_write_dat(World* world, const char* world_path) {
     {
         float p[3] = { player.camera.pos[0], player.camera.pos[1], player.camera.pos[2] };
         memcpy(buf + off, p, sizeof(p)); off += sizeof(p);
-        float yaw = 0.0f, pitch = 0.0f;
+
+        float pitch = player.camera.rot[0];
+        float yaw   = player.camera.rot[1];
         memcpy(buf + off, &yaw,   4); off += 4;
         memcpy(buf + off, &pitch, 4); off += 4;
+
         wr_u32(buf, &off, 0);
         memset(buf + off, 0, 8); off += 8;
     }
@@ -311,9 +315,9 @@ static int world_read_dat(World* world, const char* world_path) {
             memcpy(p,     buf + off, 12); off += 12;
             memcpy(&yaw,  buf + off, 4);  off += 4;
             memcpy(&pitch,buf + off, 4);  off += 4;
-            player.camera.pos[0] = p[0];
-            player.camera.pos[1] = p[1];
-            player.camera.pos[2] = p[2];
+
+            vec3 pos = { p[0], p[1], p[2] };
+            player_set_pos_rot(&player, pos, pitch, yaw);
         }
         else if (!memcmp(tag, "GENV", 4) && len >= 4) {
             world->gen_version = rd_u32(buf, &off);

@@ -17,8 +17,6 @@
 #include "network/net_platform.h"
 #include <time.h>
 
-#define DEBUG_PERF
-
 extern uint32_t gfx_tris_rendered;
 extern uint32_t gfx_draw_calls;
 

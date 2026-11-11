@@ -34,5 +34,6 @@ void player_get_eye(Player* p, vec3 out);
 void player_get_body_draw_pos(Player* p, vec3 out, float behind_distance);
 void player_set_noclip(Player* p, int enabled);
 int player_under_water(World* world, Player* p);
+void player_set_pos_rot(Player* p, vec3 pos, float pitch, float yaw);
 
 #endif

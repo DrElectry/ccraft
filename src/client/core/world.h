@@ -18,6 +18,19 @@
 #define WORLD_RENDER_DISTANCE 8
 #endif
 
+#define WORLD_MAGIC             "CCRAFT"
+#define WORLD_MAGIC_LEN         6
+#define WORLD_FORMAT_VERSION    2
+
+#define WORLD_GEN_VERSION       1
+
+#define REGION_MAGIC            "CREGNN"
+#define REGION_MAGIC_LEN        6
+#define REGION_FORMAT_VERSION   1
+#define REGION_SIZE             32
+
+#define CHUNK_DATA_BYTES        (CHUNK_BLOCK_COUNT * sizeof(uint16_t))
+
 typedef struct BlockChange {
     int x;
     int y;
@@ -41,6 +54,8 @@ typedef struct World {
     BlockChange* pending_block_changes;
     int pending_block_count;
     int pending_block_capacity;
+
+    uint32_t gen_version;
 } World;
 
 void world_init(World* world);
@@ -69,10 +84,11 @@ void world_tick(World* world, vec3 ppos);
 
 void world_reload_render_distance(World* world, vec3 ppos);
 
-void world_load(World* world, File* file);
-void world_save(World* world, const char* filename);
+int world_exists(const char* world_path);
+void world_load(World* world, const char* world_path);
+void world_save(World* world, const char* world_path);
+void new_world(const char* world_path);
 
 void rebuild_chunks_for_block(World* world, int wx, int wy, int wz);
-void new_world(const char* filename);
 
 #endif

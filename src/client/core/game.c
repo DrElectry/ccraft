@@ -296,23 +296,15 @@ void game_init() {
     if (__onserv) {
         rng_seed(__servseed);
     } else {
-        if (file_exists("worlds/main.dat")) {
-            world_file = file_open("worlds/main.dat");
-        } else {
-            printf("worlds/main.dat does not exist, creating a new world...\n");
-            new_world("worlds/main.dat");
+        if (!world_exists("worlds/main")) {
+            printf("worlds/main does not exist, creating a new world...\n");
+            new_world("worlds/main");
         }
-
-        world_file = file_open("worlds/main.dat");
-
-        memcpy(&seed, world_file.data + 6, 8);
-
-        rng_seed(seed);
     }
     world_init(&world);
 
     if (!__onserv) {
-        world_load(&world, &world_file);
+        world_load(&world, "worlds/main");
     }
 
     texture_atlas.mag_filter = GL_NEAREST;
@@ -1361,7 +1353,7 @@ void game_destroy() {
     chat_destroy();
 
     if (!__onserv) {
-        world_save(&world, "worlds/main.dat");
+        world_save(&world, "worlds/main");
     }
     
     remote_destroy();

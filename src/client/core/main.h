@@ -2,10 +2,12 @@
 #define MAIN_H
 
 #include <stdint.h>
-
+#include <cglm/cglm.h>
 #include "gl/fbo.h"
 
 extern uint64_t __servseed;
+
+extern vec3 wind_direction;
 
 extern int WIDTH;
 extern int HEIGHT;

@@ -932,7 +932,7 @@ void world_render(World* world, void* active_program, void* water_program, int c
                 if (max_dot < 0.0f) continue;
             }
 
-            gfx_render(&world->chunks_map[i].model, (Program*)active_program);
+            gfx_chunk_render(&world->chunks_map[i].model, (Program*)active_program);
             if (render_water) {
                 gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
             }
@@ -975,7 +975,7 @@ void world_render(World* world, void* active_program, void* water_program, int c
             if (max_dot < 0.0f) continue;
         }
 
-        gfx_render(&world->chunks_map[i].model, (Program*)active_program);
+        gfx_chunk_render(&world->chunks_map[i].model, (Program*)active_program);
     }
 
     if (!render_water) return;
@@ -1048,7 +1048,7 @@ void world_render(World* world, void* active_program, void* water_program, int c
 
     for (int k = 0; k < water_count; k++) {
         int i = water_buf[k].idx;
-        gfx_render(&world->chunks_map[i].water_model, (Program*)water_program);
+        gfx_chunk_render(&world->chunks_map[i].water_model, (Program*)water_program);
     }
 }
 

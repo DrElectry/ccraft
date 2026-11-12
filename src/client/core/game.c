@@ -92,12 +92,15 @@ int wireframe = 0;
 int potato_mode = 0;
 int noclip = 0;
 int disable_hud_composite = 0;
+int disable_hud = 0;
 
 float wdelay = 0.0f;
 float pdelay = 0.0f;
 float ndelay = 0.0f;
 float ddelay = 0.0f;
 float dhdelay = 0.0f;
+float bdelay = 0.0f;
+float hdelay = 0.0f;
 
 static sound_t* tung_music;
 static sound_t* tung;
@@ -378,12 +381,6 @@ void game_init() {
     if (!__onserv) {
         world_load(&world, "worlds/main");
     }
-
-    vec3 spawn_after;
-    player_get_pos(&player, spawn_after);
-    printf("spawn: before=(%.1f %.1f %.1f) after=(%.1f %.1f %.1f)\n",
-        spawn_before[0], spawn_before[1], spawn_before[2],
-        spawn_after[0],  spawn_after[1],  spawn_after[2]);
 
     gfx_program_create(&skinned_prog, "assets/misc/skin.vsh", "assets/misc/skin.fsh");
     gfx_program_create(&model_program, "assets/misc/model.vsh", "assets/misc/model.fsh");
@@ -716,6 +713,7 @@ void game_tick(float dt_p) {
     ndelay -= dt;
     ddelay -= dt;
     dhdelay -= dt;
+    hdelay -= dt;
 
     sun_delay -= dt;
     if (sun_delay <= 0.0f) {
@@ -761,6 +759,10 @@ void game_tick(float dt_p) {
     if (input_down(&input_manager, GLFW_KEY_F6) && dhdelay < 0) {
         disable_hud_composite = !disable_hud_composite;
         dhdelay = 0.25f;
+    }
+    if (input_down(&input_manager, GLFW_KEY_F7) && hdelay < 0) {
+        disable_hud = !disable_hud;
+        hdelay = 0.25f;
     }
     if (input_down(&input_manager, GLFW_KEY_B) && ndelay < 0) {
         noclip = !noclip;
@@ -1056,7 +1058,9 @@ void game_shadow_pass(int scale, float dist, mat4 out_light_space_matrix, vec3 o
 
     glm_mat4_mul(hand_model, rot, hand_model);
 
-    draw_held_hand(hand_model);
+    if (!disable_hud) {
+        draw_held_hand(hand_model);
+    }
 
     glViewport(0, 0, WIDTH, HEIGHT);
 
@@ -1167,7 +1171,9 @@ void game_draw(float time) {
 
     glm_mat4_mul(hand_model, rot, hand_model);
 
-    draw_held_hand(hand_model);
+    if (!disable_hud) {
+        draw_held_hand(hand_model);
+    }
 
     glEnable(GL_CULL_FACE);
 }
@@ -1221,7 +1227,9 @@ void game_draw_misc() {
 
     glm_mat4_mul(hand_model, rot, hand_model);
 
-    draw_held_hand(hand_model);
+    if (!disable_hud) {
+        draw_held_hand(hand_model);
+    }
 
     glEnable(GL_CULL_FACE);
 }
@@ -1354,6 +1362,10 @@ void game_draw_hud_contents() {
 }
 
 void game_draw_hud() {
+    if (disable_hud) {
+        return;
+    }
+
     if (!disable_hud_composite) {
         game_draw_hud_buttons();
     }

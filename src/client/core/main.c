@@ -16,6 +16,7 @@
 #include "utils/rand.h"
 #include "network/net_platform.h"
 #include <time.h>
+#include <math.h>
 
 extern uint32_t gfx_tris_rendered;
 extern uint32_t gfx_draw_calls;
@@ -29,6 +30,8 @@ int __servport;
 char __nickname[32];
 float blur_strength = 0.0f;
 float aperture = 0.0f;
+
+float focus_distance = 7.5f;
 
 int WIDTH = 1280;
 int HEIGHT = 720;
@@ -152,6 +155,29 @@ static void draw_blurred_ui(Program* blur_prog, Program* glass, float time)
 
     game_draw_hud_contents();
     glDepthMask(GL_TRUE);
+}
+
+static void smooth_focus_from_depth(float dt, float focus_rate)
+{
+    const float NEAR_PLANE = 0.1f;
+    const float FAR_PLANE  = 100.0f;
+
+    float raw_depth = 1.0f;
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, gbuffer.id);
+    glReadBuffer(GL_DEPTH_ATTACHMENT);
+    glReadPixels(WIDTH / 2, HEIGHT / 2, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &raw_depth);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+    float z = raw_depth * 2.0f - 1.0f;
+    float lin = (2.0f * NEAR_PLANE * FAR_PLANE) /
+                (FAR_PLANE + NEAR_PLANE - z * (FAR_PLANE - NEAR_PLANE));
+    if (lin < NEAR_PLANE) lin = NEAR_PLANE;
+    if (lin > FAR_PLANE)  lin = FAR_PLANE;
+
+    float alpha = 1.0f - expf(-dt * focus_rate);
+    focus_distance += (lin - focus_distance) * alpha;
+    if (focus_distance < NEAR_PLANE) focus_distance = NEAR_PLANE;
+    if (focus_distance > FAR_PLANE)  focus_distance = FAR_PLANE;
 }
 
 int main(int argc, char* argv[]) {
@@ -469,6 +495,8 @@ int main(int argc, char* argv[]) {
         printf("gbuffer: %.3f ms\n", (t_end_gbuffer - t_start_gbuffer) * 1000.0);
 #endif
 
+        smooth_focus_from_depth(delta_time, 3.0f);
+
 #ifdef DEBUG_PERF
         double t_start_water = glfwGetTime();
 #endif
@@ -743,6 +771,8 @@ int main(int argc, char* argv[]) {
         program_set_int(&pp, "depthTexture", 1);
         program_set_int(&pp, "bloomTexture", 2);
         program_set_float(&pp, "blurStrength", blur_strength);
+        program_set_float(&pp, "focusDistance", focus_distance);
+        program_set_float(&pp, "time", time);
         gfx_draw_fullscreen_quad();
         fbo_unbind();
 #ifdef DEBUG_PERF

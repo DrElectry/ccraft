@@ -14,7 +14,7 @@
 
 #define SEA_LEVEL 24
 #define BEACH_HEIGHT 4
-#define SUPERFLAT_DEBUG 1
+#define SUPERFLAT_DEBUG 0
 
 int lookup_atlas[] = {
     0,0,0,0,0,0,        // AIR
@@ -120,6 +120,28 @@ int lookup_ignorecollision[] = {
     0, // SAND
     0, // GRAVEL
     1, // LAVA
+    1, // ROSE
+    1, // GRASS_CROSS
+    0, // BORDER
+    0, // PLANKS
+};
+
+int lookup_wind[] = {
+    0, // AIR
+    0, // GRASS
+    0, // DIRT
+    1, // LEAVES
+    0, // STONE
+    0, // IRON_BLOCK
+    0, // WATER
+    0, // LOG
+    0, // GLASS
+    0, // COAL_ORE
+    0, // COPPER_ORE
+    0, // GOLD_ORE
+    0, // SAND
+    0, // GRAVEL
+    0, // LAVA
     1, // ROSE
     1, // GRASS_CROSS
     0, // BORDER
@@ -645,12 +667,23 @@ void chunk_apply_mesh(Chunk* chunk, ChunkMeshResult* mesh) {
     free(mesh);
 }
 
+static inline void push_face_wind(ChunkFace* faces, int* fi, float* pos,
+                                  int face, int atlas, float* lf, int flip,
+                                  int wind) {
+    int before = *fi;
+    tile_push_face_smooth((float*)faces, NULL, pos, fi, NULL, face, atlas, lf, flip);
+    if (wind) {
+        for (int i = before; i < *fi; i++)
+            faces[i].b |= (1u << 24);
+    }
+}
+
 static void push_face_to_buffer(uint16_t tile_id, float* pos,
                                   const uint8_t* sky_light, const uint8_t* block_light,
                                   int lx, int ly, int lz,
                                   const ChunkNeighbors* n, int wx, int wy, int wz,
-                                  float* model_verts, int* v_cur,
-                                  float* water_verts, int* w_v_cur) {
+                                  ChunkFace* model_faces, int* m_fi,
+                                  ChunkFace* water_faces, int* w_fi) {
 
     uint16_t front = chunk_neighbors_get(n, wx, wy, wz + 1);
     uint16_t back  = chunk_neighbors_get(n, wx, wy, wz - 1);
@@ -659,106 +692,90 @@ static void push_face_to_buffer(uint16_t tile_id, float* pos,
     uint16_t up    = chunk_neighbors_get(n, wx, wy + 1, wz);
     uint16_t down  = chunk_neighbors_get(n, wx, wy - 1, wz);
 
+    int is_liquid = is_liquid_block(tile_id);
+    int windable  = lookup_wind[tile_id];
 
-    int render_front;
-    if (is_liquid_block(tile_id)) {
-        render_front = !is_liquid_block(front);
-    } else {
-        render_front = lookup_transparent[front] || (is_liquid_block(front) ? 1 : 0);
-    }
+    int render_front = is_liquid ? !is_liquid_block(front)
+                                 : (lookup_transparent[front] || (is_liquid_block(front) ? 1 : 0));
     if (render_front) {
         float lf[4];
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, FRONT, lf, &flip);
-        if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, FRONT, atlas_lookup(tile_id, FRONT), lf, flip);
+        int wind = windable && !lookup_wind[front];
+        if (is_liquid) {
+            tile_push_face_smooth((float*)water_faces, NULL, pos, w_fi, NULL, FRONT, atlas_lookup(tile_id, FRONT), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, FRONT, atlas_lookup(tile_id, FRONT), lf, flip);
+            push_face_wind(model_faces, m_fi, pos, FRONT, atlas_lookup(tile_id, FRONT), lf, flip, wind);
         }
     }
 
-    int render_back;
-    if (is_liquid_block(tile_id)) {
-        render_back = !is_liquid_block(back);
-    } else {
-        render_back = lookup_transparent[back] || (is_liquid_block(back) ? 1 : 0);
-    }
+    int render_back = is_liquid ? !is_liquid_block(back)
+                                : (lookup_transparent[back] || (is_liquid_block(back) ? 1 : 0));
     if (render_back) {
         float lf[4];
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, BACK, lf, &flip);
-        if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, BACK, atlas_lookup(tile_id, BACK), lf, flip);
+        int wind = windable && !lookup_wind[back];
+        if (is_liquid) {
+            tile_push_face_smooth((float*)water_faces, NULL, pos, w_fi, NULL, BACK, atlas_lookup(tile_id, BACK), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, BACK, atlas_lookup(tile_id, BACK), lf, flip);
+            push_face_wind(model_faces, m_fi, pos, BACK, atlas_lookup(tile_id, BACK), lf, flip, wind);
         }
     }
 
-    int render_left;
-    if (is_liquid_block(tile_id)) {
-        render_left = !is_liquid_block(left);
-    } else {
-        render_left = lookup_transparent[left] || (is_liquid_block(left) ? 1 : 0);
-    }
+    int render_left = is_liquid ? !is_liquid_block(left)
+                                : (lookup_transparent[left] || (is_liquid_block(left) ? 1 : 0));
     if (render_left) {
         float lf[4];
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, LEFT, lf, &flip);
-        if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, LEFT, atlas_lookup(tile_id, LEFT), lf, flip);
+        int wind = windable && !lookup_wind[left];
+        if (is_liquid) {
+            tile_push_face_smooth((float*)water_faces, NULL, pos, w_fi, NULL, LEFT, atlas_lookup(tile_id, LEFT), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, LEFT, atlas_lookup(tile_id, LEFT), lf, flip);
+            push_face_wind(model_faces, m_fi, pos, LEFT, atlas_lookup(tile_id, LEFT), lf, flip, wind);
         }
     }
 
-    int render_right;
-    if (is_liquid_block(tile_id)) {
-        render_right = !is_liquid_block(right);
-    } else {
-        render_right = lookup_transparent[right] || (is_liquid_block(right) ? 1 : 0);
-    }
+    int render_right = is_liquid ? !is_liquid_block(right)
+                                 : (lookup_transparent[right] || (is_liquid_block(right) ? 1 : 0));
     if (render_right) {
         float lf[4];
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, RIGHT, lf, &flip);
-        if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip);
+        int wind = windable && !lookup_wind[right];
+        if (is_liquid) {
+            tile_push_face_smooth((float*)water_faces, NULL, pos, w_fi, NULL, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip);
+            push_face_wind(model_faces, m_fi, pos, RIGHT, atlas_lookup(tile_id, RIGHT), lf, flip, wind);
         }
     }
 
-    int render_up;
-    if (is_liquid_block(tile_id)) {
-        render_up = !is_liquid_block(up);
-    } else {
-        render_up = lookup_transparent[up] || (is_liquid_block(up) ? 1 : 0);
-    }
+    int render_up = is_liquid ? !is_liquid_block(up)
+                              : (lookup_transparent[up] || (is_liquid_block(up) ? 1 : 0));
     if (render_up) {
         float lf[4];
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, UP, lf, &flip);
-        if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, UP, atlas_lookup(tile_id, UP), lf, flip);
+        int wind = windable && !lookup_wind[up];
+        if (is_liquid) {
+            tile_push_face_smooth((float*)water_faces, NULL, pos, w_fi, NULL, UP, atlas_lookup(tile_id, UP), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, UP, atlas_lookup(tile_id, UP), lf, flip);
+            push_face_wind(model_faces, m_fi, pos, UP, atlas_lookup(tile_id, UP), lf, flip, wind);
         }
     }
 
-    int render_down;
-    if (is_liquid_block(tile_id)) {
-        render_down = !is_liquid_block(down);
-    } else {
-        render_down = lookup_transparent[down] || (is_liquid_block(down) ? 1 : 0);
-    }
+    int render_down = is_liquid ? !is_liquid_block(down)
+                                : (lookup_transparent[down] || (is_liquid_block(down) ? 1 : 0));
     if (render_down) {
         float lf[4];
         int flip = 0;
         chunk_light_smooth_face(sky_light, block_light, n, lx, ly, lz, DOWN, lf, &flip);
-        if (is_liquid_block(tile_id)) {
-            tile_push_face_smooth(water_verts, NULL, pos, w_v_cur, NULL, DOWN, atlas_lookup(tile_id, DOWN), lf, flip);
+        int wind = windable && !lookup_wind[down];
+        if (is_liquid) {
+            tile_push_face_smooth((float*)water_faces, NULL, pos, w_fi, NULL, DOWN, atlas_lookup(tile_id, DOWN), lf, flip);
         } else {
-            tile_push_face_smooth(model_verts, NULL, pos, v_cur, NULL, DOWN, atlas_lookup(tile_id, DOWN), lf, flip);
+            push_face_wind(model_faces, m_fi, pos, DOWN, atlas_lookup(tile_id, DOWN), lf, flip, wind);
         }
     }
 }
@@ -801,9 +818,17 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
 
                     if (lookup_transparent[front] || lookup_transparent[back] ||
                         lookup_transparent[left] || lookup_transparent[right]) {
+                        int wind = lookup_wind[tile_id] &&
+                            ((lookup_transparent[front] && !lookup_wind[front]) ||
+                             (lookup_transparent[back]  && !lookup_wind[back])  ||
+                             (lookup_transparent[left]  && !lookup_wind[left])  ||
+                             (lookup_transparent[right] && !lookup_wind[right]));
+
                         float lf[4] = {light, light, light, light};
                         int atlas_a = atlas_lookup(tile_id, FRONT);
                         int atlas_b = atlas_lookup(tile_id, BACK);
+
+                        int fi_start = v_cursor;
                         tile_push_face_smooth((float*)model_faces, NULL, pos, &v_cursor, NULL,
                                               CROSS_A, atlas_a, lf, 0);
                         tile_push_face_smooth((float*)model_faces, NULL, pos, &v_cursor, NULL,
@@ -812,11 +837,16 @@ void chunk_build_mesh(ChunkMeshResult* out, const uint16_t* data,
                                               CROSS_B, atlas_b, lf, 0);
                         tile_push_face_smooth((float*)model_faces, NULL, pos, &v_cursor, NULL,
                                               CROSS_B_BACK, atlas_b, lf, 0);
+
+                        if (wind) {
+                            for (int i = fi_start; i < v_cursor; i++)
+                                model_faces[i].b |= (1u << 24);
+                        }
                     }
                 } else {
                     push_face_to_buffer(tile_id, pos, sky_light, block_light, x, y, z, n, wx, wy, wz,
-                                      (float*)model_faces, &v_cursor,
-                                      (float*)water_faces, &w_v_cursor);
+                                      model_faces, &v_cursor,
+                                      water_faces, &w_v_cursor);
                 }
             }
         }

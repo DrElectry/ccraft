@@ -8,6 +8,7 @@
 #include "utils/file.h"
 #include "core/main.h"
 #include <cglm/cglm.h>
+#include "core/game.h"
 #include <math.h>
 
 #define UI_WIDTH 1280.0f
@@ -83,6 +84,33 @@ void gfx_render(Render_request *r, Program* active_program) {
 
     program_use(active_program);
     program_set_mat4(active_program, "model", (float*)model_matrix);
+
+    vao_bind(&r->cache.vao);
+    if (r->packed) {
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, r->tri_count);
+    } else {
+        glDrawElements(GL_TRIANGLES, r->tri_count * 3, GL_UNSIGNED_INT, NULL);
+    }
+
+    gfx_tris_rendered+=r->tri_count;
+    gfx_draw_calls++;
+}
+
+void gfx_chunk_render(Render_request *r, Program* active_program) {
+    mat4 model_matrix;
+
+    glm_mat4_identity(model_matrix);
+
+    glm_translate(model_matrix, r->pos);
+    glm_rotate(model_matrix, r->rot[0], (vec3){1.0f, 0.0f, 0.0f});
+    glm_rotate(model_matrix, r->rot[1], (vec3){0.0f, 1.0f, 0.0f});
+    glm_rotate(model_matrix, r->rot[2], (vec3){0.0f, 0.0f, 1.0f});
+    glm_scale(model_matrix, r->scale);
+
+    program_use(active_program);
+    program_set_mat4(active_program, "model", (float*)model_matrix);
+    program_set_vec3(active_program, "wind_direction", (float*)wind_direction);
+    program_set_float(active_program, "time", last_time);
 
     vao_bind(&r->cache.vao);
     if (r->packed) {

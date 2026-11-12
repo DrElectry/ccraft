@@ -15,6 +15,8 @@ extern int potato_mode;
 extern int noclip;
 extern int disable_hud_composite;
 
+extern float last_time;
+
 extern int underwater;
 
 extern Player player;

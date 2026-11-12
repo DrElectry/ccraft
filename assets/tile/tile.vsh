@@ -6,6 +6,9 @@ uniform mat4 proj;
 uniform mat4 view;
 uniform mat4 model;
 
+uniform vec3 wind_direction;
+uniform float time;
+
 out vec2 out_uv;
 out vec3 out_normal;
 out vec3 out_tangent;
@@ -75,6 +78,7 @@ void main()
     uint face = (a >> 16u) & 15u;
     uint atlas = (a >> 20u) & 255u;
     uint ao_flip = (a >> 28u) & 1u;
+    uint windable = (b >> 24u) & 1u;
 
     float lights[4];
     lights[0] = float(b & 63u) / 63.0;
@@ -100,7 +104,52 @@ void main()
     }
 
     vec3 local = (q == 0) ? q0 : (q == 1) ? q1 : (q == 2) ? q2 : q3;
-    vec3 in_vert = local + vec3(float(bx), float(by), float(bz));
+    vec3 block_origin = vec3(float(bx), float(by), float(bz));
+    vec3 in_vert = local + block_origin;
+
+    if (windable != 0u) {
+        // snapshot the undisplaced position. shared vertices between adjacent
+        // windable blocks have the same wp, so phase and weight match exactly
+        // and seams stay welded
+        vec3 wp = in_vert;
+
+        // Phase driven by world position => a wave travels across the canopy
+        // and neighbours stay in lockstep on shared edges.
+        float phase = wp.x * 0.35 + wp.z * 0.55 + wp.y * 0.15;
+
+        // weight differs by block type so we never tear a seam open:
+        //    cross blocks (faces 6..9) isolated on the ground, so anchor the
+        //    base (local.y = 0) and let the tip sway (local.y = 1)
+        //    regular faces (leaves, faces 0..5) weight is a continuous
+        //    function of *world Y*, so stacked leaf blocks share the same
+        //    weight at shared vertices and vertical seams stay closed
+        //    Anchor near y=30 (right where trees start on your terrain) and
+        //    ramp to full sway over ~8 blocks
+        float weight;
+        if (face >= 6u) {
+            weight = local.y;
+        } else {
+            weight = clamp((wp.y - 30.0) / 8.0, 0.0, 1.0);
+        }
+
+        float t = time * 1.6;
+
+        // two octaves both sampled at "phase"(world position) - coherent across block borders
+        float wave = sin(t + phase) * 0.6
+                   + sin(t * 2.3 + phase * 2.1) * 0.4;
+
+        // sway in horizontal plane only
+        vec3 wdir = wind_direction;
+        wdir.y = 0.0;
+        wdir = length(wdir) > 1e-5 ? normalize(wdir) : vec3(0.0);
+
+        float strength = 0.14 * weight * wave;
+        in_vert += wdir * strength;
+
+        // tiny perpendicular shimmy, same phase - coherent
+        vec3 perp = vec3(-wdir.z, 0.0, wdir.x);
+        in_vert += perp * strength * 0.25 * sin(t * 1.7 + phase * 1.5);
+    }
 
     float tile_size = 1.0 / 16.0;
     float col = float(atlas % 16u);
